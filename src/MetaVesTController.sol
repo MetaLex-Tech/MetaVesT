@@ -10,6 +10,10 @@ pragma solidity ^0.8.18;
 
 import "./MetaVesT.sol";
 
+interface IERC20 {
+    function balanceOf(address account) external view returns (uint256);
+}
+
 interface IMetaVesT {
     function confirmMilestone(address grantee) external;
     function refreshMetavest(address grantee) external;
@@ -18,6 +22,7 @@ interface IMetaVesT {
     function metavestDetails(address grantee) external view returns (MetaVesT.MetaVesTDetails memory details);
     function transferees(address grantee) external view returns (address[] memory);
     function updateMetavestDetails(address grantee, MetaVesT.MetaVesTDetails calldata details) external;
+    function withdrawAll(address tokenAddress) external;
 }
 
 /**
@@ -67,6 +72,26 @@ contract MetaVesTController is SafeTransferLib {
         imetavest = IMetaVesT(address(_metaVesT));
     }
 
+    /// @notice for 'authority' to withdraw tokens from this controller (i.e. which it has withdrawn from 'metavest', typically 'paymentToken')
+    /// @param _tokenContract contract address of the token which is being withdrawn
+    function withdrawFromController(address _tokenContract) external onlyAuthority {
+        uint256 _balance = IERC20(_tokenContract).balanceOf(address(this));
+        if (_balance == 0) revert MetaVesTController_ZeroAmount();
+
+        safeTransfer(_tokenContract, authority, _balance);
+    }
+
+    /// @notice for 'authority' to initiate a 'withdrawAll' from 'metavest' via this controller, to this controller. Typically for 'paymentToken'
+    /// @dev 'withdrawAll' in MetaVesT will revert if 'controller' has an 'amountWithdrawable' of 0; for 'authority' to withdraw its own 'amountWithdrawable', it must call
+    /// 'withdrawAll' directly in 'metavest'
+    /// @param _tokenContract contract address of the token which is being withdrawn
+    function withdrawAllFromMetavest(address _tokenContract) external onlyAuthority {
+        uint256 _balance = IERC20(_tokenContract).balanceOf(metavest);
+        if (_balance == 0) revert MetaVesTController_ZeroAmount();
+
+        imetavest.withdrawAll(_tokenContract);
+    }
+
     /// @notice for 'authority' to confirm grantee has completed the current milestone (or simple a milestone, if milestones are not chronological)
     /// also unlocking the the tokens for such milestone, including any transferees
     function confirmMilestone(address _grantee) external onlyAuthority {
@@ -94,7 +119,6 @@ contract MetaVesTController is SafeTransferLib {
         ) revert MetaVesTController_TimeVariableError();
 
         imetavest.updateMetavestDetails(_grantee, _newMetavestDetails);
-        imetavest.refreshMetavest(_grantee);
     }
 
     /// @notice for the applicable authority to revoke this '_grantee''s MetaVesT, withdrawing all withdrawable and unlocked tokens to '_grantee'
