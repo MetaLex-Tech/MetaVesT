@@ -557,19 +557,21 @@ contract MetaVesT is ReentrancyGuard, SafeTransferLib {
     /// @param _divisor: divisor corresponding to the grantee's fraction of their claim transferred via this function; i.e. for a transfer of 25% of a claim, submit '4'; to transfer the entire MetaVesT, submit '1'
     /// @param _transferee: address to which the claim is being transferred, that will have a new MetaVesT created
     function transferRights(uint256 _divisor, address _transferee) external {
-        //prevent overwrite of existing MetaVesT
+        if (_divisor == 0) revert MetaVesT_ZeroAmount();
+        if (_transferee == address(0)) revert MetaVesT_ZeroAddress();
+        // prevent potential overwrite of existing MetaVesT
         if (metavestDetails[_transferee].grantee != address(0) || _transferee == authority || _transferee == controller)
             revert MetaVesT_AlreadyExists();
 
         refreshMetavest(msg.sender);
 
         MetaVesTDetails memory _metavestDetails = metavestDetails[msg.sender];
-        // enusre MetaVesT exists and is transferable
+
+        // ensure MetaVesT exists and is transferable
         if (_metavestDetails.grantee == address(0) || msg.sender != _metavestDetails.grantee)
             revert MetaVesT_OnlyGrantee();
         if (!_metavestDetails.transferable) revert MetaVesT_NonTransferable();
-        if (_transferee == address(0)) revert MetaVesT_ZeroAddress();
-        if (transferees[msg.sender].length > ARRAY_LENGTH_LIMIT) revert MetaVesT_TransfereeLimit();
+        if (transferees[msg.sender].length == ARRAY_LENGTH_LIMIT) revert MetaVesT_TransfereeLimit();
 
         // update the current amountWithdrawable, if the msg.sender chooses to include it in the transfer by not first calling 'withdrawAll'
         uint256 _withdrawableTransferred = amountWithdrawable[msg.sender][_metavestDetails.allocation.tokenContract] /
@@ -579,7 +581,7 @@ contract MetaVesT is ReentrancyGuard, SafeTransferLib {
 
         // update unlockedTokensWithdrawn, cliffAndMilestoneUnlocked, and amountLocked similarly
         uint256 _unlockedWithdrawnTransferred = _metavestDetails.allocation.unlockedTokensWithdrawn / _divisor;
-        metavestDetails[_transferee].allocation.unlockedTokensWithdrawn = _unlockedWithdrawnTransferred;
+        _metavestDetails.allocation.unlockedTokensWithdrawn = _unlockedWithdrawnTransferred;
         metavestDetails[msg.sender].allocation.unlockedTokensWithdrawn -= _unlockedWithdrawnTransferred;
 
         uint256 _cliffAndMilestoneUnlockedTransferred = cliffAndMilestoneUnlocked[msg.sender] / _divisor;
@@ -598,8 +600,9 @@ contract MetaVesT is ReentrancyGuard, SafeTransferLib {
         _metavestDetails.allocation.tokensUnlocked = _metavestDetails.allocation.tokensUnlocked / _divisor;
         if (_metavestDetails.rta.tokensRepurchasable != 0)
             _metavestDetails.rta.tokensRepurchasable = _metavestDetails.rta.tokensRepurchasable / _divisor;
+        // update unachieved milestoneAwards
         if (_metavestDetails.milestones.length != 0) {
-            for (uint256 i; i < _metavestDetails.milestones.length; ++i) {
+            for (uint256 i = _metavestDetails.milestoneIndex; i < _metavestDetails.milestones.length; ++i) {
                 _metavestDetails.milestoneAwards[i] = _metavestDetails.milestoneAwards[i] / _divisor;
                 // update grantee's array within same loop
                 metavestDetails[msg.sender].milestoneAwards[i] -= _metavestDetails.milestoneAwards[i];
