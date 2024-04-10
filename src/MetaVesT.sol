@@ -13,20 +13,9 @@
 
 pragma solidity ^0.8.18;
 
-interface IERC20Permit {
+interface IERC20 {
     function allowance(address owner, address spender) external view returns (uint256);
-
     function balanceOf(address account) external view returns (uint256);
-
-    function permit(
-        address owner,
-        address spender,
-        uint256 value,
-        uint256 deadline,
-        uint8 v,
-        bytes32 r,
-        bytes32 s
-    ) external;
 }
 
 /// @notice Solady's SafeTransferLib 'SafeTransfer()' and 'SafeTransferFrom()'; (https://github.com/Vectorized/solady/blob/main/src/utils/SafeTransferLib.sol)
@@ -212,6 +201,7 @@ contract MetaVesT is ReentrancyGuard, SafeTransferLib {
     error MetaVesT_AllMilestonesComplete();
     error MetaVesT_AlreadyExists();
     error MetaVesT_AmountGreaterThanUnlocked();
+    error MetaVesT_AmountGreaterThanWithdrawable();
     error MetaVesT_AmountNotApprovedForTransferFrom();
     error MetaVesT_NonTransferable();
     error MetaVesT_NoMetaVesT();
@@ -248,26 +238,6 @@ contract MetaVesT is ReentrancyGuard, SafeTransferLib {
         controller = _controller;
         dao = _dao;
         paymentToken = _paymentToken;
-    }
-
-    /// @notice creates a MetaVesT for a grantee and locks the total token amount ('metavestDetails.allocation.tokenStreamTotal' + 'metavestDetails.allocation.cliffCredit' + 'metavestDetails.milestoneAwards') via permit()
-    /// @dev see MetaVesTController for conditionals and additional comments
-    /// @param _metavestDetails: MetaVesTDetails struct containing all applicable details for this '_metavestDetails.grantee'-- but MUST contain grantee, token contract, some locked amount, and start and stop time
-    /// @param _total: total amount of tokens being locked
-    /// @param _depositor: depositor of the tokens, often msg.sender/originating EOA
-    function createMetavestWithPermit(
-        MetaVesTDetails calldata _metavestDetails,
-        uint256 _total,
-        address _depositor
-    ) external onlyController nonReentrant {
-        metavestDetails[_metavestDetails.grantee] = _metavestDetails;
-        amountLocked[_metavestDetails.grantee] += _total;
-        // ensure tokensRepurchasable is == _total, if RTA
-        if (_metavestDetails.metavestType == MetaVesTType.RESTRICTED)
-            metavestDetails[_metavestDetails.grantee].rta.tokensRepurchasable = _total;
-
-        safeTransferFrom(_metavestDetails.allocation.tokenContract, _depositor, address(this), _total);
-        emit MetaVesT_Created(_metavestDetails);
     }
 
     /// @notice creates a MetaVesT for a grantee and locks the total token amount ('metavestDetails.allocation.tokenStreamTotal' + 'metavestDetails.allocation.cliffCredit' + 'metavestDetails.milestoneAwards')
@@ -823,8 +793,8 @@ contract MetaVesT is ReentrancyGuard, SafeTransferLib {
 
         uint256 _payment = _amount * _metavest.option.exercisePrice;
         if (
-            IERC20Permit(paymentToken).allowance(msg.sender, address(this)) < _payment ||
-            IERC20Permit(paymentToken).balanceOf(msg.sender) < _payment
+            IERC20(paymentToken).allowance(msg.sender, address(this)) < _payment ||
+            IERC20(paymentToken).balanceOf(msg.sender) < _payment
         ) revert MetaVesT_AmountNotApprovedForTransferFrom();
 
         safeTransferFrom(paymentToken, msg.sender, address(this), _payment);
@@ -842,26 +812,29 @@ contract MetaVesT is ReentrancyGuard, SafeTransferLib {
     function withdrawAll(address _tokenAddress) external nonReentrant {
         if (_tokenAddress == address(0)) revert MetaVesT_ZeroAddress();
         uint256 _amt;
-        // if caller has a MetaVesT which is a Token Option, they must call 'exerciseOption' in order to exercise their option and make their 'tokensUnlocked' (vested) withdrawable and then call this function, otherwise they would be withdrawing vested but not exercised tokens here
+        /// @dev if caller has a MetaVesT which is a Token Option, they must call 'exerciseOption' in order to exercise their option and make their 'tokensUnlocked' (vested) withdrawable and then call this function, otherwise they would be withdrawing vested but not exercised tokens here
         if (
             msg.sender != authority &&
             msg.sender != controller &&
             _tokenAddress == metavestDetails[msg.sender].allocation.tokenContract &&
             metavestDetails[msg.sender].metavestType != MetaVesTType.OPTION
         ) {
+            uint256 _preAmtWithdrawable = amountWithdrawable[msg.sender][_tokenAddress];
             refreshMetavest(msg.sender);
             MetaVesTDetails memory _metavest = metavestDetails[msg.sender];
             if (msg.sender != _metavest.grantee) revert MetaVesT_OnlyGrantee();
 
-            // add newly unlocked tokens to amountWithdrawable and unlockedTokensWithdrawn
-            amountWithdrawable[msg.sender][_tokenAddress] += _metavest.allocation.tokensUnlocked;
-            metavestDetails[msg.sender].allocation.unlockedTokensWithdrawn += _metavest.allocation.tokensUnlocked;
+            uint256 _unlockedNotWithdrawn = _metavest.allocation.tokensUnlocked -
+                metavestDetails[msg.sender].allocation.unlockedTokensWithdrawn;
+            // add newly unlocked tokens to amountWithdrawable and unlockedTokensWithdrawn, since all are being withdrawn now
+            amountWithdrawable[msg.sender][_tokenAddress] = _preAmtWithdrawable + _unlockedNotWithdrawn;
+            metavestDetails[msg.sender].allocation.unlockedTokensWithdrawn += _unlockedNotWithdrawn;
 
-            // delete 'tokensUnlocked' and 'cliffAndMilestoneUnlocked' as all are being withdrawn now; do not affect a paymentToken withdrawal
+            // delete 'tokensUnlocked' and 'cliffAndMilestoneUnlocked' as all are being withdrawn now; these do not affect a paymentToken withdrawal
             delete metavestDetails[msg.sender].allocation.tokensUnlocked;
             delete cliffAndMilestoneUnlocked[msg.sender];
 
-            // if no amountLocked remains, delete the metavestDetails for this msg.sender as now all tokens are withdrawn as well (so we know amountWithdrawable == 0)
+            // if no amountLocked remains, delete the metavestDetails for this msg.sender as now all tokens are withdrawn as well (so we know after this call, no locked, unlocked, nor withdrawable tokens will remain)
             if (amountLocked[msg.sender] == 0) delete metavestDetails[msg.sender];
             emit MetaVesT_Deleted(msg.sender);
         }
@@ -874,5 +847,47 @@ contract MetaVesT is ReentrancyGuard, SafeTransferLib {
 
         safeTransfer(_tokenAddress, msg.sender, _amt);
         emit MetaVesT_Withdrawal(msg.sender, _tokenAddress, _amt);
+    }
+
+    /// @notice allows an address to withdraw '_amount' of the 'amountWithdrawable' of their corresponding token in their MetaVesT, or amount of 'paymentToken' as a result of a tokenRepurchase
+    /// @dev best practice to call 'withdrawAll' rather than this function once a MetaVesT is completed, to delete it afterward
+    /// @param _tokenAddress the ERC20 token address which msg.sender is withdrawing, which should be either the 'metavestDetails[msg.sender].allocation.tokenContract' or 'paymentToken'
+    /// @param _amount amount of tokens msg.sender is withdrawing
+    function withdraw(address _tokenAddress, uint256 _amount) external nonReentrant {
+        if (_tokenAddress == address(0)) revert MetaVesT_ZeroAddress();
+
+        /// @dev if caller has a MetaVesT which is a Token Option, they must call 'exerciseOption' in order to exercise their option and make their 'tokensUnlocked' (vested) withdrawable and then call this function, otherwise they would be withdrawing vested but not exercised tokens here
+        if (
+            msg.sender != authority &&
+            msg.sender != controller &&
+            _tokenAddress == metavestDetails[msg.sender].allocation.tokenContract &&
+            metavestDetails[msg.sender].metavestType != MetaVesTType.OPTION
+        ) {
+            uint256 _preAmtWithdrawable = amountWithdrawable[msg.sender][_tokenAddress];
+            refreshMetavest(msg.sender);
+            MetaVesTDetails memory _metavest = metavestDetails[msg.sender];
+            if (msg.sender != _metavest.grantee) revert MetaVesT_OnlyGrantee();
+
+            uint256 _unlockedNotWithdrawn = _metavest.allocation.tokensUnlocked -
+                metavestDetails[msg.sender].allocation.unlockedTokensWithdrawn;
+            amountWithdrawable[msg.sender][_tokenAddress] = _preAmtWithdrawable + _unlockedNotWithdrawn;
+            if (_amount > amountWithdrawable[msg.sender][_tokenAddress])
+                revert MetaVesT_AmountGreaterThanWithdrawable();
+
+            // adjust unlocked variables for '_amount' withdrawn if not just from '_preAmtWithdrawable' (not just deducted from 'amountWithdrawable')
+            if (_preAmtWithdrawable < _amount) {
+                uint256 _newlyUnlockedAndWithdrawn = _unlockedNotWithdrawn - _amount;
+                metavestDetails[msg.sender].allocation.unlockedTokensWithdrawn += _newlyUnlockedAndWithdrawn;
+                metavestDetails[msg.sender].allocation.tokensUnlocked -= _newlyUnlockedAndWithdrawn;
+            }
+        }
+
+        if (_amount > amountWithdrawable[msg.sender][_tokenAddress]) revert MetaVesT_AmountGreaterThanWithdrawable();
+
+        // subtract '_amount' from 'amountWithdrawable' for '_tokenAddress'
+        amountWithdrawable[msg.sender][_tokenAddress] -= _amount;
+
+        safeTransfer(_tokenAddress, msg.sender, _amount);
+        emit MetaVesT_Withdrawal(msg.sender, _tokenAddress, _amount);
     }
 }
