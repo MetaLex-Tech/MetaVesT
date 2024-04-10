@@ -14,20 +14,10 @@ interface ICondition {
     function checkCondition() external returns (bool);
 }
 
-interface IERC20 {
-    function allowance(address owner, address spender) external view returns (uint256);
-    function balanceOf(address account) external view returns (uint256);
-}
-
 interface IMetaVesT {
     function addMilestone(address grantee, uint256 milestoneAward) external;
     function confirmMilestone(address grantee) external;
     function createMetavest(MetaVesT.MetaVesTDetails calldata metavestDetails, uint256 total) external;
-    function createMetavestWithPermit(
-        MetaVesT.MetaVesTDetails calldata metavestDetails,
-        uint256 total,
-        address depositor
-    ) external;
     function removeMilestone(
         uint8 milestoneIndex,
         address grantee,
@@ -141,68 +131,6 @@ contract MetaVesTController is SafeTransferLib {
         emit MetaVesTController_ConditionUpdated(_condition, _functionSig);
     }
 
-    /// @notice create a MetaVesT for a grantee and lock the total token amount ('metavestDetails.allocation.tokenStreamTotal' + 'metavestDetails.allocation.cliffCredit' + 'metavestDetails.milestoneAwards') via permit(),  if supported
-    /// @dev requires transfer of exact amount of 'metavestDetails.allocation.tokenStreamTotal' + 'metavestDetails.allocation.cliffCredit' + 'metavestDetails.milestoneAwards' along with MetaVesTDetails;
-    /// while '_depositor' need not be the 'authority', only 'authority' can set a grantee's 'MetaVesTDetails' by calling this function.
-    /// @param _metavestDetails: MetaVesTDetails struct containing all applicable details for this '_metavestDetails.grantee'-- but MUST contain grantee, token contract, some locked amount, and start and stop time
-    /// @param _depositor: depositor of the tokens, usually 'authority'
-    /// @param _deadline: deadline for usage of the permit approval signature
-    /// @param v: ECDSA sig parameter
-    /// @param r: ECDSA sig parameter
-    /// @param s: ECDSA sig parameter
-    function createMetavestAndLockTokensWithPermit(
-        MetaVesT.MetaVesTDetails calldata _metavestDetails,
-        address _depositor,
-        uint256 _deadline,
-        uint8 v,
-        bytes32 r,
-        bytes32 s
-    ) external onlyAuthority conditionCheck {
-        //prevent overwrite of existing MetaVesT
-        if (
-            imetavest.metavestDetails(_metavestDetails.grantee).grantee != address(0) ||
-            _metavestDetails.grantee == authority ||
-            _metavestDetails.grantee == address(this)
-        ) revert MetaVesTController_MetaVesTAlreadyExists();
-        if (_metavestDetails.grantee == address(0) || _metavestDetails.allocation.tokenContract == address(0))
-            revert MetaVesTController_ZeroAddress();
-        if (
-            _deadline < block.timestamp || _metavestDetails.allocation.stopTime <= _metavestDetails.allocation.startTime
-        ) revert MetaVesTController_TimeVariableError();
-        if (
-            (_metavestDetails.metavestType == MetaVesT.MetaVesTType.OPTION &&
-                _metavestDetails.option.exercisePrice == 0) ||
-            (_metavestDetails.metavestType == MetaVesT.MetaVesTType.RESTRICTED &&
-                _metavestDetails.rta.repurchasePrice == 0)
-        ) revert MetaVesTController_ZeroPrice();
-
-        // limit array length and ensure the milestone arrays are equal in length
-        if (
-            _metavestDetails.milestones.length > ARRAY_LENGTH_LIMIT ||
-            (_metavestDetails.milestones.length != _metavestDetails.milestoneAwards.length)
-        ) revert MetaVesTController_LengthMismatch();
-
-        uint256 _milestoneTotal;
-        for (uint256 i; i < _metavestDetails.milestones.length; ++i) {
-            _milestoneTotal += _metavestDetails.milestoneAwards[i];
-        }
-        uint256 _total = _metavestDetails.allocation.tokenStreamTotal +
-            _metavestDetails.allocation.cliffCredit +
-            _milestoneTotal;
-        if (_total == 0) revert MetaVesTController_ZeroAmount();
-
-        IERC20Permit(_metavestDetails.allocation.tokenContract).permit(
-            _depositor,
-            metavest,
-            _total,
-            _deadline,
-            v,
-            r,
-            s
-        );
-        imetavest.createMetavestWithPermit(_metavestDetails, _total, _depositor);
-    }
-
     /// @notice for 'authority' to create a MetaVesT for a grantee and lock the total token amount ('metavestDetails.allocation.tokenStreamTotal' + 'metavestDetails.allocation.cliffCredit' + 'metavestDetails.milestoneAwards')
     /// @dev msg.sender ('authority') must have approved 'metavest' for 'metavestDetails.allocation.tokenStreamTotal' + 'metavestDetails.allocation.cliffCredit' + 'metavestDetails.milestoneAwards' in '_metavestDetails.allocation.tokenContract' prior to calling this function;
     /// requires transfer of exact amount of 'metavestDetails.allocation.tokenStreamTotal' + 'metavestDetails.allocation.cliffCredit' + 'metavestDetails.milestoneAwards' along with MetaVesTDetails;
@@ -242,8 +170,8 @@ contract MetaVesTController is SafeTransferLib {
             _milestoneTotal;
         if (_total == 0) revert MetaVesTController_ZeroAmount();
         if (
-            IERC20Permit(_metavestDetails.allocation.tokenContract).allowance(msg.sender, metavest) < _total ||
-            IERC20Permit(_metavestDetails.allocation.tokenContract).balanceOf(msg.sender) < _total
+            IERC20(_metavestDetails.allocation.tokenContract).allowance(msg.sender, metavest) < _total ||
+            IERC20(_metavestDetails.allocation.tokenContract).balanceOf(msg.sender) < _total
         ) revert MetaVesTController_AmountNotApprovedForTransferFrom();
         imetavest.createMetavest(_metavestDetails, _total);
     }
@@ -408,8 +336,8 @@ contract MetaVesTController is SafeTransferLib {
 
         uint256 _payment = _amount * _metavest.rta.repurchasePrice;
         if (
-            IERC20Permit(paymentToken).allowance(msg.sender, metavest) < _payment ||
-            IERC20Permit(paymentToken).balanceOf(msg.sender) < _payment
+            IERC20(paymentToken).allowance(msg.sender, metavest) < _payment ||
+            IERC20(paymentToken).balanceOf(msg.sender) < _payment
         ) revert MetaVesT.MetaVesT_AmountNotApprovedForTransferFrom();
 
         safeTransferFrom(paymentToken, msg.sender, metavest, _payment);
