@@ -10,33 +10,45 @@ pragma solidity ^0.8.18;
 
 import "./MetaVesT.sol";
 
-interface ICondition {
-    function checkCondition() external returns (bool);
-}
-
 interface IMetaVesT {
-    function addMilestone(address grantee, uint256 milestoneAward) external;
-    function confirmMilestone(address grantee) external;
+    function addMilestone(address grantee, MetaVesT.Milestone calldata milestone) external;
+
+    function confirmMilestone(address grantee, uint8 milestoneIndex) external;
+
     function createMetavest(MetaVesT.MetaVesTDetails calldata metavestDetails, uint256 total) external;
+
     function removeMilestone(
         uint8 milestoneIndex,
         address grantee,
-        address tokenContract,
-        bool[] memory milestones,
-        uint256[] memory milestoneAwards,
-        uint256 removedMilestoneAmount
+        address tokenContract
     ) external;
+
     function repurchaseTokens(address grantee, uint256 divisor) external;
+
     function terminate(address grantee) external;
+
     function metavestDetails(address grantee) external view returns (MetaVesT.MetaVesTDetails memory details);
+
     function refreshMetavest(address grantee) external;
+
     function transferees(address grantee) external view returns (address[] memory);
+
     function updateAuthority(address newAuthority) external;
+
     function updateDao(address newDao) external;
+
     function updatePrice(address grantee, uint256 newPrice) external;
-    function updateStopTimes(address grantee, uint48 stopTime, uint48 shortStopTime) external;
+
+    function updateStopTimes(
+        address grantee,
+        uint48 stopTime,
+        uint48 shortStopTime
+    ) external;
+
     function updateTransferability(address grantee, bool isTransferable) external;
+
     function updateUnlockRate(address grantee, uint208 unlockRate) external;
+
     function withdrawAll(address tokenAddress) external;
 }
 
@@ -110,7 +122,11 @@ contract MetaVesTController is SafeTransferLib {
     /// @param _dao DAO governance contract address which may be used for staking/voting in the deployed MetaVesT, and which exercises control over ability of 'authority' to call certain functions via imposing
     /// conditions through 'updateFunctionCondition'. Submit address(0) for no such functionality.
     /// @param _paymentToken contract address of the token used as payment/consideration for 'authority' to repurchase tokens according to a restricted token award, or for 'grantee' to exercise a token option
-    constructor(address _authority, address _dao, address _paymentToken) {
+    constructor(
+        address _authority,
+        address _dao,
+        address _paymentToken
+    ) {
         if (_authority == address(0) || _paymentToken == address(0)) revert MetaVesTController_ZeroAddress();
         authority = _authority;
         MetaVesT _metaVesT = new MetaVesT(_authority, address(this), _dao, _paymentToken);
@@ -125,7 +141,11 @@ contract MetaVesTController is SafeTransferLib {
     /// @param _condition address of the applicable Condition contract-- pass address(0) to remove the requirement for '_functionSig'
     /// @param _index index of 'functionToConditions' mapped array which is being updated; if == array length, add a new condition
     /// @param _functionSig signature of the function which is having its condition requirement updated
-    function updateFunctionCondition(address _condition, uint256 _index, bytes4 _functionSig) external onlyDao {
+    function updateFunctionCondition(
+        address _condition,
+        uint256 _index,
+        bytes4 _functionSig
+    ) external onlyDao {
         // indexed address may be replaced can be up to the length of the array (and thus adds a new array member)
         if (_index <= functionToConditions[msg.sig].length) functionToConditions[_functionSig][_index] = _condition;
         emit MetaVesTController_ConditionUpdated(_condition, _functionSig);
@@ -135,44 +155,28 @@ contract MetaVesTController is SafeTransferLib {
     /// @dev msg.sender ('authority') must have approved 'metavest' for 'metavestDetails.allocation.tokenStreamTotal' + 'metavestDetails.allocation.cliffCredit' + 'metavestDetails.milestoneAwards' in '_metavestDetails.allocation.tokenContract' prior to calling this function;
     /// requires transfer of exact amount of 'metavestDetails.allocation.tokenStreamTotal' + 'metavestDetails.allocation.cliffCredit' + 'metavestDetails.milestoneAwards' along with MetaVesTDetails;
     /// @param _metavestDetails: MetaVesTDetails struct containing all applicable details for this '_metavestDetails.grantee'-- but MUST contain grantee, token contract, amount, and start and stop time
-    function createMetavestAndLockTokens(
-        MetaVesT.MetaVesTDetails calldata _metavestDetails
-    ) external onlyAuthority conditionCheck {
+    function createMetavestAndLockTokens(MetaVesT.MetaVesTDetails calldata _metavestDetails) external onlyAuthority conditionCheck {
         //prevent overwrite of existing MetaVesT
+        if (imetavest.metavestDetails(_metavestDetails.grantee).grantee != address(0) || _metavestDetails.grantee == authority || _metavestDetails.grantee == address(this))
+            revert MetaVesTController_MetaVesTAlreadyExists();
+        if (_metavestDetails.grantee == address(0) || _metavestDetails.allocation.tokenContract == address(0)) revert MetaVesTController_ZeroAddress();
+        if (_metavestDetails.allocation.stopTime <= _metavestDetails.allocation.startTime) revert MetaVesTController_TimeVariableError();
         if (
-            imetavest.metavestDetails(_metavestDetails.grantee).grantee != address(0) ||
-            _metavestDetails.grantee == authority ||
-            _metavestDetails.grantee == address(this)
-        ) revert MetaVesTController_MetaVesTAlreadyExists();
-        if (_metavestDetails.grantee == address(0) || _metavestDetails.allocation.tokenContract == address(0))
-            revert MetaVesTController_ZeroAddress();
-        if (_metavestDetails.allocation.stopTime <= _metavestDetails.allocation.startTime)
-            revert MetaVesTController_TimeVariableError();
-        if (
-            (_metavestDetails.metavestType == MetaVesT.MetaVesTType.OPTION &&
-                _metavestDetails.option.exercisePrice == 0) ||
-            (_metavestDetails.metavestType == MetaVesT.MetaVesTType.RESTRICTED &&
-                _metavestDetails.rta.repurchasePrice == 0)
+            (_metavestDetails.metavestType == MetaVesT.MetaVesTType.OPTION && _metavestDetails.option.exercisePrice == 0) ||
+            (_metavestDetails.metavestType == MetaVesT.MetaVesTType.RESTRICTED && _metavestDetails.rta.repurchasePrice == 0)
         ) revert MetaVesTController_ZeroPrice();
 
-        // limit array length and ensure the milestone arrays are equal in length
-        if (
-            _metavestDetails.milestones.length > ARRAY_LENGTH_LIMIT ||
-            (_metavestDetails.milestones.length != _metavestDetails.milestoneAwards.length)
-        ) revert MetaVesTController_LengthMismatch();
+        // limit array length
+        if (_metavestDetails.milestones.length > ARRAY_LENGTH_LIMIT) revert MetaVesTController_LengthMismatch();
 
         uint256 _milestoneTotal;
         for (uint256 i; i < _metavestDetails.milestones.length; ++i) {
-            _milestoneTotal += _metavestDetails.milestoneAwards[i];
+            _milestoneTotal += _metavestDetails.milestones[i].milestoneAward;
         }
-        uint256 _total = _metavestDetails.allocation.tokenStreamTotal +
-            _metavestDetails.allocation.cliffCredit +
-            _milestoneTotal;
+        uint256 _total = _metavestDetails.allocation.tokenStreamTotal + _metavestDetails.allocation.cliffCredit + _milestoneTotal;
         if (_total == 0) revert MetaVesTController_ZeroAmount();
-        if (
-            IERC20(_metavestDetails.allocation.tokenContract).allowance(msg.sender, metavest) < _total ||
-            IERC20(_metavestDetails.allocation.tokenContract).balanceOf(msg.sender) < _total
-        ) revert MetaVesTController_AmountNotApprovedForTransferFrom();
+        if (IERC20(_metavestDetails.allocation.tokenContract).allowance(msg.sender, metavest) < _total || IERC20(_metavestDetails.allocation.tokenContract).balanceOf(msg.sender) < _total)
+            revert MetaVesTController_AmountNotApprovedForTransferFrom();
         imetavest.createMetavest(_metavestDetails, _total);
     }
 
@@ -196,10 +200,7 @@ contract MetaVesTController is SafeTransferLib {
     /// @notice for 'authority' to toggle whether '_grantee''s MetaVesT is transferable-- does not revoke previous transfers, but does cause such transferees' MetaVesTs transferability to be similarly updated
     /// @param _grantee address whose MetaVesT's (and whose transferees' MetaVesTs') transferability is being updated
     /// @param _isTransferable whether transferability is to be updated to transferable (true) or nontransferable (false)
-    function updateMetavestTransferability(
-        address _grantee,
-        bool _isTransferable
-    ) external onlyAuthority conditionCheck {
+    function updateMetavestTransferability(address _grantee, bool _isTransferable) external onlyAuthority conditionCheck {
         imetavest.refreshMetavest(_grantee);
         imetavest.updateTransferability(_grantee, _isTransferable);
     }
@@ -207,20 +208,10 @@ contract MetaVesTController is SafeTransferLib {
     /// @notice for the controller to update either exercisePrice or repurchasePrice for a '_grantee' and their transferees, as applicable depending on the MetaVesTType
     /// @param _grantee address of grantee whose applicable price is being updated
     /// @param _newPrice new price (in 'paymentToken' per token)
-    function updateExerciseOrRepurchasePrice(
-        address _grantee,
-        uint256 _newPrice
-    ) external onlyAuthority conditionCheck {
+    function updateExerciseOrRepurchasePrice(address _grantee, uint256 _newPrice) external onlyAuthority conditionCheck {
         if (_newPrice == 0) revert MetaVesTController_ZeroPrice();
         imetavest.refreshMetavest(_grantee);
         imetavest.updatePrice(_grantee, _newPrice);
-    }
-
-    /// @notice for 'authority' to confirm grantee has completed the current milestone (or simple a milestone, if milestones are not chronological)
-    /// also unlocking the the tokens for such milestone, including any transferees
-    function confirmMetavestMilestone(address _grantee) external onlyAuthority conditionCheck {
-        imetavest.refreshMetavest(_grantee);
-        imetavest.confirmMilestone(_grantee);
     }
 
     /// @notice allows 'authority' to remove a milestone from '_grantee''s MetaVesT if such milestone has not yet been confirmed, also making such tokens withdrawable by controller
@@ -233,44 +224,26 @@ contract MetaVesTController is SafeTransferLib {
 
         uint256 _maxIndex = _metavest.milestones.length - 1; // max index is the length of the array - 1, since the index counter starts at 0; will revert from underflow if milestones.length == 0
         // revert if the milestone corresponding to '_milestoneIndex' doesn't exist or has already been completed
-        if (_milestoneIndex > _maxIndex || _milestoneIndex < _metavest.milestoneIndex)
-            revert MetaVesTController_MilestoneIndexCompletedOrDoesNotExist();
+        if (_milestoneIndex > _maxIndex || _metavest.milestones[_milestoneIndex].complete) revert MetaVesTController_MilestoneIndexCompletedOrDoesNotExist();
 
-        // to be passed via imetavest, to update controller's amountWithdrawable
-        uint256 _deletedMilestoneAward = _metavest.milestoneAwards[_milestoneIndex];
-
-        // remove '_milestoneIndex' element from each array by shifting each subsequent element, then deleting last one in MetaVesT.sol via 'pop()'
-        for (uint256 i = _milestoneIndex; i < _maxIndex; i++) {
-            _metavest.milestones[i] = _metavest.milestones[i + 1];
-            _metavest.milestoneAwards[i] = _metavest.milestoneAwards[i + 1];
-        }
-
-        // pass the updated arrays to MetaVesT.sol to update state variables
-        imetavest.removeMilestone(
-            _milestoneIndex,
-            _grantee,
-            _metavest.allocation.tokenContract,
-            _metavest.milestones,
-            _metavest.milestoneAwards,
-            _deletedMilestoneAward
-        );
+        imetavest.removeMilestone(_milestoneIndex, _grantee, _metavest.allocation.tokenContract);
     }
 
     /// @notice for the applicable authority to add a milestone for a '_grantee' (and any transferees) and transfer the award amount of tokens
     /// @param _grantee address of grantee whose MetaVesT is being updated
-    /// @param _milestoneAward amount of tokens corresponding to the newly added milestone, which must be transferred via this function
-    function addMetavestMilestone(address _grantee, uint256 _milestoneAward) external onlyAuthority conditionCheck {
+    /// @param _milestone new Milestone struct added for '_grantee', to be added to their 'milestones' array
+    function addMetavestMilestone(address _grantee, MetaVesT.Milestone calldata _milestone) external onlyAuthority conditionCheck {
         imetavest.refreshMetavest(_grantee);
         MetaVesT.MetaVesTDetails memory _metavest = imetavest.metavestDetails(_grantee);
-        if (_milestoneAward == 0) revert MetaVesTController_ZeroAmount();
+        if (_milestone.milestoneAward == 0) revert MetaVesTController_ZeroAmount();
         if (
-            IERC20(_metavest.allocation.tokenContract).allowance(msg.sender, metavest) < _milestoneAward ||
-            IERC20(_metavest.allocation.tokenContract).balanceOf(msg.sender) < _milestoneAward
+            IERC20(_metavest.allocation.tokenContract).allowance(msg.sender, metavest) < _milestone.milestoneAward ||
+            IERC20(_metavest.allocation.tokenContract).balanceOf(msg.sender) < _milestone.milestoneAward
         ) revert MetaVesT.MetaVesT_AmountNotApprovedForTransferFrom();
 
-        safeTransferFrom(_metavest.allocation.tokenContract, msg.sender, metavest, _milestoneAward);
+        safeTransferFrom(_metavest.allocation.tokenContract, msg.sender, metavest, _milestone.milestoneAward);
 
-        imetavest.addMilestone(_grantee, _milestoneAward);
+        imetavest.addMilestone(_grantee, _milestone);
     }
 
     /// @notice for authority to update a MetaVesT's unlockRate (including any transferees)
@@ -295,8 +268,7 @@ contract MetaVesTController is SafeTransferLib {
         if (_stopTime < _shortStopTime) revert MetaVesTController_TimeVariableError();
         imetavest.refreshMetavest(_grantee);
         MetaVesT.MetaVesTDetails memory _metavest = imetavest.metavestDetails(_grantee);
-        if (_metavest.allocation.stopTime <= block.timestamp || _stopTime <= block.timestamp)
-            revert MetaVesTController_StopTimeAlreadyOccurred();
+        if (_metavest.allocation.stopTime <= block.timestamp || _stopTime <= block.timestamp) revert MetaVesTController_StopTimeAlreadyOccurred();
 
         imetavest.updateStopTimes(_grantee, _stopTime, _shortStopTime);
     }
@@ -317,8 +289,7 @@ contract MetaVesTController is SafeTransferLib {
     function repurchaseMetavestTokens(address _grantee, uint256 _divisor) external onlyAuthority conditionCheck {
         imetavest.refreshMetavest(_grantee);
         MetaVesT.MetaVesTDetails memory _metavest = imetavest.metavestDetails(_grantee);
-        if (_metavest.metavestType != MetaVesT.MetaVesTType.RESTRICTED)
-            revert MetaVesTController_IncorrectMetaVesTType();
+        if (_metavest.metavestType != MetaVesT.MetaVesTType.RESTRICTED) revert MetaVesTController_IncorrectMetaVesTType();
         if (_metavest.rta.tokensRepurchasable == 0 || _divisor == 0) revert MetaVesTController_ZeroAmount();
         if (block.timestamp >= _metavest.rta.shortStopTime) revert MetaVesTController_RepurchaseExpired();
 
@@ -335,10 +306,7 @@ contract MetaVesTController is SafeTransferLib {
         }
 
         uint256 _payment = _amount * _metavest.rta.repurchasePrice;
-        if (
-            IERC20(paymentToken).allowance(msg.sender, metavest) < _payment ||
-            IERC20(paymentToken).balanceOf(msg.sender) < _payment
-        ) revert MetaVesT.MetaVesT_AmountNotApprovedForTransferFrom();
+        if (IERC20(paymentToken).allowance(msg.sender, metavest) < _payment || IERC20(paymentToken).balanceOf(msg.sender) < _payment) revert MetaVesT.MetaVesT_AmountNotApprovedForTransferFrom();
 
         safeTransferFrom(paymentToken, msg.sender, metavest, _payment);
         imetavest.repurchaseTokens(_grantee, _divisor);
