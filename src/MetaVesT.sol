@@ -13,6 +13,12 @@
 
 pragma solidity ^0.8.18;
 
+/// @notice interface to a BORG-Core condition contract
+/// @dev see https://github.com/MetaLex-Tech/BORG-CORE/tree/main/src/libs/conditions
+interface ICondition {
+    function checkCondition() external returns (bool);
+}
+
 interface IERC20 {
     function allowance(address owner, address spender) external view returns (uint256);
 
@@ -219,11 +225,12 @@ contract MetaVesT is ReentrancyGuard, SafeTransferLib {
     /// ERRORS
     ///
 
-    error MetaVesT_MilestoneDoesNotExist();
     error MetaVesT_AlreadyExists();
     error MetaVesT_AmountGreaterThanUnlocked();
     error MetaVesT_AmountGreaterThanWithdrawable();
     error MetaVesT_AmountNotApprovedForTransferFrom();
+    error MetaVesT_ConditionNotSatisfied(address conditionContract);
+    error MetaVesT_MilestoneIndexCompletedOrDoesNotExist();
     error MetaVesT_NonTransferable();
     error MetaVesT_NoMetaVesT();
     error MetaVesT_NoTokenOption();
@@ -278,6 +285,13 @@ contract MetaVesT is ReentrancyGuard, SafeTransferLib {
 
         safeTransferFrom(_metavestDetails.allocation.tokenContract, authority, address(this), _total);
         emit MetaVesT_Created(_metavestDetails);
+    }
+
+    /// @notice convenience function to get a grantee's updated 'tokenGoverningPower'
+    /// @param _grantee address whose 'tokenGoverningPower' is being returned
+    function getGoverningPower(address _grantee) external returns (uint256) {
+        refreshMetavest(_grantee);
+        return metavestDetails[_grantee].allocation.tokenGoverningPower;
     }
 
     /// @notice for controller to update 'authority' via its two-step functions
@@ -365,46 +379,93 @@ contract MetaVesT is ReentrancyGuard, SafeTransferLib {
         emit MetaVesT_StopTimesUpdated(_grantee, _stopTime, _shortStopTime);
     }
 
+    /// @notice for anyone to check whether grantee has completed a milestone, provided any condition contracts are satisfied,
+    /// making the tokens for such milestone unlocked, including any transferees.
+    /// @dev this function is not 'onlyController' permissioned because that functionality is possible via milestones.conditionContracts,
+    /// by using a signatureCondition contract. This way, for milestones with objective conditions (such as a time or data condition), the grantee does not need to prompt
+    /// the 'authority' to confirm their milestone
+    /// @param _grantee address of grantee whose milestone is being confirmed
+    /// @param _milestoneIndex element of 'milestones' array that is being confirmed
+    function confirmMilestone(address _grantee, uint8 _milestoneIndex) external {
+        refreshMetavest(_grantee);
+        MetaVesTDetails memory _metavestDetails = metavestDetails[_grantee];
+
+        if (_milestoneIndex > _metavestDetails.milestones.length || _metavestDetails.milestones[_milestoneIndex].complete) revert MetaVesT_MilestoneIndexCompletedOrDoesNotExist();
+
+        // perform any applicable condition checks, including whether 'authority' has a signatureCondition
+        for (uint256 i; i < _metavestDetails.milestones[_milestoneIndex].conditionContracts.length; ++i) {
+            if (!ICondition(_metavestDetails.milestones[_milestoneIndex].conditionContracts[i]).checkCondition())
+                revert MetaVesT_ConditionNotSatisfied(_metavestDetails.milestones[_milestoneIndex].conditionContracts[i]);
+        }
+
+        unchecked {
+            metavestDetails[_grantee].allocation.tokensUnlocked += _metavestDetails.milestones[_milestoneIndex].milestoneAward; // cannot overflow as milestoneAwards cannot cumulatively be greater that tokenStreamTotal
+            cliffAndMilestoneUnlocked[_grantee] += _metavestDetails.milestones[_milestoneIndex].milestoneAward;
+            amountLocked[_metavestDetails.grantee] -= _metavestDetails.milestones[_milestoneIndex].milestoneAward; // cannot underflow as milestoneAwards cannot be cumulatively be greater than the amountLocked
+            if (_metavestDetails.metavestType == MetaVesTType.RESTRICTED) metavestDetails[_grantee].rta.tokensRepurchasable -= _metavestDetails.milestones[_milestoneIndex].milestoneAward;
+        }
+
+        //delete award and mark complete after adding to unlocked amount and deducting from amount locked
+        delete metavestDetails[_grantee].milestones[_milestoneIndex].milestoneAward;
+        metavestDetails[_grantee].milestones[_milestoneIndex].complete = true;
+
+        // if claims were transferred, make similar updates (start and end time will be the same) for each transferee of this '_grantee'
+        // condition contracts are the same, so no need to re-check in the same txn
+        if (transferees[_grantee].length != 0) {
+            for (uint256 i; i < transferees[_grantee].length; ++i) {
+                address _addr = transferees[_grantee][i];
+                uint256 _award = metavestDetails[_addr].milestones[_milestoneIndex].milestoneAward;
+                unchecked {
+                    metavestDetails[_addr].allocation.tokensUnlocked += _award;
+                    cliffAndMilestoneUnlocked[_addr] += _award;
+                    amountLocked[_addr] -= _award;
+                    if (_metavestDetails.metavestType == MetaVesTType.RESTRICTED) metavestDetails[_addr].rta.tokensRepurchasable -= _award;
+                }
+                //delete award after adding to amount withdrawable and deducting from amount locked, and mark complete
+                delete metavestDetails[_addr].milestones[_milestoneIndex].milestoneAward;
+                metavestDetails[_addr].milestones[_milestoneIndex].complete = true;
+            }
+        }
+
+        emit MetaVesT_MilestoneCompleted(_grantee, _milestoneIndex);
+    }
+
     /// @notice for the applicable authority to remove a MetaVesT's milestone via the controller
     /// @dev conditionals and further comments for this function are in the 'controller'; since only an uncompleted milestone may be removed, 'milestoneIndex' doesn't need to be adjusted
     /// @param _milestoneIndex element of the 'milestones' array to be removed
     /// @param _grantee address of grantee whose MetaVesT is being updated
     /// @param _tokenContract token contract address of the applicable milestoneAward
-    /// @param _milestones update 'milestones' array of Milestone structs for '_grantee', with last element to be removed
-    /// @param _removedMilestoneAmount amount of tokens in now-removed milestoneAward, which becomes withdrawable by 'controller'
     function removeMilestone(
         uint8 _milestoneIndex,
         address _grantee,
-        address _tokenContract,
-        Milestone[] calldata _milestones,
-        uint256 _removedMilestoneAmount
+        address _tokenContract
     ) external onlyController {
-        metavestDetails[_grantee].milestones = _milestones;
-
-        // remove last element in storage, as it is now duplicative (having replaced the '_milestoneIndex' element), and decrease the length by 1
-        metavestDetails[_grantee].milestones.pop();
+        uint256 _removedMilestoneAmount = metavestDetails[_grantee].milestones[_milestoneIndex].milestoneAward;
 
         amountWithdrawable[controller][_tokenContract] += _removedMilestoneAmount;
         amountLocked[_grantee] -= _removedMilestoneAmount;
 
+        delete metavestDetails[_grantee].milestones[_milestoneIndex];
+
+        bool _rta;
         // ensure tokensRepurchasable subtracts deleted amount, if RTA
-        if (metavestDetails[_grantee].rta.tokensRepurchasable != 0) metavestDetails[_grantee].rta.tokensRepurchasable -= _removedMilestoneAmount;
+        if (metavestDetails[_grantee].rta.tokensRepurchasable != 0) {
+            metavestDetails[_grantee].rta.tokensRepurchasable -= _removedMilestoneAmount;
+            _rta = true;
+        }
 
         // replicate for transferees
         if (transferees[_grantee].length != 0) {
-            uint256 _maxIndex = _milestones.length - 1;
             for (uint256 i; i < transferees[_grantee].length; ++i) {
                 address _transferee = transferees[_grantee][i];
                 uint256 _transfereeRemovedMilestoneAmount = metavestDetails[_transferee].milestones[_milestoneIndex].milestoneAward;
 
-                // remove '_milestoneIndex' element from each array by shifting each subsequent element, then deleting last one in MetaVesT.sol via 'pop()'
-                for (uint256 x = _milestoneIndex; x < _maxIndex; x++) {
-                    metavestDetails[_transferee].milestones[x] = metavestDetails[_transferee].milestones[x + 1];
-                }
-                metavestDetails[_transferee].milestones.pop();
-
                 amountWithdrawable[controller][_tokenContract] += _transfereeRemovedMilestoneAmount;
                 amountLocked[_transferee] -= _transfereeRemovedMilestoneAmount;
+                if (_rta) metavestDetails[_transferee].rta.tokensRepurchasable -= _transfereeRemovedMilestoneAmount;
+
+                delete metavestDetails[_transferee].milestones[_milestoneIndex];
+
                 emit MetaVesT_MilestoneRemoved(_transferee, _milestoneIndex);
             }
         }
@@ -550,45 +611,6 @@ contract MetaVesT is ReentrancyGuard, SafeTransferLib {
         emit MetaVesT_Withdrawal(authority, _metavestDetails.allocation.tokenContract, _remainder);
     }
 
-    /// @notice for 'controller' to confirm grantee has completed a milestone, provided any condition contracts are satisfied,
-    /// making the tokens for such milestone unlocked, including any transferees
-    function confirmMilestone(address _grantee, uint8 _milestoneIndex) external onlyController {
-        MetaVesTDetails memory _metavestDetails = metavestDetails[_grantee];
-        if (_milestoneIndex > metavestDetails[_grantee].milestones.length || metavestDetails[_grantee].milestones[_milestoneIndex].complete)
-            revert MetaVesT_MilestoneDoesNotExist();
-
-        unchecked {
-            metavestDetails[_grantee].allocation.tokensUnlocked += _metavestDetails.milestones[_milestoneIndex].milestoneAward; // cannot overflow as milestoneAwards cannot cumulatively be greater that tokenStreamTotal
-            cliffAndMilestoneUnlocked[_grantee] += _metavestDetails.milestones[_milestoneIndex].milestoneAward;
-            amountLocked[_metavestDetails.grantee] -= _metavestDetails.milestones[_milestoneIndex].milestoneAward; // cannot underflow as milestoneAwards cannot be cumulatively be greater than the amountLocked
-            if (_metavestDetails.metavestType == MetaVesTType.RESTRICTED)
-                metavestDetails[_grantee].rta.tokensRepurchasable -= _metavestDetails.milestones[_milestoneIndex].milestoneAward;
-        }
-
-        //delete award and mark complete after adding to unlocked amount and deducting from amount locked
-        delete metavestDetails[_grantee].milestones[_milestoneIndex].milestoneAward;
-        metavestDetails[_grantee].milestones[_milestoneIndex].complete = true;
-
-        // if claims were transferred, make similar updates (start and end time will be the same) for each transferee of this '_grantee'
-        if (transferees[_grantee].length != 0) {
-            for (uint256 i; i < transferees[_grantee].length; ++i) {
-                address _addr = transferees[_grantee][i];
-                uint256 _award = metavestDetails[_addr].milestones[_milestoneIndex].milestoneAward;
-                unchecked {
-                    metavestDetails[_addr].allocation.tokensUnlocked += _award;
-                    cliffAndMilestoneUnlocked[_addr] += _award;
-                    amountLocked[_addr] -= _award;
-                    if (_metavestDetails.metavestType == MetaVesTType.RESTRICTED) metavestDetails[_addr].rta.tokensRepurchasable -= _award;
-                }
-                //delete award after adding to amount withdrawable and deducting from amount locked, and mark complete
-                delete metavestDetails[_addr].milestones[_milestoneIndex].milestoneAward;
-                metavestDetails[_addr].milestones[_milestoneIndex].complete = true;
-            }
-        }
-
-        emit MetaVesT_MilestoneCompleted(_grantee, _milestoneIndex);
-    }
-
     /// @notice allows a grantee to transfer part or all of their MetaVesT to a '_transferee' if this MetaVest has transferability enabled
     /// @param _divisor: divisor corresponding to the grantee's fraction of their claim transferred via this function; i.e. for a transfer of 25% of a claim, submit '4'; to transfer the entire MetaVesT, submit '1'
     /// @param _transferee: address to which the claim is being transferred, that will have a new MetaVesT created
@@ -712,8 +734,7 @@ contract MetaVesT is ReentrancyGuard, SafeTransferLib {
         delete metavestDetails[_grantee].allocation.tokenGoverningPower;
         if (_metavestDetails.eligibleTokens.locked) metavestDetails[_grantee].allocation.tokenGoverningPower += amountLocked[_grantee];
         if (_metavestDetails.eligibleTokens.unlocked) metavestDetails[_grantee].allocation.tokenGoverningPower += _metavestDetails.allocation.tokensUnlocked;
-        if (_metavestDetails.eligibleTokens.locked)
-            metavestDetails[_grantee].allocation.tokenGoverningPower += amountWithdrawable[_grantee][_metavestDetails.allocation.tokenContract];
+        if (_metavestDetails.eligibleTokens.locked) metavestDetails[_grantee].allocation.tokenGoverningPower += amountWithdrawable[_grantee][_metavestDetails.allocation.tokenContract];
 
         // if claims were transferred, make similar updates (though note '_start' and '_end' will be the same) for each transferee
         /// @dev this refreshes the "first level" of transferees; so a grantee's transferees will have their MetaVesTs refreshed, but
@@ -770,8 +791,7 @@ contract MetaVesT is ReentrancyGuard, SafeTransferLib {
         if (_metavest.allocation.tokensUnlocked < _amount) revert MetaVesT_AmountGreaterThanUnlocked();
 
         uint256 _payment = _amount * _metavest.option.exercisePrice;
-        if (IERC20(paymentToken).allowance(msg.sender, address(this)) < _payment || IERC20(paymentToken).balanceOf(msg.sender) < _payment)
-            revert MetaVesT_AmountNotApprovedForTransferFrom();
+        if (IERC20(paymentToken).allowance(msg.sender, address(this)) < _payment || IERC20(paymentToken).balanceOf(msg.sender) < _payment) revert MetaVesT_AmountNotApprovedForTransferFrom();
 
         safeTransferFrom(paymentToken, msg.sender, address(this), _payment);
 
