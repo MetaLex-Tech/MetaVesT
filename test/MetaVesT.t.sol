@@ -7,7 +7,7 @@ import "src/MetaVesT.sol";
 import "src/MetaVesTController.sol";
 
 /// @dev foundry framework testing of MetaVesT.sol including mock tokens
-/// NOTE: many MetaVesT functions are permissioned and conditions are house in MetaVesTController; see
+/// NOTE: many MetaVesT functions are permissioned and conditions are housed in MetaVesTController that are assumed in here; see
 /// MetaVesTController.t.sol for such tests
 /// forge t --via-ir
 
@@ -98,6 +98,8 @@ contract MetaVesTTest is Test {
     MetaVesTController internal controller;
     IMetaVesT internal imetavest;
 
+    MetaVesT.Milestone[] internal emptyMilestones;
+
     bool internal baseCondition;
 
     address metavestTestAddr;
@@ -127,85 +129,106 @@ contract MetaVesTTest is Test {
         assertEq(metavestTest.paymentToken(), testPaymentToken, "paymentToken did not initialize");
     }
 
-    function testCreateMetavest(MetaVesT.MetaVesTDetails calldata _metavestDetails, uint256 _total) external {
-        vm.assume(_metavestDetails.allocation.tokenContract == testTokenAddr);
-        // milestones tested separately
-        vm.assume(_metavestDetails.milestones.length == 0);
+    function testCreateMetavest(address _grantee, uint256 _total, bool _transferable) external {
+        vm.assume(_total > 1000 && _grantee != address(0));
 
-        vm.prank(controllerAddr);
-        testToken.mintToken(controllerAddr, _total);
+        MetaVesT.MetaVesTDetails memory _metavestDetails = MetaVesT.MetaVesTDetails({
+            metavestType: MetaVesT.MetaVesTType.ALLOCATION, // assuming ALLOCATION for this example
+            allocation: MetaVesT.Allocation({
+                tokenStreamTotal: _total,
+                cliffCredit: 0,
+                tokenGoverningPower: 0,
+                tokensUnlocked: 0,
+                unlockedTokensWithdrawn: 0,
+                unlockRate: 10,
+                tokenContract: testTokenAddr,
+                startTime: uint48(2 ** 20),
+                stopTime: uint48(2 ** 40)
+            }),
+            option: MetaVesT.TokenOption({exercisePrice: 1 ether, tokensForfeited: 0, shortStopTime: uint48(2 ** 30)}),
+            rta: MetaVesT.RestrictedTokenAward({
+                repurchasePrice: 0.5 ether,
+                tokensRepurchasable: 0,
+                shortStopTime: uint48(2 ** 30)
+            }),
+            eligibleTokens: MetaVesT.GovEligibleTokens({locked: false, unlocked: true, withdrawable: true}),
+            milestones: emptyMilestones, // milestones tested separately
+            grantee: _grantee,
+            transferable: _transferable
+        });
 
+        testToken.mintToken(AUTHORITY, _total);
+        vm.prank(AUTHORITY);
+        testToken.approve(metavestTestAddr, _total);
+
+        vm.startPrank(controllerAddr);
         metavestTest.createMetavest(_metavestDetails, _total);
+
+        MetaVesT.MetaVesTDetails memory _newDetails = metavestTest.getMetavestDetails(_metavestDetails.grantee);
         assertEq(_total, testToken.balanceOf(metavestTestAddr));
-        assertEq(
-            _metavestDetails.grantee,
-            imetavest.metavestDetails(_metavestDetails.grantee).grantee,
-            "metavestDetails not stored"
-        );
+        assertEq(_metavestDetails.grantee, _newDetails.grantee, "metavestDetails not stored");
         assertEq(metavestTest.amountLocked(_metavestDetails.grantee), _total, "amountLocked did not update");
     }
 
     function testUpdateTransferability(address _grantee, bool _isTransferable) external {
-        vm.prank(controllerAddr);
+        vm.assume(_grantee != address(0));
+        vm.startPrank(controllerAddr);
         metavestTest.updateTransferability(_grantee, _isTransferable);
 
         assertTrue(
-            imetavest.metavestDetails(_grantee).transferable == _isTransferable,
+            metavestTest.getMetavestDetails(_grantee).transferable == _isTransferable,
             "transferability did not update"
         );
     }
 
     function testUpdateUnlockRate(address _grantee, uint208 _unlockRate) external {
-        vm.prank(controllerAddr);
+        vm.assume(_grantee != address(0));
+        vm.startPrank(controllerAddr);
         metavestTest.updateUnlockRate(_grantee, _unlockRate);
-
-        assertEq(imetavest.metavestDetails(_grantee).allocation.unlockRate, _unlockRate, "unlockRate did not update");
+        MetaVesT.MetaVesTDetails memory _details = metavestTest.getMetavestDetails(_grantee);
+        assertEq(_details.allocation.unlockRate, _unlockRate, "unlockRate did not update");
     }
 
     function testUpdateStopTimes(address _grantee, uint48 _stopTime, uint48 _shortStopTime) external {
-        vm.prank(controllerAddr);
+        vm.assume(_grantee != address(0));
+        vm.startPrank(controllerAddr);
         metavestTest.updateStopTimes(_grantee, _stopTime, _shortStopTime);
-        MetaVesT.MetaVesTType _type = imetavest.metavestDetails(_grantee).metavestType;
+        MetaVesT.MetaVesTDetails memory _details = metavestTest.getMetavestDetails(_grantee);
+        MetaVesT.MetaVesTType _type = _details.metavestType;
 
         if (
             _type == MetaVesT.MetaVesTType.OPTION &&
-            imetavest.metavestDetails(_grantee).option.shortStopTime > block.timestamp &&
+            _details.option.shortStopTime > block.timestamp &&
             _shortStopTime > block.timestamp
         ) {
-            assertEq(
-                imetavest.metavestDetails(_grantee).option.shortStopTime,
-                _shortStopTime,
-                "option shortStopTime did not update"
-            );
+            assertEq(_details.option.shortStopTime, _shortStopTime, "option shortStopTime did not update");
         } else if (
             _type == MetaVesT.MetaVesTType.RESTRICTED &&
-            imetavest.metavestDetails(_grantee).rta.shortStopTime > block.timestamp &&
+            _details.rta.shortStopTime > block.timestamp &&
             _shortStopTime > block.timestamp
         ) {
-            assertEq(
-                imetavest.metavestDetails(_grantee).rta.shortStopTime,
-                _shortStopTime,
-                "rta shortStopTime did not update"
-            );
+            assertEq(_details.rta.shortStopTime, _shortStopTime, "rta shortStopTime did not update");
         }
-        assertEq(imetavest.metavestDetails(_grantee).allocation.stopTime, _stopTime, "stopTime did not update");
+        assertEq(_details.allocation.stopTime, _stopTime, "stopTime did not update");
     }
 
     function testUpdatePrice(address _grantee, uint256 _newPrice) external {
-        vm.prank(controllerAddr);
-        MetaVesT.MetaVesTType _type = imetavest.metavestDetails(_grantee).metavestType;
+        vm.assume(_grantee != address(0));
+        vm.startPrank(controllerAddr);
+        MetaVesT.MetaVesTDetails memory _details = metavestTest.getMetavestDetails(_grantee);
+        MetaVesT.MetaVesTType _type = _details.metavestType;
         if (_type == MetaVesT.MetaVesTType.ALLOCATION) vm.expectRevert();
         metavestTest.updatePrice(_grantee, _newPrice);
 
         if (_type == MetaVesT.MetaVesTType.OPTION) {
             assertEq(
-                imetavest.metavestDetails(_grantee).option.exercisePrice,
+                metavestTest.getMetavestDetails(_grantee).option.exercisePrice,
                 _newPrice,
                 "option exercise price did not update"
             );
         } else if (_type == MetaVesT.MetaVesTType.RESTRICTED) {
             assertEq(
-                imetavest.metavestDetails(_grantee).rta.repurchasePrice,
+                metavestTest.getMetavestDetails(_grantee).rta.repurchasePrice,
                 _newPrice,
                 "rta repurchase price did not update"
             );
