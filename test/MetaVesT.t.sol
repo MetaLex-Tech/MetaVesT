@@ -133,7 +133,7 @@ contract MetaVesTTest is Test {
         vm.assume(_total > 1000 && _grantee != address(0));
 
         MetaVesT.MetaVesTDetails memory _metavestDetails = MetaVesT.MetaVesTDetails({
-            metavestType: MetaVesT.MetaVesTType.ALLOCATION, // assuming ALLOCATION for this example
+            metavestType: MetaVesT.MetaVesTType.ALLOCATION, // simple allocation since more functionalities will be tested in MetaVesTController.t
             allocation: MetaVesT.Allocation({
                 tokenStreamTotal: _total,
                 cliffCredit: 0,
@@ -145,12 +145,8 @@ contract MetaVesTTest is Test {
                 startTime: uint48(2 ** 20),
                 stopTime: uint48(2 ** 40)
             }),
-            option: MetaVesT.TokenOption({exercisePrice: 1 ether, tokensForfeited: 0, shortStopTime: uint48(2 ** 30)}),
-            rta: MetaVesT.RestrictedTokenAward({
-                repurchasePrice: 0.5 ether,
-                tokensRepurchasable: 0,
-                shortStopTime: uint48(2 ** 30)
-            }),
+            option: MetaVesT.TokenOption({exercisePrice: 0, tokensForfeited: 0, shortStopTime: uint48(0)}),
+            rta: MetaVesT.RestrictedTokenAward({repurchasePrice: 0, tokensRepurchasable: 0, shortStopTime: uint48(0)}),
             eligibleTokens: MetaVesT.GovEligibleTokens({locked: false, unlocked: true, withdrawable: true}),
             milestones: emptyMilestones, // milestones tested separately
             grantee: _grantee,
@@ -235,8 +231,103 @@ contract MetaVesTTest is Test {
         }
     }
 
+    function testConfirmMilestone(address _grantee, uint8 _milestoneIndex) external {
+        vm.assume(_grantee != address(0));
+        MetaVesT.MetaVesTDetails memory _details = _createBasicMilestoneMetavest(_grantee);
+        uint256 _beforeUnlocked = _details.allocation.tokensUnlocked;
+        uint256 _beforeAmountLocked = metavestTest.amountLocked(_grantee);
+        block.number / 2 == 0 ? baseCondition = true : baseCondition = false;
+
+        bool _result;
+        if (_milestoneIndex < _details.milestones.length)
+            _result = ICondition(_details.milestones[_milestoneIndex].conditionContracts[0]).checkCondition();
+
+        if (_milestoneIndex >= _details.milestones.length || _details.milestones[_milestoneIndex].complete || !_result)
+            vm.expectRevert();
+        metavestTest.confirmMilestone(_grantee, _milestoneIndex);
+
+        if (_result) {
+            assertTrue(
+                metavestTest.getMetavestDetails(_grantee).milestones[_milestoneIndex].complete,
+                "not marked complete"
+            );
+            assertEq(
+                metavestTest.getMetavestDetails(_grantee).milestones[_milestoneIndex].milestoneAward,
+                0,
+                "milestoneAward not deleted"
+            );
+            assertGt(
+                metavestTest.getMetavestDetails(_grantee).allocation.tokensUnlocked,
+                _beforeUnlocked,
+                "unlocked amount did not increase"
+            );
+            assertGt(_beforeAmountLocked, metavestTest.amountLocked(_grantee), "amountLocked mapping did not update");
+        }
+    }
+
+    function testRemoveMilestone(address _grantee, uint8 _milestoneIndex) external {
+        vm.assume(_grantee != address(0));
+        MetaVesT.MetaVesTDetails memory _details = _createBasicMilestoneMetavest(_grantee);
+        uint256 _beforeAmountLocked = metavestTest.amountLocked(_grantee);
+        vm.startPrank(controllerAddr);
+        bool _reverted;
+        if (_milestoneIndex >= _details.milestones.length) {
+            _reverted = true;
+            vm.expectRevert();
+        }
+        metavestTest.removeMilestone(_milestoneIndex, _grantee, _details.allocation.tokenContract);
+        if (!_reverted) {
+            assertEq(
+                metavestTest.getMetavestDetails(_grantee).milestones[_milestoneIndex].milestoneAward,
+                0,
+                "milestoneAward was not deleted"
+            );
+            assertGt(_beforeAmountLocked, metavestTest.amountLocked(_grantee), "amountLocked not reduced");
+        }
+    }
+
     /// @dev mock a BaseCondition call
     function checkCondition() public view returns (bool) {
         return (baseCondition);
+    }
+
+    function _createBasicMilestoneMetavest(address _grantee) internal returns (MetaVesT.MetaVesTDetails memory) {
+        MetaVesT.Milestone[] memory milestones = new MetaVesT.Milestone[](1);
+        milestones[0].complete = false;
+        milestones[0].milestoneAward = 1;
+        address[] memory conditionContracts = new address[](1);
+        conditionContracts[0] = address(this); // will call the mock checkCondition
+        milestones[0].conditionContracts = conditionContracts;
+
+        vm.assume(_grantee != address(0));
+
+        MetaVesT.MetaVesTDetails memory _metavestDetails = MetaVesT.MetaVesTDetails({
+            metavestType: MetaVesT.MetaVesTType.ALLOCATION, // simple allocation since more functionalities will be tested in MetaVesTController.t
+            allocation: MetaVesT.Allocation({
+                tokenStreamTotal: 1000,
+                cliffCredit: 0,
+                tokenGoverningPower: 0,
+                tokensUnlocked: 0,
+                unlockedTokensWithdrawn: 0,
+                unlockRate: 10,
+                tokenContract: testTokenAddr,
+                startTime: uint48(2 ** 20),
+                stopTime: uint48(2 ** 40)
+            }),
+            option: MetaVesT.TokenOption({exercisePrice: 0, tokensForfeited: 0, shortStopTime: uint48(0)}),
+            rta: MetaVesT.RestrictedTokenAward({repurchasePrice: 0, tokensRepurchasable: 0, shortStopTime: uint48(0)}),
+            eligibleTokens: MetaVesT.GovEligibleTokens({locked: false, unlocked: true, withdrawable: true}),
+            milestones: milestones,
+            grantee: _grantee,
+            transferable: false
+        });
+
+        testToken.mintToken(AUTHORITY, 1001);
+        vm.prank(AUTHORITY);
+        testToken.approve(metavestTestAddr, 1001);
+
+        vm.prank(controllerAddr);
+        metavestTest.createMetavest(_metavestDetails, 1001);
+        return _metavestDetails;
     }
 }
