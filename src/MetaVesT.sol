@@ -168,7 +168,7 @@ contract MetaVesT is ReentrancyGuard, SafeTransferLib {
 
     struct Milestone {
         bool complete; // whether the Milestone is satisfied and the 'milestoneAward' is to be released
-        uint256 milestoneAward; // per-milestone indexed lump sums of tokens unlocked upon corresponding milestone completion
+        uint256 milestoneAward; // per-milestone indexed lump sums of tokens vested upon corresponding milestone completion
         address[] conditionContracts; // array of contract addresses corresponding to condition(s) that must satisfied for this Milestone to be 'complete'
     }
 
@@ -483,8 +483,11 @@ contract MetaVesT is ReentrancyGuard, SafeTransferLib {
                     transfereeDetails.allocation.tokensVested += _award;
                     cliffAndMilestoneVested[_transferee] += _award;
                     amountLocked[_transferee] -= _award;
-                    if (details.metavestType == MetaVesTType.RESTRICTED)
-                        transfereeDetails.rta.tokensRepurchasable -= _award;
+                    // ensure transferee's tokensRepurchasable balance is sufficient, in case the milestone was added after transfer
+                    if (
+                        details.metavestType == MetaVesTType.RESTRICTED &&
+                        transfereeDetails.rta.tokensRepurchasable >= _award
+                    ) transfereeDetails.rta.tokensRepurchasable -= _award;
                 }
                 //delete award after adding to amount withdrawable and deducting from amount locked, and mark complete
                 delete transfereeDetails.milestones[_milestoneIndex].milestoneAward;
@@ -511,7 +514,7 @@ contract MetaVesT is ReentrancyGuard, SafeTransferLib {
 
         bool _rta;
         // ensure tokensRepurchasable subtracts deleted amount, if RTA
-        if (details.rta.tokensRepurchasable != 0) {
+        if (details.rta.tokensRepurchasable != 0 && details.metavestType == MetaVesTType.RESTRICTED) {
             details.rta.tokensRepurchasable -= _removedMilestoneAmount;
             _rta = true;
         }
@@ -527,7 +530,9 @@ contract MetaVesT is ReentrancyGuard, SafeTransferLib {
 
                 amountWithdrawable[controller][_tokenContract] += _transfereeRemovedMilestoneAmount;
                 amountLocked[_transferee] -= _transfereeRemovedMilestoneAmount;
-                if (_rta) transfereeDetails.rta.tokensRepurchasable -= _transfereeRemovedMilestoneAmount;
+                // ensure transferee's tokensRepurchasable balance is sufficient, in case the milestone was added after transfer
+                if (_rta && transfereeDetails.rta.tokensRepurchasable >= _transfereeRemovedMilestoneAmount)
+                    transfereeDetails.rta.tokensRepurchasable -= _transfereeRemovedMilestoneAmount;
 
                 delete transfereeDetails.milestones[_milestoneIndex];
 
@@ -717,18 +722,12 @@ contract MetaVesT is ReentrancyGuard, SafeTransferLib {
         MetaVesTDetails memory _metavestDetails = details; // MLOADs for calculations
         Allocation memory _allocation = _metavestDetails.allocation;
         Milestone[] memory _milestones = _metavestDetails.milestones;
-        address _tokenContract = _allocation.tokenContract;
 
         // ensure MetaVesT exists and is transferable
         if (_metavestDetails.grantee == address(0) || msg.sender != _metavestDetails.grantee)
             revert MetaVesT_OnlyGrantee();
         if (!_metavestDetails.transferable) revert MetaVesT_NonTransferable();
         if (transferees[msg.sender].length == ARRAY_LENGTH_LIMIT) revert MetaVesT_TransfereeLimit();
-
-        // update the current amountWithdrawable, if the msg.sender chooses to include it in the transfer by not first calling 'withdrawAll'
-        uint256 _withdrawableTransferred = amountWithdrawable[msg.sender][_tokenContract] / _divisor;
-        amountWithdrawable[_transferee][_tokenContract] = _withdrawableTransferred;
-        amountWithdrawable[msg.sender][_tokenContract] -= _withdrawableTransferred;
 
         // update unlockedTokensWithdrawn, vestedTokensWithdrawn, cliffAndMilestoneUnlocked, linearUnlocked, and amountLocked similarly
         _allocation.unlockedTokensWithdrawn = _allocation.unlockedTokensWithdrawn / _divisor;
