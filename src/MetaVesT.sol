@@ -120,25 +120,25 @@ contract MetaVesT is ReentrancyGuard, SafeTransferLib {
     }
 
     struct MetaVesTDetails {
+        address grantee; // grantee of the tokens
+        bool transferable; // whether grantee can transfer their MetaVesT in whole or in part to other addresses
         MetaVesTType metavestType;
         Allocation allocation; // Allocation details are applicable for all three MetaVesTType options
         TokenOption option; // struct containing token option-specific details
         RestrictedTokenAward rta; // struct containing restricted token award-specific details
         GovEligibleTokens eligibleTokens; // struct containing bools of types of MetaVesTed tokens' governing power
         Milestone[] milestones; // array of Milestone structs
-        address grantee; // grantee of the tokens
-        bool transferable; // whether grantee can transfer their MetaVesT in whole or in part to other addresses
     }
 
     struct Allocation {
-        uint256 tokenStreamTotal; // total number of tokens subject to linear vesting/restriction removal (does NOT include 'cliffCredit' nor each 'milestoneAward')
+        uint256 tokenStreamTotal; // total number of tokens subject to linear vesting/restriction removal (includes each 'cliffCredit' but not each 'milestoneAward')
         uint256 tokenGoverningPower; // number of tokens able to be staked/voted/otherwise used in 'dao' governance
         uint256 tokensVested; // vested but not withdrawn -- if RESTRICTED this amount corresponds to 'unrestricted';
         uint256 tokensUnlocked; // unlocked but not withdrawn
         uint256 vestedTokensWithdrawn; // number of tokens withdrawn that were previously 'tokensVested', for vesting calculations
         uint256 unlockedTokensWithdrawn; // number of tokens withdrawn that were previously 'tokensVested', for unlocking calculations
-        uint128 vestingCliffCredit; // lump sum of tokens which become vested (note: not added to 'tokensVested' so as not to disrupt calculations) at 'startTime'
-        uint128 unlockingCliffCredit; // lump sum of tokens which become withdrawable (note: not added to 'tokensUnlocked' so as not to disrupt calculations) at 'startTime'
+        uint128 vestingCliffCredit; // lump sum of tokens which become vested at 'startTime'
+        uint128 unlockingCliffCredit; // lump sum of tokens which become unlocked at 'startTime'
         uint160 vestingRate; // tokens per second that become vested; if RESTRICTED this amount corresponds to 'lapse rate' for tokens that become non-repurchasable
         uint48 vestingStartTime; // if RESTRICTED this amount corresponds to 'lapse start time'
         uint48 vestingStopTime; // long stop time
@@ -161,14 +161,14 @@ contract MetaVesT is ReentrancyGuard, SafeTransferLib {
     }
 
     struct GovEligibleTokens {
-        bool locked; // whether 'amountLocked' counts towards 'tokenGoverningPower'
+        bool nonwithdrawable; // whether 'nonwithdrawableAmount' counts towards 'tokenGoverningPower'
         bool vested; // whether 'tokensVested' counts towards 'tokenGoverningPower'
         bool unlocked; // whether 'tokensUnlocked' counts towards 'tokenGoverningPower'
     }
 
     struct Milestone {
-        bool complete; // whether the Milestone is satisfied and the 'milestoneAward' is to be released
         uint256 milestoneAward; // per-milestone indexed lump sums of tokens vested upon corresponding milestone completion
+        bool complete; // whether the Milestone is satisfied and the 'milestoneAward' is to be released
         address[] conditionContracts; // array of contract addresses corresponding to condition(s) that must satisfied for this Milestone to be 'complete'
     }
 
@@ -187,31 +187,31 @@ contract MetaVesT is ReentrancyGuard, SafeTransferLib {
     /// @notice contract address for use of 'tokenGoverningPower', typically a DAO pool, governor, staking address, if any (otherwise address(0))
     address public dao;
 
+    /// @notice maps grantee address to their MetaVesTDetails struct
+    mapping(address => MetaVesTDetails) public metavestDetails;
+
     /// @notice maps grantee to transferees of their MetaVesT
     mapping(address => address[]) public transferees;
 
-    /// @notice maps address to total amount of tokens currently locked for their MetaVesT
-    /// initially == 'metavestDetails.allocation.tokenStreamTotal' + 'metavestDetails.allocation.cliffCredit' + each 'metavestDetails.milestones.milestoneAward'
-    mapping(address => uint256) public amountLocked;
-
-    /// @notice maps address to tokens unlocked via cliff and confirmed milestones, to ease unlocking calculations
-    mapping(address => uint256) internal cliffAndMilestoneUnlocked;
-
-    /// @notice maps address to tokens vested via cliff and confirmed milestones, to ease vesting calculations
-    mapping(address => uint256) internal cliffAndMilestoneVested;
-
-    /// @notice maps address to tokens unlocked via linear unlocking, to ease unlocking calculations
-    mapping(address => uint256) internal linearUnlocked;
-
-    /// @notice maps address to tokens unlocked via linear unlocking, to ease unlocking calculations
-    mapping(address => uint256) internal linearVested;
+    /// @notice maps grantee address to total amount of tokens in their MetaVesT which are non-withdrawable
+    /// @dev no need to specify token address because a grantee's paymentToken from any repurchase is always withdrawable
+    mapping(address => uint256) public nonwithdrawableAmount;
 
     /// @notice maps address to their total amount of tokens which are withdrawable from address(this)
     /// @dev address mapped to (token address -> amount able to be withdrawn)
     mapping(address => mapping(address => uint256)) public amountWithdrawable;
 
-    /// @notice maps grantee address to their MetaVesTDetails struct
-    mapping(address => MetaVesTDetails) public metavestDetails;
+    /// @notice maps address to tokens unlocked via confirmed milestones, to ease unlocking calculations
+    mapping(address => uint256) internal _milestoneUnlocked;
+
+    /// @notice maps address to tokens vested via confirmed milestones, to ease vesting calculations
+    mapping(address => uint256) internal _milestoneVested;
+
+    /// @notice maps address to tokens unlocked via linear unlocking, to ease unlocking calculations. Includes 'unlockingCliffCredit' after 'unlockingStartTime'.
+    mapping(address => uint256) internal _linearUnlocked;
+
+    /// @notice maps address to tokens vested via linear vesting, to ease vesting calculations. Includes 'vestingCliffCredit' after 'vestingStartTime'.
+    mapping(address => uint256) internal _linearVested;
 
     ///
     /// EVENTS
@@ -285,10 +285,10 @@ contract MetaVesT is ReentrancyGuard, SafeTransferLib {
         paymentToken = _paymentToken;
     }
 
-    /// @notice creates a MetaVesT for a grantee and locks the total token amount ('metavestDetails.allocation.tokenStreamTotal' + 'metavestDetails.allocation.vestingCliffCredit' + each 'metavestDetails.milestones.milestoneAward')
+    /// @notice creates a MetaVesT for a grantee and locks the total token amount ('metavestDetails.allocation.tokenStreamTotal' + all 'milestoneAward's)
     /// @dev see MetaVesTController for conditionals and additional comments
     /// @param _metavestDetails: MetaVesTDetails struct containing all applicable details for this '_metavestDetails.grantee'-- but MUST contain grantee, token contract, amount, and start and stop time
-    /// @param _total: total amount of tokens being locked, including linear release, milestone awards, and vestingCliffCredit
+    /// @param _total: total amount of tokens being locked, including cliff and linear release, and total milestone awards
     function createMetavest(MetaVesTDetails calldata _metavestDetails, uint256 _total) external onlyController {
         address _grantee = _metavestDetails.grantee;
         MetaVesTDetails storage details = metavestDetails[_grantee];
@@ -306,7 +306,7 @@ contract MetaVesT is ReentrancyGuard, SafeTransferLib {
         details.grantee = _grantee;
         details.transferable = _metavestDetails.transferable;
 
-        amountLocked[_grantee] = _total;
+        nonwithdrawableAmount[_grantee] = _total;
 
         // ensure tokensRepurchasable is == _total, if RTA
         if (_metavestDetails.metavestType == MetaVesTType.RESTRICTED) details.rta.tokensRepurchasable = _total;
@@ -463,8 +463,9 @@ contract MetaVesT is ReentrancyGuard, SafeTransferLib {
         uint256 _milestoneAward = _milestones[_milestoneIndex].milestoneAward;
         unchecked {
             details.allocation.tokensVested += _milestoneAward; // cannot overflow as milestoneAwards cannot cumulatively be greater that tokenStreamTotal
-            cliffAndMilestoneVested[_grantee] += _milestoneAward;
-            cliffAndMilestoneUnlocked[_grantee] += _milestoneAward;
+            details.allocation.tokensUnlocked += _milestoneAward;
+            _milestoneVested[_grantee] += _milestoneAward;
+            _milestoneUnlocked[_grantee] += _milestoneAward;
             if (details.metavestType == MetaVesTType.RESTRICTED) details.rta.tokensRepurchasable -= _milestoneAward;
         }
 
@@ -478,17 +479,18 @@ contract MetaVesT is ReentrancyGuard, SafeTransferLib {
             for (uint256 i; i < transferees[_grantee].length; ++i) {
                 address _transferee = transferees[_grantee][i];
                 MetaVesTDetails storage transfereeDetails = metavestDetails[_transferee];
-                uint256 _award = transfereeDetails.milestones[_milestoneIndex].milestoneAward;
+                uint256 _transfereeMilestoneAward = transfereeDetails.milestones[_milestoneIndex].milestoneAward;
                 unchecked {
-                    transfereeDetails.allocation.tokensVested += _award;
-                    cliffAndMilestoneVested[_transferee] += _award;
-                    cliffAndMilestoneUnlocked[_transferee] += _award;
+                    transfereeDetails.allocation.tokensVested += _transfereeMilestoneAward;
+                    transfereeDetails.allocation.tokensUnlocked += _transfereeMilestoneAward;
+                    _milestoneVested[_transferee] += _transfereeMilestoneAward;
+                    _milestoneUnlocked[_transferee] += _transfereeMilestoneAward;
 
                     // ensure transferee's tokensRepurchasable balance is sufficient, in case the milestone was added after transfer
                     if (
                         details.metavestType == MetaVesTType.RESTRICTED &&
-                        transfereeDetails.rta.tokensRepurchasable >= _award
-                    ) transfereeDetails.rta.tokensRepurchasable -= _award;
+                        transfereeDetails.rta.tokensRepurchasable >= _transfereeMilestoneAward
+                    ) transfereeDetails.rta.tokensRepurchasable -= _transfereeMilestoneAward;
                 }
                 //delete award after adding to amount withdrawable and deducting from amount locked, and mark complete
                 delete transfereeDetails.milestones[_milestoneIndex].milestoneAward;
@@ -509,7 +511,7 @@ contract MetaVesT is ReentrancyGuard, SafeTransferLib {
         uint256 _removedMilestoneAmount = details.milestones[_milestoneIndex].milestoneAward;
 
         amountWithdrawable[controller][_tokenContract] += _removedMilestoneAmount;
-        amountLocked[_grantee] -= _removedMilestoneAmount;
+        nonwithdrawableAmount[_grantee] -= _removedMilestoneAmount;
 
         delete details.milestones[_milestoneIndex];
 
@@ -530,7 +532,7 @@ contract MetaVesT is ReentrancyGuard, SafeTransferLib {
                     .milestoneAward;
 
                 amountWithdrawable[controller][_tokenContract] += _transfereeRemovedMilestoneAmount;
-                amountLocked[_transferee] -= _transfereeRemovedMilestoneAmount;
+                nonwithdrawableAmount[_transferee] -= _transfereeRemovedMilestoneAmount;
                 // ensure transferee's tokensRepurchasable balance is sufficient, in case the milestone was added after transfer
                 if (_rta && transfereeDetails.rta.tokensRepurchasable >= _transfereeRemovedMilestoneAmount)
                     transfereeDetails.rta.tokensRepurchasable -= _transfereeRemovedMilestoneAmount;
@@ -548,7 +550,7 @@ contract MetaVesT is ReentrancyGuard, SafeTransferLib {
     /// @param _grantee address of grantee whose MetaVesT is being updated
     /// @param _milestone new Milestone struct added for '_grantee', to be added to their 'milestones' array
     function addMilestone(address _grantee, Milestone calldata _milestone) external onlyController {
-        amountLocked[_grantee] += _milestone.milestoneAward;
+        nonwithdrawableAmount[_grantee] += _milestone.milestoneAward;
         MetaVesTDetails storage details = metavestDetails[_grantee];
         // ensure tokensRepurchasable is == _total, if RTA
         if (details.metavestType == MetaVesTType.RESTRICTED)
@@ -606,10 +608,10 @@ contract MetaVesT is ReentrancyGuard, SafeTransferLib {
         uint256 _amount = details.rta.tokensRepurchasable / _divisor;
         uint256 _repurchasePrice = details.rta.repurchasePrice; // same for '_grantee' and their transferees
 
-        // to preserve linear calculations, repurchased tokens are deducted from the amountLocked as well as the tokenStreamTotal and tokensRepurchasable
+        // to preserve linear calculations, repurchased tokens are deducted from the nonwithdrawableAmount as well as the tokenStreamTotal and tokensRepurchasable
         details.rta.tokensRepurchasable -= _amount;
         details.allocation.tokenStreamTotal -= _amount;
-        amountLocked[_grantee] -= _amount;
+        nonwithdrawableAmount[_grantee] -= _amount;
 
         // make the payment to grantee withdrawable
         amountWithdrawable[_grantee][paymentToken] += _amount * _repurchasePrice;
@@ -621,7 +623,7 @@ contract MetaVesT is ReentrancyGuard, SafeTransferLib {
                 uint256 _transfereeAmount = transfereeDetails.rta.tokensRepurchasable / _divisor;
                 transfereeDetails.allocation.tokenStreamTotal -= _transfereeAmount;
                 transfereeDetails.rta.tokensRepurchasable -= _transfereeAmount;
-                amountLocked[_transferee] -= _transfereeAmount;
+                nonwithdrawableAmount[_transferee] -= _transfereeAmount;
                 _amount += _transfereeAmount;
 
                 amountWithdrawable[_transferee][paymentToken] += _transfereeAmount * _repurchasePrice;
@@ -637,7 +639,7 @@ contract MetaVesT is ReentrancyGuard, SafeTransferLib {
     /// @dev conditionals for this function are in the 'controller'; makes all unlockedTokens for such grantee withdrawable then sends them to grantee,
     /// so as to avoid a mapping overwrite if the grantee's terminatedd MetaVesT is replaced with a new one before they can withdraw.
     /// Returns remainder to 'authority'
-    /// @param _grantee: address of grantee whose MetaVesT is being terminated
+    /// @param _grantee address of grantee whose MetaVesT is being terminated
     function terminate(address _grantee) external onlyController {
         MetaVesTDetails storage details = metavestDetails[_grantee];
         //'_grantee's' and all transferees' metavests are first refreshed in 'controller'
@@ -648,7 +650,7 @@ contract MetaVesT is ReentrancyGuard, SafeTransferLib {
         uint256 _amt = amountWithdrawable[_grantee][_tokenContract];
 
         // calculate locked unvested remainder to be returned to 'authority'
-        uint256 _remainder = amountLocked[_grantee] - _vested - details.allocation.vestedTokensWithdrawn;
+        uint256 _remainder = nonwithdrawableAmount[_grantee] - _vested - details.allocation.vestedTokensWithdrawn;
 
         // only include 'tokensVested' if the metavest type is not a token option, as that amount reflects vested but not exercised tokens, which is added to '_remainder'
         // since the metavest is being deleted, locked vested amounts are accelerated to unlocked
@@ -658,11 +660,11 @@ contract MetaVesT is ReentrancyGuard, SafeTransferLib {
         // delete all mappings for '_grantee'
         delete metavestDetails[_grantee];
         delete amountWithdrawable[_grantee][_tokenContract];
-        delete amountLocked[_grantee];
-        delete linearUnlocked[_grantee];
-        delete linearVested[_grantee];
-        delete cliffAndMilestoneUnlocked[_grantee];
-        delete cliffAndMilestoneVested[_grantee];
+        delete nonwithdrawableAmount[_grantee];
+        delete _linearUnlocked[_grantee];
+        delete _linearVested[_grantee];
+        delete _milestoneUnlocked[_grantee];
+        delete _milestoneVested[_grantee];
 
         if (transferees[_grantee].length != 0) {
             for (uint256 x; x < transferees[_grantee].length; ++x) {
@@ -672,7 +674,7 @@ contract MetaVesT is ReentrancyGuard, SafeTransferLib {
 
                 // add each transferee's locked remainder to be returned to 'authority'
                 _remainder +=
-                    amountLocked[_transferee] -
+                    nonwithdrawableAmount[_transferee] -
                     transfereeDetails.allocation.tokensVested -
                     transfereeDetails.allocation.unlockedTokensWithdrawn;
 
@@ -683,11 +685,11 @@ contract MetaVesT is ReentrancyGuard, SafeTransferLib {
 
                 // delete all mappings for '_transferee'
                 delete metavestDetails[_transferee];
-                delete cliffAndMilestoneUnlocked[_transferee];
-                delete cliffAndMilestoneVested[_transferee];
-                delete linearUnlocked[_transferee];
-                delete linearVested[_transferee];
-                delete amountLocked[_transferee];
+                delete _milestoneUnlocked[_transferee];
+                delete _milestoneVested[_transferee];
+                delete _linearUnlocked[_transferee];
+                delete _linearVested[_transferee];
+                delete nonwithdrawableAmount[_transferee];
                 delete amountWithdrawable[_transferee][_tokenContract];
                 safeTransfer(_tokenContract, _transferee, _transfereeAmt);
 
@@ -704,6 +706,88 @@ contract MetaVesT is ReentrancyGuard, SafeTransferLib {
         emit MetaVesT_Deleted(_grantee);
         emit MetaVesT_Withdrawal(_grantee, _tokenContract, _amt);
         emit MetaVesT_Withdrawal(authority, _tokenContract, _remainder);
+    }
+
+    /// @notice for the applicable authority to terminate (stop) this '_grantee''s vesting via the controller, but preserving the unlocking schedule for any already-vested tokens,
+    /// so their MetaVesT is not deleted
+    /// @dev conditionals for this function are in the 'controller'; returns unvested remainder to 'authority' but preserves MetaVesT for all vested tokens up until call
+    /// @param _grantee address of grantee whose MetaVesT's vesting is being stopped
+    /// @param _cancelMilestones whether '_grantee''s milestones that have not yet been completed are also being terminated
+    function terminateVesting(address _grantee, bool _cancelMilestones) external onlyController {
+        MetaVesTDetails storage details = metavestDetails[_grantee];
+        MetaVesTType _type = details.metavestType;
+        uint256 _milestonesLen = details.milestones.length;
+        uint256 _transfereesLen = transferees[_grantee].length;
+        //'_grantee's' and all transferees' metavests are first refreshed in 'controller'
+        address _tokenContract = details.allocation.tokenContract;
+        address _authority = authority;
+
+        // calculate locked unvested non-milestone remainder to be returned to 'authority'
+        uint256 _remainder = details.allocation.tokenStreamTotal - _linearVested[_grantee];
+
+        // deduct all unvested tokens from applicable mappings for '_grantee'
+        nonwithdrawableAmount[_grantee] -= _remainder;
+        if (details.rta.tokensRepurchasable != 0 && _type == MetaVesTType.RESTRICTED)
+            details.rta.tokensRepurchasable -= _remainder;
+        delete metavestDetails[_grantee].allocation.vestingCliffCredit;
+        delete metavestDetails[_grantee].allocation.vestingRate;
+
+        // replicate for transferees
+        if (_transfereesLen != 0) {
+            for (uint256 x; x < _transfereesLen; ++x) {
+                address _transferee = transferees[_grantee][x];
+                MetaVesTDetails storage transfereeDetails = metavestDetails[_transferee];
+                uint256 _transfereeRemainder = transfereeDetails.allocation.tokenStreamTotal -
+                    _linearVested[_transferee];
+                _remainder += _transfereeRemainder;
+
+                // deduct all unvested tokens from applicable mappings for '_transferee'
+                nonwithdrawableAmount[_transferee] -= _transfereeRemainder;
+                if (transfereeDetails.rta.tokensRepurchasable != 0 && _type == MetaVesTType.RESTRICTED)
+                    transfereeDetails.rta.tokensRepurchasable -= _transfereeRemainder;
+                delete metavestDetails[_transferee].allocation.vestingCliffCredit;
+                delete metavestDetails[_transferee].allocation.vestingRate;
+            }
+        }
+
+        // if '_cancelMilestones', iterate through milestones (by milestoneIndex) and remove uncompleted milestones and make related variable updates
+        if (_cancelMilestones && _milestonesLen != 0) {
+            for (uint8 i = 0; i < _milestonesLen; ++i) {
+                if (!details.milestones[i].complete) {
+                    uint256 _removedMilestoneAmount = details.milestones[i].milestoneAward;
+
+                    _remainder += _removedMilestoneAmount;
+                    nonwithdrawableAmount[_grantee] -= _removedMilestoneAmount;
+                    if (details.rta.tokensRepurchasable != 0 && _type == MetaVesTType.RESTRICTED)
+                        details.rta.tokensRepurchasable -= _removedMilestoneAmount;
+                    delete details.milestones[i];
+
+                    // replicate for transferees
+                    if (_transfereesLen != 0) {
+                        for (uint256 y; y < _transfereesLen; ++y) {
+                            address _transferee = transferees[_grantee][y];
+                            MetaVesTDetails storage transfereeDetails = metavestDetails[_transferee];
+                            uint256 _transfereeRemovedMilestoneAmount = transfereeDetails.milestones[i].milestoneAward;
+
+                            _remainder += _transfereeRemovedMilestoneAmount;
+                            nonwithdrawableAmount[_transferee] -= _transfereeRemovedMilestoneAmount;
+                            if (
+                                _type == MetaVesTType.RESTRICTED &&
+                                transfereeDetails.rta.tokensRepurchasable >= _transfereeRemovedMilestoneAmount
+                            ) transfereeDetails.rta.tokensRepurchasable -= _transfereeRemovedMilestoneAmount;
+
+                            delete transfereeDetails.milestones[i];
+                        }
+                    }
+                    emit MetaVesT_MilestoneRemoved(_grantee, i);
+                }
+            }
+        }
+
+        // safeTransfer the total removed unvested tokens to 'authority'
+        safeTransfer(_tokenContract, _authority, _remainder);
+        emit MetaVesT_Withdrawal(_authority, _tokenContract, _remainder);
+        emit MetaVesT_VestingRateUpdated(_grantee, 0);
     }
 
     /// @notice allows a grantee to transfer part or all of their MetaVesT to a '_transferee' if this MetaVest has transferability enabled
@@ -730,26 +814,29 @@ contract MetaVesT is ReentrancyGuard, SafeTransferLib {
         if (!_metavestDetails.transferable) revert MetaVesT_NonTransferable();
         if (transferees[msg.sender].length == ARRAY_LENGTH_LIMIT) revert MetaVesT_TransfereeLimit();
 
-        // update unlockedTokensWithdrawn, vestedTokensWithdrawn, cliffAndMilestoneUnlocked, linearUnlocked, and amountLocked similarly
+        // update unlockedTokensWithdrawn, vestedTokensWithdrawn, _milestoneUnlocked, _linearUnlocked, _linearVested, and nonwithdrawableAmount similarly
         _allocation.unlockedTokensWithdrawn = _allocation.unlockedTokensWithdrawn / _divisor;
         details.allocation.unlockedTokensWithdrawn -= _allocation.unlockedTokensWithdrawn / _divisor;
 
         _allocation.vestedTokensWithdrawn = _allocation.vestedTokensWithdrawn / _divisor;
         details.allocation.vestedTokensWithdrawn -= _allocation.vestedTokensWithdrawn / _divisor;
 
-        cliffAndMilestoneUnlocked[_transferee] = cliffAndMilestoneUnlocked[msg.sender] / _divisor;
-        cliffAndMilestoneUnlocked[msg.sender] -= cliffAndMilestoneUnlocked[msg.sender] / _divisor;
+        _milestoneUnlocked[_transferee] = _milestoneUnlocked[msg.sender] / _divisor;
+        _milestoneUnlocked[msg.sender] -= _milestoneUnlocked[msg.sender] / _divisor;
 
-        cliffAndMilestoneVested[_transferee] = cliffAndMilestoneVested[msg.sender] / _divisor;
-        cliffAndMilestoneVested[msg.sender] -= cliffAndMilestoneVested[msg.sender] / _divisor;
+        _milestoneVested[_transferee] = _milestoneVested[msg.sender] / _divisor;
+        _milestoneVested[msg.sender] -= _milestoneVested[msg.sender] / _divisor;
 
-        linearUnlocked[_transferee] = linearUnlocked[msg.sender] / _divisor;
-        linearUnlocked[msg.sender] -= linearUnlocked[msg.sender] / _divisor;
+        _linearUnlocked[_transferee] = _linearUnlocked[msg.sender] / _divisor;
+        _linearUnlocked[msg.sender] -= _linearUnlocked[msg.sender] / _divisor;
 
-        amountLocked[_transferee] = amountLocked[msg.sender] / _divisor;
-        amountLocked[msg.sender] -= amountLocked[msg.sender] / _divisor;
+        _linearVested[_transferee] = _linearVested[msg.sender] / _divisor;
+        _linearVested[msg.sender] -= _linearVested[msg.sender] / _divisor;
 
-        // transferee's MetaVesT should mirror the calling grantee's except for amounts and grantee address, so just update necessary elements in the MLOAD
+        nonwithdrawableAmount[_transferee] = nonwithdrawableAmount[msg.sender] / _divisor;
+        nonwithdrawableAmount[msg.sender] -= nonwithdrawableAmount[msg.sender] / _divisor;
+
+        // transferee's MetaVesT should mirror the calling grantee's except for amounts and grantee address, so just update those necessary elements in the MLOAD
         _allocation.tokenStreamTotal = _allocation.tokenStreamTotal / _divisor;
         _allocation.vestingCliffCredit = uint128(_allocation.vestingCliffCredit / _divisor);
         _allocation.unlockingCliffCredit = uint128(_allocation.unlockingCliffCredit / _divisor);
@@ -800,8 +887,9 @@ contract MetaVesT is ReentrancyGuard, SafeTransferLib {
     }
 
     /// @notice refresh the time-contingent details and amounts of '_grantee''s MetaVesT; if any tokens remain locked past the stopTime
-    /// @dev updates the grantee's (and any transferees') 'tokensVested'
-    /// @param _grantee: address whose MetaVesT is being refreshed, along with any transferees of such MetaVesT
+    /// @dev this does not refresh the transferees’ transferees and so on, but ‘refreshMetavest’ is called anyway in each state-changing function
+    /// that would be called by a transferee (which would then update their transferee’s values)
+    /// @param _grantee address whose MetaVesT is being refreshed, along with any transferees of such MetaVesT
     function refreshMetavest(address _grantee) public {
         // check whether MetaVesT for this grantee exists
         MetaVesTDetails storage details = metavestDetails[_grantee];
@@ -810,7 +898,6 @@ contract MetaVesT is ReentrancyGuard, SafeTransferLib {
 
         Allocation memory _allocation = details.allocation;
         uint256 _allocationTotal = _allocation.tokenStreamTotal;
-        MetaVesTType _type = details.metavestType;
 
         // separately calculate vesting and unlocking
         // vesting first
@@ -819,52 +906,51 @@ contract MetaVesT is ReentrancyGuard, SafeTransferLib {
         uint256 _newlyVested;
 
         // if token option, '_end' == exercise deadline; if RTA, '_end' == repurchase deadline
-        if (_type == MetaVesTType.OPTION) _vestingEnd = uint256(details.option.shortStopTime);
-        else if (_type == MetaVesTType.RESTRICTED) _vestingEnd = uint256(details.rta.shortStopTime);
+        if (details.metavestType == MetaVesTType.OPTION) _vestingEnd = uint256(details.option.shortStopTime);
+        else if (details.metavestType == MetaVesTType.RESTRICTED) _vestingEnd = uint256(details.rta.shortStopTime);
         else _vestingEnd = uint256(_allocation.vestingStopTime);
 
         ///
         /// calculate vest amounts, subtracting vested and withdrawn amounts
         ///
         if (block.timestamp < _vestingStart) {
-            linearVested[_grantee] = 0;
+            _linearVested[_grantee] = 0;
         } else if (block.timestamp >= _vestingEnd) {
-            // after '_end', vested == tokenStreamTotal + cliff and milestone amounts vested up until now - vestedTokensWithdrawn
+            // after '_end', vested == tokenStreamTotal + milestone amounts vested up until now - vestedTokensWithdrawn
             details.allocation.tokensVested =
-                cliffAndMilestoneVested[_grantee] +
-                _allocation.vestingCliffCredit +
-                _allocationTotal -
+                _allocationTotal +
+                _milestoneVested[_grantee] -
                 _allocation.vestedTokensWithdrawn;
-            linearVested[_grantee] = _allocationTotal;
+            _linearVested[_grantee] = _allocationTotal;
             // if token option, if long stop date reached, vested unexercised tokens are forfeited
-            if (_type == MetaVesTType.OPTION && block.timestamp >= _allocation.vestingStopTime) {
+            if (details.metavestType == MetaVesTType.OPTION && block.timestamp >= _allocation.vestingStopTime) {
                 details.option.tokensForfeited += uint208(details.allocation.tokensVested);
                 // make forfeited vested tokens withdrawable by 'authority'
                 amountWithdrawable[authority][_allocation.tokenContract] += details.allocation.tokensVested;
                 delete details.allocation.tokensVested;
-                delete linearVested[_grantee];
+                delete _linearVested[_grantee];
             }
             // if RTA, if short stop date reached, unlocked tokens are not able to be repurchased by authority
             delete details.rta.tokensRepurchasable;
         } else {
-            // new tokensVested = (vestRate * passed time since start) - preexisting 'linearVested' if the linear vest hasn't already been completed
-            if (linearVested[_grantee] != _allocationTotal)
-                _newlyVested = (_allocation.vestingRate * (block.timestamp - _vestingStart)) - linearVested[_grantee];
+            // new tokensVested = (vestRate * passed time since start) (+ the cliff, which == 0 after initial award by its deletion below) - preexisting '_linearVested' if the linear vest hasn't already been completed
+            if (_linearVested[_grantee] != _allocationTotal)
+                _newlyVested =
+                    (_allocation.vestingRate * (block.timestamp - _vestingStart)) +
+                    _allocation.vestingCliffCredit -
+                    _linearVested[_grantee];
+
             // make sure linear vest calculation does not surpass the token stream total, such as with a high vestRate; if so, calculate accordingly
-            if (linearVested[_grantee] + _newlyVested <= _allocationTotal) {
-                details.allocation.tokensVested += _newlyVested + _allocation.vestingCliffCredit; // add the newly vested amount (and the cliff, which == 0 after initial award by its deletion below) rather than re-assigning variable entirely as pre-existing vested amount was already subtracted
+            if (_linearVested[_grantee] + _newlyVested <= _allocationTotal) {
+                details.allocation.tokensVested += _newlyVested; // add the newly vested amount rather than re-assigning variable entirely as pre-existing vested amount was already subtracted
                 if (details.rta.tokensRepurchasable >= _newlyVested) details.rta.tokensRepurchasable -= _newlyVested;
             } else {
                 _newlyVested = 0;
-                details.allocation.tokensVested =
-                    _allocationTotal +
-                    cliffAndMilestoneVested[_grantee] +
-                    _allocation.vestingCliffCredit;
-                linearVested[_grantee] = _allocationTotal;
+                details.allocation.tokensVested = _allocationTotal + _milestoneVested[_grantee];
+                _linearVested[_grantee] = _allocationTotal;
             }
             // delete cliff credit. After the cliff is added the first time, subsequent calls will simply pass 0 throughout this function
-            linearVested[_grantee] += _newlyVested;
-            cliffAndMilestoneVested[_grantee] += _allocation.vestingCliffCredit;
+            _linearVested[_grantee] += _newlyVested;
             delete details.allocation.vestingCliffCredit;
         }
 
@@ -876,44 +962,41 @@ contract MetaVesT is ReentrancyGuard, SafeTransferLib {
 
         // calculate unlock amounts, subtracting unlocked and withdrawn amounts
         if (block.timestamp < uint256(_allocation.unlockStartTime)) {
-            linearUnlocked[_grantee] = 0;
+            _linearUnlocked[_grantee] = 0;
         } else if (block.timestamp >= _unlockingEnd) {
-            // after '_end', unlocked == tokenStreamTotal + cliff and milestone amounts unlocked up until now - unlockedTokensWithdrawn
+            // after '_end', unlocked == tokenStreamTotal + milestone amounts unlocked up until now - unlockedTokensWithdrawn
             details.allocation.tokensUnlocked =
-                cliffAndMilestoneUnlocked[_grantee] +
-                _allocation.unlockingCliffCredit +
-                _allocationTotal -
+                _allocationTotal +
+                _milestoneUnlocked[_grantee] -
                 _allocation.unlockedTokensWithdrawn;
-            linearUnlocked[_grantee] = _allocationTotal;
+            _linearUnlocked[_grantee] = _allocationTotal;
         } else {
-            // new tokensUnlocked = (unlockRate * passed time since start) - preexisting 'linearUnlocked' if the linear unlock hasn't already been completed
-            if (linearUnlocked[_grantee] != _allocationTotal)
+            // new tokensUnlocked = (unlockRate * passed time since start) (+ the cliff, which == 0 after initial award by its deletion below) - preexisting '_linearUnlocked' if the linear unlock hasn't already been completed
+            if (_linearUnlocked[_grantee] != _allocationTotal)
                 _newlyUnlocked =
-                    (_allocation.unlockRate * (block.timestamp - uint256(_allocation.unlockStartTime))) -
-                    linearUnlocked[_grantee];
+                    (_allocation.unlockRate * (block.timestamp - uint256(_allocation.unlockStartTime))) +
+                    _allocation.unlockingCliffCredit -
+                    _linearUnlocked[_grantee];
             // make sure linear unlocked calculation does not surpass the token stream total, such as with a high unlockRate; if so, calculate accordingly
-            if (linearUnlocked[_grantee] + _newlyUnlocked <= _allocationTotal) {
-                details.allocation.tokensUnlocked += _newlyUnlocked + _allocation.unlockingCliffCredit; // add the newly unlocked amount (and the cliff, which == 0 after initial award by its deletion below) rather than re-assigning variable entirely as pre-existing unlocked amount was already subtracted
+            if (_linearUnlocked[_grantee] + _newlyUnlocked <= _allocationTotal) {
+                details.allocation.tokensUnlocked += _newlyUnlocked; // add the newly unlocked amount rather than re-assigning variable entirely as pre-existing unlocked amount was already subtracted
             } else {
                 _newlyUnlocked = 0;
-                details.allocation.tokensUnlocked =
-                    _allocationTotal +
-                    cliffAndMilestoneUnlocked[_grantee] +
-                    _allocation.unlockingCliffCredit;
-                linearUnlocked[_grantee] = _allocationTotal;
+                details.allocation.tokensUnlocked = _allocationTotal + _milestoneUnlocked[_grantee];
+                _linearUnlocked[_grantee] = _allocationTotal;
             }
             // delete cliff credit. After the cliff is added the first time, subsequent calls will simply pass 0 throughout this function
-            linearUnlocked[_grantee] += _newlyUnlocked;
-            cliffAndMilestoneUnlocked[_grantee] += _allocation.unlockingCliffCredit;
+            _linearUnlocked[_grantee] += _newlyUnlocked;
             delete details.allocation.unlockingCliffCredit;
         }
 
-        // the smaller of the updated vested & unlocked (the overlapping amount, which is withdrawable) is deducted from amountLocked
-        amountLocked[_grantee] -= _min(_newlyVested, _newlyUnlocked);
+        // the smaller of the updated vested & unlocked (the overlapping amount, which is withdrawable) is deducted from nonwithdrawableAmount
+        nonwithdrawableAmount[_grantee] -= _min(_newlyVested, _newlyUnlocked);
 
         // recalculate governing power
         delete details.allocation.tokenGoverningPower;
-        if (details.eligibleTokens.locked) details.allocation.tokenGoverningPower += amountLocked[_grantee];
+        if (details.eligibleTokens.nonwithdrawable)
+            details.allocation.tokenGoverningPower += nonwithdrawableAmount[_grantee];
         if (details.eligibleTokens.unlocked)
             details.allocation.tokenGoverningPower += details.allocation.tokensUnlocked;
         if (details.eligibleTokens.vested) details.allocation.tokenGoverningPower += _allocation.tokensVested;
@@ -931,15 +1014,13 @@ contract MetaVesT is ReentrancyGuard, SafeTransferLib {
 
                 // vesting first
                 if (block.timestamp < _vestingStart) {
-                    linearVested[_transferee] = 0;
+                    _linearVested[_transferee] = 0;
                 } else if (block.timestamp >= _vestingEnd) {
-                    // after '_end', vested == tokenStreamTotal + cliff and milestone amounts vested up until now - vestedTokensWithdrawn
                     transfereeDetails.allocation.tokensVested =
-                        cliffAndMilestoneVested[_transferee] +
-                        _transfereeAllocation.vestingCliffCredit +
-                        _transfereeAllocation.tokenStreamTotal -
+                        _transfereeAllocation.tokenStreamTotal +
+                        _milestoneVested[_transferee] -
                         _transfereeAllocation.vestedTokensWithdrawn;
-                    linearVested[_transferee] = _transfereeAllocation.tokenStreamTotal;
+                    _linearVested[_transferee] = _transfereeAllocation.tokenStreamTotal;
                     // if token option, if long stop date reached, vested unexercised tokens are forfeited and may be reclaimed by 'authority'
                     if (
                         transfereeDetails.metavestType == MetaVesTType.OPTION &&
@@ -951,81 +1032,70 @@ contract MetaVesT is ReentrancyGuard, SafeTransferLib {
                             .allocation
                             .tokensVested;
                         delete transfereeDetails.allocation.tokensVested;
-                        delete linearVested[_transferee];
+                        delete _linearVested[_transferee];
                     }
                     // if RTA, if short stop date reached, vested tokens are not able to be repurchased by authority
                     delete transfereeDetails.rta.tokensRepurchasable;
                 } else {
-                    // new tokensVested = (vestingRate * passed time since start) - preexisting 'linearVested' if the linear vest hasn't already been completed
-                    if (linearVested[_transferee] != _transfereeAllocation.tokenStreamTotal)
+                    if (_linearVested[_transferee] != _transfereeAllocation.tokenStreamTotal)
                         _transfereeNewlyVested =
-                            (_allocation.vestingRate * (block.timestamp - _vestingStart)) -
-                            linearVested[_transferee];
-                    // make sure linear vest calculation does not surpass the token stream total
-                    if (linearVested[_transferee] + _transfereeNewlyVested <= _transfereeAllocation.tokenStreamTotal) {
-                        transfereeDetails.allocation.tokensVested +=
-                            _transfereeNewlyVested +
-                            transfereeDetails.allocation.vestingCliffCredit;
+                            (_allocation.vestingRate * (block.timestamp - _vestingStart)) +
+                            transfereeDetails.allocation.vestingCliffCredit -
+                            _linearVested[_transferee];
+                    if (_linearVested[_transferee] + _transfereeNewlyVested <= _transfereeAllocation.tokenStreamTotal) {
+                        transfereeDetails.allocation.tokensVested += _transfereeNewlyVested;
                         if (transfereeDetails.rta.tokensRepurchasable >= _transfereeNewlyVested)
                             transfereeDetails.rta.tokensRepurchasable -= _transfereeNewlyVested;
                     } else {
                         _transfereeNewlyVested = 0;
                         transfereeDetails.allocation.tokensVested =
                             _transfereeAllocation.tokenStreamTotal +
-                            cliffAndMilestoneVested[_transferee] +
-                            _transfereeAllocation.vestingCliffCredit;
-                        linearVested[_transferee] = _transfereeAllocation.tokenStreamTotal;
+                            _milestoneVested[_transferee];
+                        _linearVested[_transferee] = _transfereeAllocation.tokenStreamTotal;
                     }
-                    // delete cliff credit. After the cliff is added the first time, later refreshes will simply pass 0
-                    linearVested[_transferee] += _transfereeNewlyVested;
-                    cliffAndMilestoneVested[_transferee] += _transfereeAllocation.vestingCliffCredit;
+                    _linearVested[_transferee] += _transfereeNewlyVested;
                     delete transfereeDetails.allocation.vestingCliffCredit;
                 }
 
-                // now unlocking
+                // now calculate unlocking
                 if (block.timestamp < uint256(_allocation.unlockStartTime)) {
-                    linearUnlocked[_transferee] = 0;
+                    _linearUnlocked[_transferee] = 0;
                 } else if (block.timestamp >= _unlockingEnd) {
-                    // after '_end', unlocked == tokenStreamTotal + cliff and milestone amounts unlocked up until now - unlockedTokensWithdrawn
                     transfereeDetails.allocation.tokensUnlocked =
-                        cliffAndMilestoneUnlocked[_transferee] +
-                        _transfereeAllocation.unlockingCliffCredit +
-                        _transfereeAllocation.tokenStreamTotal -
+                        _transfereeAllocation.tokenStreamTotal +
+                        _milestoneUnlocked[_transferee] -
                         _transfereeAllocation.unlockedTokensWithdrawn;
-                    linearUnlocked[_transferee] = _transfereeAllocation.tokenStreamTotal;
+                    _linearUnlocked[_transferee] = _transfereeAllocation.tokenStreamTotal;
                 } else {
-                    // new tokensUnlocked = (unlockRate * passed time since start) - preexisting 'linearUnlocked' if the linear unlock hasn't already been completed
-                    if (linearUnlocked[_transferee] != _transfereeAllocation.tokenStreamTotal)
+                    if (_linearUnlocked[_transferee] != _transfereeAllocation.tokenStreamTotal)
                         _transfereeNewlyUnlocked =
-                            (_allocation.unlockRate * (block.timestamp - uint256(_allocation.unlockStartTime))) -
-                            linearUnlocked[_transferee];
+                            (_allocation.unlockRate * (block.timestamp - uint256(_allocation.unlockStartTime))) +
+                            transfereeDetails.allocation.unlockingCliffCredit -
+                            _linearUnlocked[_transferee];
                     // make sure linear unlocked calculation does not surpass the token stream total
                     if (
-                        linearUnlocked[_transferee] + _transfereeNewlyUnlocked <= _transfereeAllocation.tokenStreamTotal
+                        _linearUnlocked[_transferee] + _transfereeNewlyUnlocked <=
+                        _transfereeAllocation.tokenStreamTotal
                     ) {
-                        transfereeDetails.allocation.tokensUnlocked +=
-                            _transfereeNewlyUnlocked +
-                            transfereeDetails.allocation.unlockingCliffCredit;
+                        transfereeDetails.allocation.tokensUnlocked += _transfereeNewlyUnlocked;
                     } else {
                         _transfereeNewlyUnlocked = 0;
                         transfereeDetails.allocation.tokensUnlocked =
                             _transfereeAllocation.tokenStreamTotal +
-                            cliffAndMilestoneUnlocked[_transferee] +
-                            _transfereeAllocation.unlockingCliffCredit;
-                        linearUnlocked[_transferee] = _transfereeAllocation.tokenStreamTotal;
+                            _milestoneUnlocked[_transferee];
+                        _linearUnlocked[_transferee] = _transfereeAllocation.tokenStreamTotal;
                     }
                     // delete cliff credit. After the cliff is added the first time, later refreshes will simply pass 0
-                    linearUnlocked[_transferee] += _transfereeNewlyUnlocked;
-                    cliffAndMilestoneUnlocked[_transferee] += _transfereeAllocation.unlockingCliffCredit;
+                    _linearUnlocked[_transferee] += _transfereeNewlyUnlocked;
                     delete transfereeDetails.allocation.unlockingCliffCredit;
                 }
 
-                // the smaller of the updated vested & unlocked amount (the overlapping amount, which is withdrawable) is deducted from amountLocked
-                amountLocked[_transferee] -= _min(_transfereeNewlyVested, _transfereeNewlyUnlocked);
+                // the smaller of the updated vested & unlocked amount (the overlapping amount, which is withdrawable) is deducted from nonwithdrawableAmount
+                nonwithdrawableAmount[_transferee] -= _min(_transfereeNewlyVested, _transfereeNewlyUnlocked);
                 // recalculate governing power
                 delete transfereeDetails.allocation.tokenGoverningPower;
-                if (transfereeDetails.eligibleTokens.locked)
-                    transfereeDetails.allocation.tokenGoverningPower += amountLocked[_transferee];
+                if (transfereeDetails.eligibleTokens.nonwithdrawable)
+                    transfereeDetails.allocation.tokenGoverningPower += nonwithdrawableAmount[_transferee];
                 if (transfereeDetails.eligibleTokens.unlocked)
                     transfereeDetails.allocation.tokenGoverningPower += _transfereeAllocation.tokensUnlocked;
                 if (transfereeDetails.eligibleTokens.vested)
@@ -1096,13 +1166,20 @@ contract MetaVesT is ReentrancyGuard, SafeTransferLib {
             detailsAllocation.vestedTokensWithdrawn += _newlyWithdrawable;
         }
 
-        // delete the metavestDetails for this msg.sender if the token corresponds to a metavest and all their values are 0, as now all tokens are withdrawn as well (so we know after this call, no locked, unlocked, vested, nor withdrawable tokens will remain)
+        // delete the metavestDetails and mappings for this msg.sender if the token corresponds to a metavest and all their values are 0,
+        // as now all tokens are withdrawn as well (so we know after this call, no locked, unlocked, vested, nor withdrawable tokens will remain)
         if (
             _tokenAddress == detailsAllocation.tokenContract &&
-            amountLocked[msg.sender] == 0 &&
+            nonwithdrawableAmount[msg.sender] == 0 &&
             detailsAllocation.tokensUnlocked == detailsAllocation.unlockedTokensWithdrawn &&
             detailsAllocation.tokensVested == detailsAllocation.vestedTokensWithdrawn
-        ) delete metavestDetails[msg.sender];
+        ) {
+            delete metavestDetails[msg.sender];
+            delete _linearUnlocked[msg.sender];
+            delete _linearVested[msg.sender];
+            delete _milestoneUnlocked[msg.sender];
+            delete _milestoneVested[msg.sender];
+        }
         emit MetaVesT_Deleted(msg.sender);
 
         _amt = amountWithdrawable[msg.sender][_tokenAddress];
