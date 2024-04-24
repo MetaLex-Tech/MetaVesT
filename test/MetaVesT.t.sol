@@ -150,7 +150,7 @@ contract MetaVesTTest is Test {
             }),
             option: MetaVesT.TokenOption({exercisePrice: 0, tokensForfeited: 0, shortStopTime: uint48(0)}),
             rta: MetaVesT.RestrictedTokenAward({repurchasePrice: 0, tokensRepurchasable: 0, shortStopTime: uint48(0)}),
-            eligibleTokens: MetaVesT.GovEligibleTokens({locked: false, vested: true, unlocked: true}),
+            eligibleTokens: MetaVesT.GovEligibleTokens({nonwithdrawable: false, vested: true, unlocked: true}),
             milestones: emptyMilestones, // milestones tested separately
             grantee: _grantee,
             transferable: _transferable
@@ -166,7 +166,11 @@ contract MetaVesTTest is Test {
         MetaVesT.MetaVesTDetails memory _newDetails = metavestTest.getMetavestDetails(_metavestDetails.grantee);
         assertEq(_total, testToken.balanceOf(metavestTestAddr));
         assertEq(_metavestDetails.grantee, _newDetails.grantee, "metavestDetails not stored");
-        assertEq(metavestTest.amountLocked(_metavestDetails.grantee), _total, "amountLocked did not update");
+        assertEq(
+            metavestTest.nonwithdrawableAmount(_metavestDetails.grantee),
+            _total,
+            "nonwithdrawableAmount did not update"
+        );
     }
 
     function testUpdateTransferability(address _grantee, bool _isTransferable) external {
@@ -260,7 +264,7 @@ contract MetaVesTTest is Test {
     function testRemoveMilestone(address _grantee, uint8 _milestoneIndex) external {
         vm.assume(_grantee != address(0));
         MetaVesT.MetaVesTDetails memory _details = _createBasicMilestoneMetavest(_grantee);
-        uint256 _beforeAmountLocked = metavestTest.amountLocked(_grantee);
+        uint256 _beforenonwithdrawableAmount = metavestTest.nonwithdrawableAmount(_grantee);
         vm.startPrank(controllerAddr);
         bool _reverted;
         if (_milestoneIndex >= _details.milestones.length) {
@@ -274,7 +278,11 @@ contract MetaVesTTest is Test {
                 0,
                 "milestoneAward was not deleted"
             );
-            assertGt(_beforeAmountLocked, metavestTest.amountLocked(_grantee), "amountLocked not reduced");
+            assertGt(
+                _beforenonwithdrawableAmount,
+                metavestTest.nonwithdrawableAmount(_grantee),
+                "nonwithdrawableAmount not reduced"
+            );
         }
     }
 
@@ -285,7 +293,7 @@ contract MetaVesTTest is Test {
         vm.prank(address(3));
         vm.expectRevert();
         metavestTest.addMilestone(_grantee, _milestone);
-        uint256 _beforeLocked = metavestTest.amountLocked(_grantee);
+        uint256 _beforeLocked = metavestTest.nonwithdrawableAmount(_grantee);
         uint256 _beforeLength = _details.milestones.length;
         vm.startPrank(controllerAddr);
         metavestTest.addMilestone(_grantee, _milestone);
@@ -294,7 +302,7 @@ contract MetaVesTTest is Test {
             _beforeLength,
             "milestones array did not increment length"
         );
-        assertGt(metavestTest.amountLocked(_grantee), _beforeLocked, "amountLocked did not increase");
+        assertGt(metavestTest.nonwithdrawableAmount(_grantee), _beforeLocked, "nonwithdrawableAmount did not increase");
     }
 
     function testUpdatePrice(address _grantee, uint128 _newPrice) external {
@@ -327,7 +335,7 @@ contract MetaVesTTest is Test {
 
         uint256 _beforeRepurchasable = _details.rta.tokensRepurchasable;
         uint256 _beforeTotal = _details.allocation.tokenStreamTotal;
-        uint256 _beforeLocked = metavestTest.amountLocked(_grantee);
+        uint256 _beforeLocked = metavestTest.nonwithdrawableAmount(_grantee);
         uint256 _beforePaymentWithdrawable = metavestTest.getAmountWithdrawable(_grantee, metavestTest.paymentToken()); // these are transferred via the controller, so the balance will not update in this test (just the mapping)
         uint256 _beforeBalance = testToken.balanceOf(metavestTestAddr);
 
@@ -344,7 +352,11 @@ contract MetaVesTTest is Test {
             metavestTest.getMetavestDetails(_grantee).allocation.tokenStreamTotal,
             "tokenStreamTotal did not update"
         );
-        assertEq(_beforeLocked - _amount, metavestTest.amountLocked(_grantee), "amountLocked did not update");
+        assertEq(
+            _beforeLocked - _amount,
+            metavestTest.nonwithdrawableAmount(_grantee),
+            "nonwithdrawableAmount did not update"
+        );
         assertEq(
             _beforePaymentWithdrawable + (_details.rta.repurchasePrice * _amount),
             metavestTest.getAmountWithdrawable(_grantee, metavestTest.paymentToken()),
@@ -357,13 +369,52 @@ contract MetaVesTTest is Test {
         );
     }
 
+    function testTerminateVesting(address _grantee, bool _cancelMilestones) external {
+        vm.assume(_grantee != address(0));
+        _createBasicMilestoneMetavest(_grantee);
+        uint256 _beforeBalance = testToken.balanceOf(metavestTestAddr);
+        uint256 _beforeAuthorityBalance = testToken.balanceOf(AUTHORITY);
+        uint256 _beforeNonWithdrawable = metavestTest.nonwithdrawableAmount(_grantee);
+
+        vm.expectRevert();
+        metavestTest.terminateVesting(_grantee, _cancelMilestones);
+        vm.prank(controllerAddr);
+        metavestTest.terminateVesting(_grantee, _cancelMilestones);
+
+        assertTrue(_beforeBalance >= testToken.balanceOf(metavestTestAddr), "metavest balance not properly changed");
+        assertTrue(
+            _beforeNonWithdrawable >= metavestTest.nonwithdrawableAmount(_grantee),
+            "grantee's balance not properly changed"
+        );
+        assertTrue(
+            _beforeAuthorityBalance <= testToken.balanceOf(AUTHORITY),
+            "authority's balance not properly changed"
+        );
+        if (_cancelMilestones)
+            assertEq(
+                0,
+                metavestTest.getMetavestDetails(_grantee).milestones[0].milestoneAward,
+                "Milestone award not deleted"
+            );
+        assertEq(
+            0,
+            metavestTest.getMetavestDetails(_grantee).allocation.vestingRate,
+            "grantee's vestingRate not deleted"
+        );
+        assertEq(
+            0,
+            metavestTest.getMetavestDetails(_grantee).allocation.vestingCliffCredit,
+            "grantee's vestingCliffCredit not deleted"
+        );
+    }
+
     function testTerminate(address _grantee) external {
         vm.assume(_grantee != address(0));
         MetaVesT.MetaVesTDetails memory _details = _createBasicMilestoneMetavest(_grantee);
         uint256 _beforeBalance = testToken.balanceOf(metavestTestAddr);
         uint256 _beforeGranteeBalance = testToken.balanceOf(_grantee);
         uint256 _beforeAuthorityBalance = testToken.balanceOf(AUTHORITY);
-        uint256 _beforeLocked = metavestTest.amountLocked(_grantee);
+        uint256 _beforeLocked = metavestTest.nonwithdrawableAmount(_grantee);
         uint256 _beforeWithdrawable = metavestTest.getAmountWithdrawable(_grantee, _details.allocation.tokenContract);
         uint256 _remainder = _beforeLocked -
             _details.allocation.tokensVested -
@@ -397,7 +448,7 @@ contract MetaVesTTest is Test {
             metavestTest.getAmountWithdrawable(_grantee, testTokenAddr),
             "grantee still has withdrawable balance"
         );
-        assertEq(0, metavestTest.amountLocked(_grantee), "amountLocked not deleted");
+        assertEq(0, metavestTest.nonwithdrawableAmount(_grantee), "nonwithdrawableAmount not deleted");
         assertEq(address(0), metavestTest.getMetavestDetails(_grantee).grantee, "grantee's metavest not deleted");
     }
 
@@ -425,8 +476,8 @@ contract MetaVesTTest is Test {
                 tokensUnlocked: 0,
                 vestedTokensWithdrawn: 0,
                 unlockedTokensWithdrawn: 0,
-                vestingCliffCredit: 0,
-                unlockingCliffCredit: 0,
+                vestingCliffCredit: 1,
+                unlockingCliffCredit: 1,
                 vestingRate: uint160(10),
                 vestingStartTime: uint48(2 ** 20),
                 vestingStopTime: uint48(2 ** 40),
@@ -437,7 +488,7 @@ contract MetaVesTTest is Test {
             }),
             option: MetaVesT.TokenOption({exercisePrice: 0, tokensForfeited: 0, shortStopTime: uint48(0)}),
             rta: MetaVesT.RestrictedTokenAward({repurchasePrice: 0, tokensRepurchasable: 0, shortStopTime: uint48(0)}),
-            eligibleTokens: MetaVesT.GovEligibleTokens({locked: false, vested: true, unlocked: false}),
+            eligibleTokens: MetaVesT.GovEligibleTokens({nonwithdrawable: false, vested: true, unlocked: false}),
             milestones: milestones,
             grantee: _grantee,
             transferable: false
@@ -464,8 +515,8 @@ contract MetaVesTTest is Test {
                 tokensUnlocked: 0,
                 vestedTokensWithdrawn: 0,
                 unlockedTokensWithdrawn: 0,
-                vestingCliffCredit: 0,
-                unlockingCliffCredit: 0,
+                vestingCliffCredit: 1,
+                unlockingCliffCredit: 1,
                 vestingRate: uint160(10),
                 vestingStartTime: uint48(2 ** 20),
                 vestingStopTime: uint48(2 ** 40),
@@ -480,7 +531,7 @@ contract MetaVesTTest is Test {
                 tokensRepurchasable: 1000,
                 shortStopTime: uint48(2 ** 40)
             }),
-            eligibleTokens: MetaVesT.GovEligibleTokens({locked: false, vested: true, unlocked: false}),
+            eligibleTokens: MetaVesT.GovEligibleTokens({nonwithdrawable: false, vested: true, unlocked: false}),
             milestones: emptyMilestones,
             grantee: _grantee,
             transferable: false
