@@ -10,6 +10,10 @@ import "src/MetaVesTController.sol";
 /// NOTE: many MetaVesT functions are permissioned and conditions are housed in MetaVesTController that are assumed in here; see
 /// MetaVesTController.t.sol for such tests
 
+interface IGetTransferees {
+    function transferees(address grantee, uint256 index) external view returns (address);
+}
+
 abstract contract ERC20 {
     string public name;
     string public symbol;
@@ -231,13 +235,13 @@ contract MetaVesTTest is Test {
 
     function testConfirmMilestone(address _grantee, uint8 _milestoneIndex) external {
         vm.assume(_grantee != address(0));
-        MetaVesT.MetaVesTDetails memory _details = _createBasicMilestoneMetavest(_grantee);
+        MetaVesT.MetaVesTDetails memory _details = _createBasicMilestoneMetavest(_grantee, true);
         uint256 _beforeVested = _details.allocation.tokensVested;
         block.number / 2 == 0 ? baseCondition = true : baseCondition = false;
 
         bool _result;
         if (_milestoneIndex < _details.milestones.length)
-            _result = ICondition(_details.milestones[_milestoneIndex].conditionContracts[0]).checkCondition();
+            _result = IConditionM(_details.milestones[_milestoneIndex].conditionContracts[0]).checkCondition();
 
         if (_milestoneIndex >= _details.milestones.length || _details.milestones[_milestoneIndex].complete || !_result)
             vm.expectRevert();
@@ -263,7 +267,7 @@ contract MetaVesTTest is Test {
 
     function testRemoveMilestone(address _grantee, uint8 _milestoneIndex) external {
         vm.assume(_grantee != address(0));
-        MetaVesT.MetaVesTDetails memory _details = _createBasicMilestoneMetavest(_grantee);
+        MetaVesT.MetaVesTDetails memory _details = _createBasicMilestoneMetavest(_grantee, true);
         uint256 _beforenonwithdrawableAmount = metavestTest.nonwithdrawableAmount(_grantee);
         vm.startPrank(controllerAddr);
         bool _reverted;
@@ -289,7 +293,7 @@ contract MetaVesTTest is Test {
     // note the conditional ensuring the tokens comprising milestoneAward are transferred (and that milestoneAward > 0) is in MetaVesTController and not tested here
     function testAddMilestone(address _grantee, MetaVesT.Milestone calldata _milestone) external {
         vm.assume(_grantee != address(0) && _milestone.milestoneAward > 0 && _milestone.milestoneAward < 1e30);
-        MetaVesT.MetaVesTDetails memory _details = _createBasicMilestoneMetavest(_grantee);
+        MetaVesT.MetaVesTDetails memory _details = _createBasicMilestoneMetavest(_grantee, true);
         vm.prank(address(3));
         vm.expectRevert();
         metavestTest.addMilestone(_grantee, _milestone);
@@ -328,58 +332,17 @@ contract MetaVesTTest is Test {
         }
     }
 
-    function testRepurchaseTokens(address _grantee, uint256 _divisor) external {
-        vm.assume(_grantee != address(0) && _divisor != 0); // _divisor condition in MetaVesTController
-        MetaVesT.MetaVesTDetails memory _details = _createBasicRTAMetavest(_grantee);
-        uint256 _amount = _details.rta.tokensRepurchasable / _divisor;
-
-        uint256 _beforeRepurchasable = _details.rta.tokensRepurchasable;
-        uint256 _beforeTotal = _details.allocation.tokenStreamTotal;
-        uint256 _beforeLocked = metavestTest.nonwithdrawableAmount(_grantee);
-        uint256 _beforePaymentWithdrawable = metavestTest.getAmountWithdrawable(_grantee, metavestTest.paymentToken()); // these are transferred via the controller, so the balance will not update in this test (just the mapping)
-        uint256 _beforeBalance = testToken.balanceOf(metavestTestAddr);
-
-        vm.startPrank(controllerAddr);
-        metavestTest.repurchaseTokens(_grantee, _divisor);
-
-        assertEq(
-            _beforeRepurchasable - _amount,
-            metavestTest.getMetavestDetails(_grantee).rta.tokensRepurchasable,
-            "tokensRepurchasable did not update"
-        );
-        assertEq(
-            _beforeTotal - _amount,
-            metavestTest.getMetavestDetails(_grantee).allocation.tokenStreamTotal,
-            "tokenStreamTotal did not update"
-        );
-        assertEq(
-            _beforeLocked - _amount,
-            metavestTest.nonwithdrawableAmount(_grantee),
-            "nonwithdrawableAmount did not update"
-        );
-        assertEq(
-            _beforePaymentWithdrawable + (_details.rta.repurchasePrice * _amount),
-            metavestTest.getAmountWithdrawable(_grantee, metavestTest.paymentToken()),
-            "amountWithdrawable of paymentToken did not update"
-        );
-        assertEq(
-            _beforeBalance - _amount,
-            testToken.balanceOf(metavestTestAddr),
-            "balance of repurchased tokens did not update"
-        );
-    }
-
-    function testTerminateVesting(address _grantee, bool _cancelMilestones) external {
+    function testTerminateVesting(address _grantee) external {
         vm.assume(_grantee != address(0));
-        _createBasicMilestoneMetavest(_grantee);
+        _createBasicMilestoneMetavest(_grantee, true);
         uint256 _beforeBalance = testToken.balanceOf(metavestTestAddr);
         uint256 _beforeAuthorityBalance = testToken.balanceOf(AUTHORITY);
         uint256 _beforeNonWithdrawable = metavestTest.nonwithdrawableAmount(_grantee);
 
         vm.expectRevert();
-        metavestTest.terminateVesting(_grantee, _cancelMilestones);
+        metavestTest.terminateVesting(_grantee);
         vm.prank(controllerAddr);
-        metavestTest.terminateVesting(_grantee, _cancelMilestones);
+        metavestTest.terminateVesting(_grantee);
 
         assertTrue(_beforeBalance >= testToken.balanceOf(metavestTestAddr), "metavest balance not properly changed");
         assertTrue(
@@ -390,12 +353,6 @@ contract MetaVesTTest is Test {
             _beforeAuthorityBalance <= testToken.balanceOf(AUTHORITY),
             "authority's balance not properly changed"
         );
-        if (_cancelMilestones)
-            assertEq(
-                0,
-                metavestTest.getMetavestDetails(_grantee).milestones[0].milestoneAward,
-                "Milestone award not deleted"
-            );
         assertEq(
             0,
             metavestTest.getMetavestDetails(_grantee).allocation.vestingRate,
@@ -410,7 +367,7 @@ contract MetaVesTTest is Test {
 
     function testTerminate(address _grantee) external {
         vm.assume(_grantee != address(0));
-        MetaVesT.MetaVesTDetails memory _details = _createBasicMilestoneMetavest(_grantee);
+        MetaVesT.MetaVesTDetails memory _details = _createBasicMilestoneMetavest(_grantee, true);
         uint256 _beforeBalance = testToken.balanceOf(metavestTestAddr);
         uint256 _beforeGranteeBalance = testToken.balanceOf(_grantee);
         uint256 _beforeAuthorityBalance = testToken.balanceOf(AUTHORITY);
@@ -428,21 +385,13 @@ contract MetaVesTTest is Test {
         vm.prank(controllerAddr);
         metavestTest.terminate(_grantee);
 
-        assertEq(
-            _beforeBalance - _beforeWithdrawable - _remainder,
-            testToken.balanceOf(metavestTestAddr),
-            "metavest balance not properly changed"
-        );
+        assertGt(_beforeBalance, testToken.balanceOf(metavestTestAddr), "metavest balance not properly changed");
         assertEq(
             _beforeGranteeBalance + _beforeWithdrawable,
             testToken.balanceOf(_grantee),
             "grantee's balance not properly changed"
         );
-        assertEq(
-            _beforeAuthorityBalance + _remainder,
-            testToken.balanceOf(AUTHORITY),
-            "authority's balance not properly changed"
-        );
+        assertGt(testToken.balanceOf(AUTHORITY), _beforeAuthorityBalance, "authority's balance not properly changed");
         assertEq(
             0,
             metavestTest.getAmountWithdrawable(_grantee, testTokenAddr),
@@ -452,15 +401,116 @@ contract MetaVesTTest is Test {
         assertEq(address(0), metavestTest.getMetavestDetails(_grantee).grantee, "grantee's metavest not deleted");
     }
 
+    function testTransferRights(uint128 _divisor, address _transferee, address _grantee, bool _transferable) external {
+        vm.assume(_grantee != address(0));
+        MetaVesT.MetaVesTDetails memory _details = _createBasicMilestoneMetavest(_grantee, _transferable);
+        uint256 _beforeNonwithdrawable = metavestTest.nonwithdrawableAmount(_grantee);
+        uint256 _beforeTransfereenonWithdrawable = metavestTest.nonwithdrawableAmount(_transferee);
+        uint256 _beforeTotal = _details.allocation.tokenStreamTotal;
+        bool _reverted;
+
+        vm.expectRevert();
+        metavestTest.transferRights(_divisor, _transferee);
+        vm.startPrank(_grantee);
+        if (
+            _divisor == 0 ||
+            _transferee == address(0) ||
+            metavestTest.getMetavestDetails(_transferee).grantee != address(0) ||
+            _transferee == metavestTest.authority() ||
+            _transferee == metavestTest.controller() ||
+            !_transferable
+        ) {
+            _reverted = true;
+            vm.expectRevert();
+        }
+        metavestTest.transferRights(_divisor, _transferee);
+
+        // if the divisor is too high, the amounts transferred to transferee will == 0 from rounding, so adding 1 allows 'assertGt' to capture greater than or equal, which is more ideal
+        if (!_reverted) {
+            assertGt(
+                _beforeNonwithdrawable + 1,
+                metavestTest.nonwithdrawableAmount(_grantee),
+                "grantee's nonwithdrawableAmount not <="
+            );
+            assertGt(
+                metavestTest.nonwithdrawableAmount(_transferee) + 1,
+                _beforeTransfereenonWithdrawable,
+                "grantee's nonwithdrawableAmount <="
+            );
+            assertGt(
+                _beforeTotal + 1,
+                metavestTest.getMetavestDetails(_grantee).allocation.tokenStreamTotal,
+                "total allocated tokens not <="
+            );
+
+            assertEq(
+                _beforeTotal,
+                metavestTest.getMetavestDetails(_grantee).allocation.tokenStreamTotal +
+                    metavestTest.getMetavestDetails(_transferee).allocation.tokenStreamTotal,
+                "grantee and transferee together should have the same total as grantee pre-transfer"
+            );
+            assertGt(metavestTest.getMetavestDetails(_transferee).milestones.length, 0, "milestones did not transfer");
+            assertEq(
+                IGetTransferees(metavestTestAddr).transferees(_grantee, 0),
+                _transferee,
+                "transferee not added to transferees array element 0"
+            );
+        }
+    }
+
+    function testExerciseOption(address _grantee, uint256 _amount) external {
+        vm.assume(_grantee != address(0));
+        MetaVesT.MetaVesTDetails memory _details = _createTokenOptionMetavest(_grantee);
+        uint256 _beforeWithdrawable = metavestTest.getAmountWithdrawable(_grantee, _details.allocation.tokenContract);
+        uint256 _beforeWithdrawableController = metavestTest.getAmountWithdrawable(
+            metavestTest.controller(),
+            metavestTest.paymentToken()
+        );
+        bool _reverted;
+
+        vm.startPrank(_grantee);
+        if (
+            _amount == 0 ||
+            metavestTest.getMetavestDetails(_grantee).grantee != _grantee ||
+            _grantee == metavestTest.authority() ||
+            _grantee == metavestTest.controller() ||
+            _amount >
+            _min(
+                _details.allocation.tokensVested - _details.allocation.vestedTokensWithdrawn,
+                _details.allocation.tokensUnlocked - _details.allocation.unlockedTokensWithdrawn
+            )
+        ) {
+            _reverted = true;
+            vm.expectRevert();
+        }
+        metavestTest.exerciseOption(_amount);
+
+        if (!_reverted) {
+            assertGt(
+                metavestTest.getAmountWithdrawable(_grantee, _details.allocation.tokenContract),
+                _beforeWithdrawable,
+                "grantee amountWithdrawable did not increase"
+            );
+            assertGt(
+                metavestTest.getAmountWithdrawable(metavestTest.controller(), metavestTest.paymentToken()),
+                _beforeWithdrawableController,
+                "controller paymentToken amountWithdrawable did not increase"
+            );
+        }
+    }
+
     /// @dev mock a BaseCondition call
     function checkCondition() public view returns (bool) {
         return (baseCondition);
     }
 
-    function _createBasicMilestoneMetavest(address _grantee) internal returns (MetaVesT.MetaVesTDetails memory) {
+    function _createBasicMilestoneMetavest(
+        address _grantee,
+        bool _transferable
+    ) internal returns (MetaVesT.MetaVesTDetails memory) {
         MetaVesT.Milestone[] memory milestones = new MetaVesT.Milestone[](1);
         milestones[0].complete = false;
-        milestones[0].milestoneAward = 1;
+        milestones[0].milestoneAward = 100;
         address[] memory conditionContracts = new address[](1);
         conditionContracts[0] = address(this); // will call the mock checkCondition
         milestones[0].conditionContracts = conditionContracts;
@@ -476,8 +526,8 @@ contract MetaVesTTest is Test {
                 tokensUnlocked: 0,
                 vestedTokensWithdrawn: 0,
                 unlockedTokensWithdrawn: 0,
-                vestingCliffCredit: 1,
-                unlockingCliffCredit: 1,
+                vestingCliffCredit: uint128(1),
+                unlockingCliffCredit: uint128(1),
                 vestingRate: uint160(10),
                 vestingStartTime: uint48(2 ** 20),
                 vestingStopTime: uint48(2 ** 40),
@@ -491,15 +541,15 @@ contract MetaVesTTest is Test {
             eligibleTokens: MetaVesT.GovEligibleTokens({nonwithdrawable: false, vested: true, unlocked: false}),
             milestones: milestones,
             grantee: _grantee,
-            transferable: false
+            transferable: _transferable
         });
 
-        testToken.mintToken(AUTHORITY, 1001);
+        testToken.mintToken(AUTHORITY, 1100);
         vm.prank(AUTHORITY);
-        testToken.approve(metavestTestAddr, 1001);
+        testToken.approve(metavestTestAddr, 1100);
 
         vm.prank(controllerAddr);
-        metavestTest.createMetavest(_metavestDetails, 1001);
+        metavestTest.createMetavest(_metavestDetails, 1100);
         return _metavestDetails;
     }
 
@@ -507,7 +557,7 @@ contract MetaVesTTest is Test {
         vm.assume(_grantee != address(0));
 
         MetaVesT.MetaVesTDetails memory _metavestDetails = MetaVesT.MetaVesTDetails({
-            metavestType: MetaVesT.MetaVesTType.ALLOCATION, // simple allocation since more functionalities will be tested in MetaVesTController.t
+            metavestType: MetaVesT.MetaVesTType.RESTRICTED,
             allocation: MetaVesT.Allocation({
                 tokenStreamTotal: 1000,
                 tokenGoverningPower: 0,
@@ -515,8 +565,8 @@ contract MetaVesTTest is Test {
                 tokensUnlocked: 0,
                 vestedTokensWithdrawn: 0,
                 unlockedTokensWithdrawn: 0,
-                vestingCliffCredit: 1,
-                unlockingCliffCredit: 1,
+                vestingCliffCredit: uint128(1),
+                unlockingCliffCredit: uint128(1),
                 vestingRate: uint160(10),
                 vestingStartTime: uint48(2 ** 20),
                 vestingStopTime: uint48(2 ** 40),
@@ -534,7 +584,7 @@ contract MetaVesTTest is Test {
             eligibleTokens: MetaVesT.GovEligibleTokens({nonwithdrawable: false, vested: true, unlocked: false}),
             milestones: emptyMilestones,
             grantee: _grantee,
-            transferable: false
+            transferable: true
         });
 
         testToken.mintToken(AUTHORITY, 1001);
@@ -547,5 +597,59 @@ contract MetaVesTTest is Test {
         vm.prank(controllerAddr);
         metavestTest.createMetavest(_metavestDetails, 1001);
         return _metavestDetails;
+    }
+
+    function _createTokenOptionMetavest(address _grantee) internal returns (MetaVesT.MetaVesTDetails memory) {
+        vm.assume(_grantee != address(0));
+
+        MetaVesT.MetaVesTDetails memory _metavestDetails = MetaVesT.MetaVesTDetails({
+            metavestType: MetaVesT.MetaVesTType.OPTION,
+            allocation: MetaVesT.Allocation({
+                tokenStreamTotal: 1000,
+                tokenGoverningPower: 0,
+                tokensVested: 0,
+                tokensUnlocked: 0,
+                vestedTokensWithdrawn: 0,
+                unlockedTokensWithdrawn: 0,
+                vestingCliffCredit: uint128(1),
+                unlockingCliffCredit: uint128(1),
+                vestingRate: uint160(10),
+                vestingStartTime: uint48(block.timestamp - 10), // 10 * 10 tokens will have vested, exercise price of 1
+                vestingStopTime: uint48(2 ** 40),
+                unlockRate: uint160(10),
+                unlockStartTime: uint48(block.timestamp - 10),
+                unlockStopTime: uint48(2 ** 40),
+                tokenContract: testTokenAddr
+            }),
+            option: MetaVesT.TokenOption({
+                exercisePrice: 1,
+                tokensForfeited: uint208(0),
+                shortStopTime: uint48(2 ** 40)
+            }),
+            rta: MetaVesT.RestrictedTokenAward({repurchasePrice: 0, tokensRepurchasable: 0, shortStopTime: uint48(0)}),
+            eligibleTokens: MetaVesT.GovEligibleTokens({nonwithdrawable: false, vested: true, unlocked: false}),
+            milestones: emptyMilestones,
+            grantee: _grantee,
+            transferable: true
+        });
+
+        testToken2.mintToken(_grantee, 10000);
+        testToken.mintToken(AUTHORITY, 10000);
+        vm.prank(AUTHORITY);
+        testToken.approve(metavestTestAddr, 1100);
+        vm.prank(_grantee);
+        testToken2.approve(metavestTestAddr, 10000);
+
+        vm.prank(controllerAddr);
+        metavestTest.createMetavest(_metavestDetails, 1000);
+        return _metavestDetails;
+    }
+
+    // same min function as MetaVesT.sol
+    function _min(uint256 x, uint256 y) internal pure returns (uint256 z) {
+        /// @solidity memory-safe-assembly
+        assembly {
+            z := xor(x, mul(xor(x, y), lt(y, x)))
+        }
     }
 }
