@@ -148,7 +148,7 @@ contract MetaVesTController is SafeTransferLib {
         if (functionToConditions[msg.sig][0] != address(0)) {
             for (uint256 i; i < functionToConditions[msg.sig].length; ++i) {
                 address _cond = functionToConditions[msg.sig][i];
-                if (!ICondition(_cond).checkCondition()) revert MetaVesTController_ConditionNotSatisfied(_cond);
+                if (!IConditionM(_cond).checkCondition()) revert MetaVesTController_ConditionNotSatisfied(_cond);
             }
         }
         _;
@@ -258,8 +258,8 @@ contract MetaVesTController is SafeTransferLib {
         uint256 _total = _metavestDetails.allocation.tokenStreamTotal + _milestoneTotal;
         if (_total == 0) revert MetaVesTController_ZeroAmount();
         if (
-            IERC20(_metavestDetails.allocation.tokenContract).allowance(msg.sender, metavest) < _total ||
-            IERC20(_metavestDetails.allocation.tokenContract).balanceOf(msg.sender) < _total
+            IERC20M(_metavestDetails.allocation.tokenContract).allowance(msg.sender, metavest) < _total ||
+            IERC20M(_metavestDetails.allocation.tokenContract).balanceOf(msg.sender) < _total
         ) revert MetaVesTController_AmountNotApprovedForTransferFrom();
 
         _tokenGrantees[_metavestDetails.allocation.tokenContract].push(_metavestDetails.grantee);
@@ -270,7 +270,7 @@ contract MetaVesTController is SafeTransferLib {
     /// @notice for 'authority' to withdraw tokens from this controller (i.e. which it has withdrawn from 'metavest', typically 'paymentToken')
     /// @param _tokenContract contract address of the token which is being withdrawn
     function withdrawFromController(address _tokenContract) external onlyAuthority {
-        uint256 _balance = IERC20(_tokenContract).balanceOf(address(this));
+        uint256 _balance = IERC20M(_tokenContract).balanceOf(address(this));
         if (_balance == 0) revert MetaVesTController_ZeroAmount();
 
         safeTransfer(_tokenContract, authority, _balance);
@@ -334,8 +334,8 @@ contract MetaVesTController is SafeTransferLib {
         address _tokenContract = imetavest.metavestDetails(_grantee).allocation.tokenContract;
         if (_milestone.milestoneAward == 0) revert MetaVesTController_ZeroAmount();
         if (
-            IERC20(_tokenContract).allowance(msg.sender, metavest) < _milestone.milestoneAward ||
-            IERC20(_tokenContract).balanceOf(msg.sender) < _milestone.milestoneAward
+            IERC20M(_tokenContract).allowance(msg.sender, metavest) < _milestone.milestoneAward ||
+            IERC20M(_tokenContract).balanceOf(msg.sender) < _milestone.milestoneAward
         ) revert MetaVesT.MetaVesT_AmountNotApprovedForTransferFrom();
 
         _resetAmendmentParams(_grantee, msg.sig);
@@ -438,8 +438,8 @@ contract MetaVesTController is SafeTransferLib {
 
         uint256 _payment = _amount * _metavest.rta.repurchasePrice;
         if (
-            IERC20(paymentToken).allowance(msg.sender, metavest) < _payment ||
-            IERC20(paymentToken).balanceOf(msg.sender) < _payment
+            IERC20M(paymentToken).allowance(msg.sender, metavest) < _payment ||
+            IERC20M(paymentToken).balanceOf(msg.sender) < _payment
         ) revert MetaVesT.MetaVesT_AmountNotApprovedForTransferFrom();
 
         safeTransferFrom(paymentToken, msg.sender, metavest, _payment);
