@@ -233,7 +233,7 @@ contract MetaVesT is ReentrancyGuard, SafeTransferLib {
         uint48 shortStopTime
     );
     event MetaVesT_TransferabilityUpdated(address grantee, bool isTransferable);
-    event MetaVesT_TransferredRights(address grantee, address transferee, uint256 divisor);
+    event MetaVesT_TransferredRights(address grantee, address transferee, uint128 divisor);
     event MetaVesT_UnlockRateUpdated(address grantee, uint208 unlockRate);
     event MetaVesT_VestingRateUpdated(address grantee, uint208 vestingRate);
     event MetaVesT_Withdrawal(address withdrawer, address tokenContract, uint256 amount);
@@ -739,9 +739,10 @@ contract MetaVesT is ReentrancyGuard, SafeTransferLib {
     }
 
     /// @notice allows a grantee to transfer part or all of their MetaVesT to a '_transferee' if this MetaVest has transferability enabled
-    /// @param _divisor: divisor corresponding to the grantee's fraction of their claim transferred via this function; i.e. for a transfer of 25% of a claim, submit '4'; to transfer the entire MetaVesT, submit '1'
-    /// @param _transferee: address to which the claim is being transferred, that will have a new MetaVesT created
-    function transferRights(uint256 _divisor, address _transferee) external {
+    /// @dev '_divisor' is uint128 to avoid arithmetic errors with cliff credit divisions, and would not reasonably exceed the uint128 max
+    /// @param _divisor divisor corresponding to the grantee's fraction of their claim transferred via this function; i.e. for a transfer of 25% of a claim, submit '4'; to transfer the entire MetaVesT, submit '1'
+    /// @param _transferee address to which the claim is being transferred, that will have a new MetaVesT created
+    function transferRights(uint128 _divisor, address _transferee) external {
         if (_divisor == 0) revert MetaVesT_ZeroAmount();
         if (_transferee == address(0)) revert MetaVesT_ZeroAddress();
         // prevent potential overwrite of existing MetaVesT
@@ -762,52 +763,52 @@ contract MetaVesT is ReentrancyGuard, SafeTransferLib {
         if (!_metavestDetails.transferable) revert MetaVesT_NonTransferable();
         if (transferees[msg.sender].length == ARRAY_LENGTH_LIMIT) revert MetaVesT_TransfereeLimit();
 
-        // update unlockedTokensWithdrawn, vestedTokensWithdrawn, _milestoneUnlocked, _linearUnlocked, _linearVested, and nonwithdrawableAmount similarly
+        // update unlockedTokensWithdrawn, vestedTokensWithdrawn, _milestoneUnlocked, _linearUnlocked, _linearVested, and nonwithdrawableAmount to calculate '_transferee' amount and subtract from grantee's
         _allocation.unlockedTokensWithdrawn = _allocation.unlockedTokensWithdrawn / _divisor;
-        details.allocation.unlockedTokensWithdrawn -= _allocation.unlockedTokensWithdrawn / _divisor;
+        if (details.allocation.unlockedTokensWithdrawn > _allocation.unlockedTokensWithdrawn)
+            details.allocation.unlockedTokensWithdrawn -= _allocation.unlockedTokensWithdrawn;
 
         _allocation.vestedTokensWithdrawn = _allocation.vestedTokensWithdrawn / _divisor;
-        details.allocation.vestedTokensWithdrawn -= _allocation.vestedTokensWithdrawn / _divisor;
+        details.allocation.vestedTokensWithdrawn -= _allocation.vestedTokensWithdrawn;
 
         _milestoneUnlocked[_transferee] = _milestoneUnlocked[msg.sender] / _divisor;
-        _milestoneUnlocked[msg.sender] -= _milestoneUnlocked[msg.sender] / _divisor;
+        _milestoneUnlocked[msg.sender] -= _milestoneUnlocked[_transferee];
 
         _milestoneVested[_transferee] = _milestoneVested[msg.sender] / _divisor;
-        _milestoneVested[msg.sender] -= _milestoneVested[msg.sender] / _divisor;
+        _milestoneVested[msg.sender] -= _milestoneVested[_transferee];
 
         _linearUnlocked[_transferee] = _linearUnlocked[msg.sender] / _divisor;
-        _linearUnlocked[msg.sender] -= _linearUnlocked[msg.sender] / _divisor;
+        _linearUnlocked[msg.sender] -= _linearUnlocked[_transferee];
 
         _linearVested[_transferee] = _linearVested[msg.sender] / _divisor;
-        _linearVested[msg.sender] -= _linearVested[msg.sender] / _divisor;
+        _linearVested[msg.sender] -= _linearVested[_transferee];
 
         nonwithdrawableAmount[_transferee] = nonwithdrawableAmount[msg.sender] / _divisor;
-        nonwithdrawableAmount[msg.sender] -= nonwithdrawableAmount[msg.sender] / _divisor;
+        nonwithdrawableAmount[msg.sender] -= nonwithdrawableAmount[_transferee];
 
         // transferee's MetaVesT should mirror the calling grantee's except for amounts and grantee address, so just update those necessary elements in the MLOAD
-        _allocation.tokenStreamTotal = _allocation.tokenStreamTotal / _divisor;
-        _allocation.vestingCliffCredit = uint128(_allocation.vestingCliffCredit / _divisor);
-        _allocation.unlockingCliffCredit = uint128(_allocation.unlockingCliffCredit / _divisor);
-        _allocation.tokenGoverningPower = _allocation.tokenGoverningPower / _divisor;
-        _allocation.tokensVested = _allocation.tokensVested / _divisor;
-        _allocation.tokensUnlocked = _allocation.tokensUnlocked / _divisor;
-        if (_metavestDetails.rta.tokensRepurchasable != 0)
-            _metavestDetails.rta.tokensRepurchasable = _metavestDetails.rta.tokensRepurchasable / _divisor;
+        _allocation.tokenStreamTotal /= _divisor;
+        _allocation.vestingCliffCredit /= _divisor;
+        _allocation.unlockingCliffCredit /= _divisor;
+        _allocation.tokenGoverningPower /= _divisor;
+        _allocation.tokensVested /= _divisor;
+        _allocation.tokensUnlocked /= _divisor;
+        if (_metavestDetails.rta.tokensRepurchasable != 0) _metavestDetails.rta.tokensRepurchasable /= _divisor;
 
         // update milestoneAwards; completed milestones will pass 0
         if (_milestones.length != 0) {
             // manually copy milestones to avoid dynamic struct array -> storage erro
             for (uint256 i = 0; i < _milestones.length; ++i) {
-                _milestones[i].milestoneAward = _milestones[i].milestoneAward / _divisor;
-                transfereeDetail.milestones.push(_milestones[i]);
-                // update grantee's array within same loop
-                details.milestones[i].milestoneAward /= _milestones[i].milestoneAward;
+                _milestones[i].milestoneAward /= _divisor;
+                transfereeDetail.milestones.push(_milestones[i]); // we know transferee did not have a metavest before this, so we can simply push the memory milestones array to storage
+                // update grantee's milestone array within same loop to remove each transferred milestoneAward for efficiency
+                details.milestones[i].milestoneAward -= _milestones[i].milestoneAward;
             }
         }
 
         transferees[msg.sender].push(_transferee);
 
-        // assign other transferee details manually using the updated '_metavestDetails', avoiding milestones
+        // assign other transferee details manually using the updated '_metavestDetails'
         transfereeDetail.grantee = _transferee;
         transfereeDetail.metavestType = _metavestDetails.metavestType;
         transfereeDetail.allocation = _allocation;
@@ -816,18 +817,14 @@ contract MetaVesT is ReentrancyGuard, SafeTransferLib {
         transfereeDetail.eligibleTokens = _metavestDetails.eligibleTokens;
         transfereeDetail.transferable = _metavestDetails.transferable;
 
-        for (uint256 i = 0; i < _milestones.length; ++i) {
-            transfereeDetail.milestones.push(_milestones[i]);
-        }
-
+        // subtract transferred amounts from grantee's metavestDetails
         details.allocation.tokenStreamTotal -= _allocation.tokenStreamTotal;
         details.allocation.vestingCliffCredit -= _allocation.vestingCliffCredit;
         details.allocation.unlockingCliffCredit -= _allocation.unlockingCliffCredit;
         details.allocation.tokenGoverningPower -= _allocation.tokenGoverningPower;
         details.allocation.tokensVested -= _allocation.tokensVested;
         details.allocation.tokensUnlocked -= _allocation.tokensUnlocked;
-        details.allocation.tokenStreamTotal -= _allocation.tokenStreamTotal;
-        if (_metavestDetails.rta.tokensRepurchasable != 0)
+        if (details.rta.tokensRepurchasable > _metavestDetails.rta.tokensRepurchasable)
             details.rta.tokensRepurchasable -= _metavestDetails.rta.tokensRepurchasable;
 
         emit MetaVesT_Created(_metavestDetails);
