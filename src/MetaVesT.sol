@@ -11,7 +11,7 @@
                                      *************************************
                                                                         */
 
-pragma solidity ^0.8.18;
+pragma solidity 0.8.18;
 
 /// @notice interface to a MetaLeX condition contract
 /// @dev see https://github.com/MetaLex-Tech/BORG-CORE/tree/main/src/libs/conditions
@@ -184,7 +184,7 @@ contract MetaVesT is ReentrancyGuard, SafeTransferLib {
     /// @notice authority address, may replace itself in 'controller'
     address public authority;
 
-    /// @notice contract address for use of 'tokenGoverningPower', typically a DAO pool, governor, staking address, if any (otherwise address(0))
+    /// @notice address which may impose function-specific condition checks in 'controller'
     address public dao;
 
     /// @notice maps grantee address to their MetaVesTDetails struct
@@ -193,8 +193,8 @@ contract MetaVesT is ReentrancyGuard, SafeTransferLib {
     /// @notice maps grantee to transferees of their MetaVesT
     mapping(address => address[]) public transferees;
 
-    /// @notice maps grantee address to total amount of tokens in their MetaVesT which are non-withdrawable
-    /// @dev no need to specify token address because a grantee's paymentToken from any repurchase is always withdrawable
+    /// @notice maps grantee address to total amount of tokens in their MetaVesT which are non-withdrawable, including non-vested or locked, or unconfirmed 'milestoneAwards'
+    /// @dev no need to specify token address because a grantee's paymentToken from any repurchase is always withdrawable, so this can only be their metavested token
     mapping(address => uint256) public nonwithdrawableAmount;
 
     /// @notice maps address to their total amount of tokens which are withdrawable from address(this)
@@ -270,12 +270,13 @@ contract MetaVesT is ReentrancyGuard, SafeTransferLib {
     /// @notice constructs a MetaVesT framework specifying authority address, MetaVesTController contract address, and DAO staking/voting contract address
     /// each individual grantee's MetaVesT will be initiated in the 'controller' contract
     /** @dev ONLY ONE METAVEST PER ADDRESS;
-     *** this contract supports multiple different ERC20s, but each grantee address (including transferees) may only correspond to one MetaVesT and therefore one token*/
+     *** this contract supports multiple different ERC20s, but each grantee address (including transferees) may only correspond to one MetaVesT and therefore one token;
+     *** for multiple metavests to a single recipient, use different/fresh addresses */
     /// @param _authority: address which initiates and may update each MetaVesT, such as a BORG or DAO, via the 'controller'
     /// 'authority' cannot initially be zero address, as no MetaVesTs could be initialized; however, may replace itself with zero address after creating MetaVesTs for immutability.
     /// @param _controller: MetaVesTController.sol contract address, permissioned to the 'authority' that parameterizes functionalities of each MetaVesT in this contract
     /// and may update details; contains many of the conditionals for the authority-permissioned functions
-    /// @param _dao: contract address which token may be staked and used for voting, typically a DAO pool, governor, staking address. Submit address(0) for no such functionality.
+    /// @param _dao: address which may impose function-specific condition checks in 'controller'
     /// @param _paymentToken contract address of the token used as payment/consideration for 'authority' to repurchase tokens according to a restricted token award, or for 'grantee' to exercise a token option
     constructor(address _authority, address _controller, address _dao, address _paymentToken) {
         if (_authority == address(0) || _controller == address(0)) revert MetaVesT_ZeroAddress();
@@ -368,7 +369,7 @@ contract MetaVesT is ReentrancyGuard, SafeTransferLib {
     }
 
     /// @notice for 'controller' to update the 'vestingRate' for a '_grantee' and their transferees
-    /// @dev an '_vestingRate' of 0 is permissible to enable temporary freezes of allocation unlocks by authority
+    /// @dev a '_vestingRate' of 0 is permissible to enable temporary freezes of allocation unlocks by authority
     /// @param _grantee address whose MetaVesT's (and whose transferees' MetaVesTs') vestingRate is being updated
     /// @param _vestingRate token vesting rate, and 'lapse rate' for restricted token award
     function updateVestingRate(address _grantee, uint160 _vestingRate) external onlyController {
@@ -446,7 +447,7 @@ contract MetaVesT is ReentrancyGuard, SafeTransferLib {
     /// the 'authority' to confirm their milestone
     /// @param _grantee address of grantee whose milestone is being confirmed
     /// @param _milestoneIndex element of 'milestones' array that is being confirmed
-    function confirmMilestone(address _grantee, uint8 _milestoneIndex) external {
+    function confirmMilestone(address _grantee, uint8 _milestoneIndex) external nonReentrant {
         refreshMetavest(_grantee);
         MetaVesTDetails storage details = metavestDetails[_grantee];
         Milestone[] memory _milestones = details.milestones;
@@ -579,7 +580,9 @@ contract MetaVesT is ReentrancyGuard, SafeTransferLib {
 
     /// @notice for 'authority' (via 'controller') to repurchase tokens from this '_grantee''s restricted token award MetaVesT; '_amount' of 'paymentToken' will be transferred to this address and
     /// will be withdrawable by 'grantee'
-    /// @dev conditionals for this function (including short stop time check and '_divisor' != 0) are in the 'controller'; repurchased tokens are sent to 'authority'
+    /// @dev conditionals for this function (including short stop time check and '_divisor' != 0) are in the 'controller'; repurchased tokens are sent to 'authority';
+    /// note that 'refreshMetavest' is called in 'controller' so the purchase amount will be the same as calculated there and in this function, and that for transferees of transferees,
+    /// 'authority' will need to initiate another repurchase from 'controller' (which is not subject to consent or condition checks)
     /// @param _grantee address of grantee whose tokens are being repurchased
     /// @param _divisor divisor corresponding to the fraction of _grantee's repurchasable tokens being repurchased by 'authority'; to repurchase the full available amount, submit '1'
     function repurchaseTokens(address _grantee, uint256 _divisor) external onlyController {
@@ -618,7 +621,7 @@ contract MetaVesT is ReentrancyGuard, SafeTransferLib {
     /// @notice for the applicable authority to terminate and delete this '_grantee''s MetaVesT via the controller, retaining unvested tokens and accelerating the unlock of vested tokens
     /// @dev conditionals for this function are in the 'controller'; makes all unlockedTokens for such grantee withdrawable then sends them to grantee,
     /// so as to avoid a mapping overwrite if the grantee's terminated MetaVesT is replaced with a new one before they can withdraw.
-    /// Returns remainder to 'authority'
+    /// Returns remainder to 'authority'; call 'terminateVesting' to only terminate vesting and preserve the unlock schedule
     /// @param _grantee address of grantee whose MetaVesT is being terminated
     function terminate(address _grantee) external onlyController {
         MetaVesTDetails storage details = metavestDetails[_grantee];
@@ -626,17 +629,11 @@ contract MetaVesT is ReentrancyGuard, SafeTransferLib {
         address _tokenContract = details.allocation.tokenContract;
         uint256 _vested = details.allocation.tokensVested - details.allocation.vestedTokensWithdrawn; // '_vested' == vested but not withdrawn
 
-        // calculate amount to send to '_grantee'
+        // calculate amount to send to '_grantee' starting with current amount withdrawable
         uint256 _amt = amountWithdrawable[_grantee][_tokenContract];
 
-        // calculate unvested remainder to be returned to 'authority'
-        uint256 _remainder = details.allocation.tokenStreamTotal - _vested;
-
-        // revoke incomplete milestones and add each 'milestoneAward' to '_remainder'; milestoneAward will == 0 if complete and will be skipped
-        // no need to delete here as the entire array is deleted when 'metavestDetails' is deleted
-        for (uint256 i; i < details.milestones.length; ++i) {
-            if (details.milestones[i].milestoneAward != 0) _remainder += details.milestones[i].milestoneAward;
-        }
+        // calculate nonwithdrawable and unvested remainder to be returned to 'authority' which includes unconfirmed milestoneAwards
+        uint256 _remainder = nonwithdrawableAmount[_grantee] - _vested;
 
         // only include 'tokensVested' if the metavest type is not a token option, as that amount reflects vested but not exercised tokens, which is added to '_remainder'
         // since the metavest is being deleted, locked vested amounts are accelerated to unlocked
@@ -661,17 +658,11 @@ contract MetaVesT is ReentrancyGuard, SafeTransferLib {
                     transfereeDetails.allocation.vestedTokensWithdrawn;
 
                 // add each transferee's locked remainder to be returned to 'authority'
-                _remainder += transfereeDetails.allocation.tokenStreamTotal - _transfereeVested;
+                _remainder += nonwithdrawableAmount[_transferee] - _transfereeVested;
 
                 // only include '_transfereeVested' if the metavest type is not a token option, as that amount reflects vested but not exercised tokens, which is added to '_remainder'
                 if (transfereeDetails.metavestType != MetaVesTType.OPTION) _transfereeAmt += _transfereeVested;
                 else _remainder += _transfereeVested;
-
-                // replicate milestone revocations for '_transferee'
-                for (uint256 y; y < transfereeDetails.milestones.length; ++y) {
-                    if (transfereeDetails.milestones[y].milestoneAward != 0)
-                        _remainder += transfereeDetails.milestones[y].milestoneAward;
-                }
 
                 // delete all mappings for '_transferee'
                 delete metavestDetails[_transferee];
@@ -699,7 +690,8 @@ contract MetaVesT is ReentrancyGuard, SafeTransferLib {
     }
 
     /// @notice for the applicable authority to terminate (stop) this '_grantee''s vesting via the controller, but preserving the unlocking schedule for any already-vested tokens, so their MetaVesT is not deleted
-    /// @dev conditionals for this function are in the 'controller'; returns unvested remainder to 'authority' but preserves MetaVesT for all vested tokens up until call
+    /// @dev conditionals for this function are in the 'controller'; returns unvested remainder to 'authority' but preserves MetaVesT for all vested tokens up until call;
+    /// because 'refreshMetavest' uses transferor's 'vestingRate', this will also stop vesting for all levels of transferee
     /// @param _grantee address of grantee whose MetaVesT's vesting is being stopped
     function terminateVesting(address _grantee) external onlyController {
         MetaVesTDetails storage details = metavestDetails[_grantee];
@@ -720,8 +712,8 @@ contract MetaVesT is ReentrancyGuard, SafeTransferLib {
         delete metavestDetails[_grantee].allocation.vestingRate;
 
         // for subsequent refreshMetavest calculation purposes, update these vesting tracking variables
-        details.allocation.vestedTokensWithdrawn += _remainder; // '_remainder' (before transferee remainders are added) is being "withdrawn" to authority
         _linearVested[_grantee] = details.allocation.tokenStreamTotal; // no more linear vesting after this function
+        details.allocation.vestedTokensWithdrawn += _remainder; // '_remainder' (before transferee remainders are added) is being "withdrawn" to authority
 
         // replicate for transferees
         if (_transfereesLen != 0) {
@@ -752,7 +744,7 @@ contract MetaVesT is ReentrancyGuard, SafeTransferLib {
     }
 
     /// @notice allows a grantee to transfer part or all of their MetaVesT to a '_transferee' if this MetaVest has transferability enabled
-    /// @dev '_divisor' is uint128 to avoid arithmetic errors with cliff credit divisions, and would not reasonably exceed the uint128 max
+    /// @dev '_divisor' is uint128 to avoid arithmetic errors with cliff credit divisions, and would not reasonably exceed the uint128 max; note that resulting values from any divisor other than '1' may be round down
     /// @param _divisor divisor corresponding to the grantee's fraction of their claim transferred via this function; i.e. for a transfer of 25% of a claim, submit '4'; to transfer the entire MetaVesT, submit '1'
     /// @param _transferee address to which the claim is being transferred, that will have a new MetaVesT created
     function transferRights(uint128 _divisor, address _transferee) external {
@@ -776,10 +768,9 @@ contract MetaVesT is ReentrancyGuard, SafeTransferLib {
         if (!_metavestDetails.transferable) revert MetaVesT_NonTransferable();
         if (transferees[msg.sender].length == ARRAY_LENGTH_LIMIT) revert MetaVesT_TransfereeLimit();
 
-        // update unlockedTokensWithdrawn, vestedTokensWithdrawn, _milestoneUnlocked, _linearUnlocked, _linearVested, and nonwithdrawableAmount to calculate '_transferee' amount and subtract from grantee's
+        // update tracking values to calculate '_transferee' amount and subtract from grantee's
         _allocation.unlockedTokensWithdrawn = _allocation.unlockedTokensWithdrawn / _divisor;
-        if (details.allocation.unlockedTokensWithdrawn > _allocation.unlockedTokensWithdrawn)
-            details.allocation.unlockedTokensWithdrawn -= _allocation.unlockedTokensWithdrawn;
+        details.allocation.unlockedTokensWithdrawn -= _allocation.unlockedTokensWithdrawn;
 
         _allocation.vestedTokensWithdrawn = _allocation.vestedTokensWithdrawn / _divisor;
         details.allocation.vestedTokensWithdrawn -= _allocation.vestedTokensWithdrawn;
@@ -846,7 +837,10 @@ contract MetaVesT is ReentrancyGuard, SafeTransferLib {
 
     /// @notice refresh the time-contingent details and amounts of '_grantee''s MetaVesT; if any tokens remain locked past the stopTime
     /// @dev this does not refresh the transferees’ transferees and so on, but ‘refreshMetavest’ is called anyway in each state-changing function
-    /// that would be called by a transferee (which would then update their transferee’s values)
+    /// that would be called by a transferee (which would then update their transferee’s values). Also, each transferee's unlock and vest calculations
+    /// use their transferor's 'vestingRate', 'vestingStartTime', 'vestingStopTime', 'unlockRate', 'vestingStartTime', and 'vestingStopTime', so
+    /// lower level updates will update a level of transferee above on each refresh, substantially mitigating any time-based temporary benefits or
+    /// detriments to transferees-of-transferees and beyond. Further, such later transferees can have their metavests permissionlessly refreshed by any caller.
     /// @param _grantee address whose MetaVesT is being refreshed, along with any transferees of such MetaVesT
     function refreshMetavest(address _grantee) public {
         // check whether MetaVesT for this grantee exists
@@ -879,10 +873,12 @@ contract MetaVesT is ReentrancyGuard, SafeTransferLib {
                 _allocationTotal +
                 _milestoneVested[_grantee] -
                 _allocation.vestedTokensWithdrawn;
-            _linearVested[_grantee] = _allocationTotal;
-            // if token option, if long stop date reached, vested unexercised tokens are forfeited (note 'tokensVested' already has 'vestedTokensWithdrawn' subtracted)
+            _linearVested[_grantee] = _allocationTotal; // this includes vestingCliffCredit
+            // if token option, if long stop date reached, vested unexercised tokens are forfeited (note 'tokensVested' already has 'vestedTokensWithdrawn' subtracted from line above)
             if (details.metavestType == MetaVesTType.OPTION && block.timestamp >= _allocation.vestingStopTime) {
-                details.option.tokensForfeited += uint208(details.allocation.tokensVested);
+                details.option.tokensForfeited += uint208(
+                    details.allocation.tokensVested - details.allocation.vestedTokensWithdrawn
+                );
                 // make forfeited vested tokens withdrawable by 'authority'
                 amountWithdrawable[authority][_allocation.tokenContract] += details.allocation.tokensVested;
                 delete details.allocation.tokensVested;
@@ -893,10 +889,20 @@ contract MetaVesT is ReentrancyGuard, SafeTransferLib {
         } else {
             // new tokensVested = (vestRate * passed time since start) (+ the cliff, which == 0 after initial award by its deletion below) - preexisting '_linearVested' if the linear vest hasn't already been completed
             if (_linearVested[_grantee] != _allocationTotal)
-                _newlyVested =
+                if (
+                    _linearVested[_grantee] >
                     (_allocation.vestingRate * (block.timestamp - _vestingStart)) +
-                    _allocation.vestingCliffCredit -
-                    _linearVested[_grantee];
+                        uint256(_allocation.vestingCliffCredit)
+                )
+                    // ensure '_linearVested' is not the greater value due to 'vestingCliffCredit' being larger than the linear vest update since the last refresh (and the cliff credit having been deleted), or this will revert
+                    // if so, just add the linear update to '_newlyVested'
+                    _newlyVested = ((_allocation.vestingRate * (block.timestamp - _vestingStart)) +
+                        uint256(_allocation.vestingCliffCredit));
+                else
+                    _newlyVested =
+                        ((_allocation.vestingRate * (block.timestamp - _vestingStart)) +
+                            uint256(_allocation.vestingCliffCredit)) -
+                        _linearVested[_grantee];
 
             // make sure linear vest calculation does not surpass the token stream total, such as with a high vestRate; if so, calculate accordingly
             if (_linearVested[_grantee] + _newlyVested <= _allocationTotal) {
@@ -931,10 +937,20 @@ contract MetaVesT is ReentrancyGuard, SafeTransferLib {
         } else {
             // new tokensUnlocked = (unlockRate * passed time since start) (+ the cliff, which == 0 after initial award by its deletion below) - preexisting '_linearUnlocked' if the linear unlock hasn't already been completed
             if (_linearUnlocked[_grantee] != _allocationTotal)
-                _newlyUnlocked =
+                if (
+                    _linearUnlocked[_grantee] >
                     (_allocation.unlockRate * (block.timestamp - uint256(_allocation.unlockStartTime))) +
-                    _allocation.unlockingCliffCredit -
-                    _linearUnlocked[_grantee];
+                        uint256(_allocation.unlockingCliffCredit)
+                )
+                    // see above comment about '_linearVested' and cliff check
+                    _newlyUnlocked = ((_allocation.unlockRate *
+                        (block.timestamp - uint256(_allocation.unlockStartTime))) +
+                        uint256(_allocation.unlockingCliffCredit));
+                else
+                    _newlyUnlocked =
+                        ((_allocation.unlockRate * (block.timestamp - uint256(_allocation.unlockStartTime))) +
+                            uint256(_allocation.unlockingCliffCredit)) -
+                        _linearUnlocked[_grantee];
             // make sure linear unlocked calculation does not surpass the token stream total, such as with a high unlockRate; if so, calculate accordingly
             if (_linearUnlocked[_grantee] + _newlyUnlocked <= _allocationTotal) {
                 details.allocation.tokensUnlocked += _newlyUnlocked; // add the newly unlocked amount rather than re-assigning variable entirely as pre-existing unlocked amount was already subtracted
@@ -996,10 +1012,19 @@ contract MetaVesT is ReentrancyGuard, SafeTransferLib {
                     delete transfereeDetails.rta.tokensRepurchasable;
                 } else {
                     if (_linearVested[_transferee] != _transfereeAllocation.tokenStreamTotal)
-                        _transfereeNewlyVested =
-                            (_allocation.vestingRate * (block.timestamp - _vestingStart)) +
-                            transfereeDetails.allocation.vestingCliffCredit -
-                            _linearVested[_transferee];
+                        if (
+                            _linearVested[_transferee] >
+                            ((_allocation.vestingRate * (block.timestamp - _vestingStart)) +
+                                uint256(transfereeDetails.allocation.vestingCliffCredit))
+                        )
+                            _transfereeNewlyVested = ((_allocation.vestingRate * (block.timestamp - _vestingStart)) +
+                                uint256(transfereeDetails.allocation.vestingCliffCredit));
+                        else
+                            _transfereeNewlyVested =
+                                ((_allocation.vestingRate * (block.timestamp - _vestingStart)) +
+                                    uint256(transfereeDetails.allocation.vestingCliffCredit)) -
+                                _linearVested[_transferee];
+
                     if (_linearVested[_transferee] + _transfereeNewlyVested <= _transfereeAllocation.tokenStreamTotal) {
                         transfereeDetails.allocation.tokensVested += _transfereeNewlyVested;
                         if (transfereeDetails.rta.tokensRepurchasable >= _transfereeNewlyVested)
@@ -1026,10 +1051,19 @@ contract MetaVesT is ReentrancyGuard, SafeTransferLib {
                     _linearUnlocked[_transferee] = _transfereeAllocation.tokenStreamTotal;
                 } else {
                     if (_linearUnlocked[_transferee] != _transfereeAllocation.tokenStreamTotal)
-                        _transfereeNewlyUnlocked =
-                            (_allocation.unlockRate * (block.timestamp - uint256(_allocation.unlockStartTime))) +
-                            transfereeDetails.allocation.unlockingCliffCredit -
-                            _linearUnlocked[_transferee];
+                        if (
+                            _linearUnlocked[_transferee] >
+                            ((_allocation.unlockRate * (block.timestamp - uint256(_allocation.unlockStartTime))) +
+                                uint256(transfereeDetails.allocation.unlockingCliffCredit))
+                        )
+                            _transfereeNewlyUnlocked = ((_allocation.unlockRate *
+                                (block.timestamp - uint256(_allocation.unlockStartTime))) +
+                                uint256(transfereeDetails.allocation.unlockingCliffCredit));
+                        else
+                            _transfereeNewlyUnlocked =
+                                ((_allocation.unlockRate * (block.timestamp - uint256(_allocation.unlockStartTime))) +
+                                    uint256(transfereeDetails.allocation.unlockingCliffCredit)) -
+                                _linearUnlocked[_transferee];
                     // make sure linear unlocked calculation does not surpass the token stream total
                     if (
                         _linearUnlocked[_transferee] + _transfereeNewlyUnlocked <=
@@ -1064,19 +1098,21 @@ contract MetaVesT is ReentrancyGuard, SafeTransferLib {
 
     /// @notice allows a grantee (or transferee) of a token option to exercise their option by paying the exercise price in 'paymentToken' for their amount of vested tokens, making such tokens withdrawable if unlocked
     /// @param _amount amount of tokens msg.sender seeks to exercise in their token option
-    function exerciseOption(uint256 _amount) external nonReentrant {
+    function exerciseOption(uint256 _amount) external {
+        if (_amount == 0) revert MetaVesT_ZeroAmount();
         refreshMetavest(msg.sender);
 
         MetaVesTDetails storage details = metavestDetails[msg.sender];
         Allocation storage detailsAllocation = details.allocation;
+        if (msg.sender != details.grantee) revert MetaVesT_OnlyGrantee();
+        if (details.metavestType != MetaVesTType.OPTION) revert MetaVesT_NoTokenOption();
+
         address _tokenContract = detailsAllocation.tokenContract;
         // amount available to msg.sender to exercise and withdraw is the amount that is (vested & not withdrawn) && (unlocked & not withdrawn)
         uint256 _availableTokens = _min(
             detailsAllocation.tokensVested - detailsAllocation.vestedTokensWithdrawn,
             detailsAllocation.tokensUnlocked - detailsAllocation.unlockedTokensWithdrawn
         );
-        if (msg.sender != details.grantee) revert MetaVesT_OnlyGrantee();
-        if (details.metavestType != MetaVesTType.OPTION) revert MetaVesT_NoTokenOption();
         if (_availableTokens < _amount) revert MetaVesT_AmountGreaterThanAvailable();
 
         uint256 _payment = _amount * details.option.exercisePrice;
@@ -1085,13 +1121,14 @@ contract MetaVesT is ReentrancyGuard, SafeTransferLib {
             IERC20M(paymentToken).balanceOf(msg.sender) < _payment
         ) revert MetaVesT_AmountNotApprovedForTransferFrom();
 
+        detailsAllocation.unlockedTokensWithdrawn += _amount;
+        detailsAllocation.vestedTokensWithdrawn += _amount;
+        nonwithdrawableAmount[msg.sender] -= _amount;
+
         safeTransferFrom(paymentToken, msg.sender, address(this), _payment);
 
         amountWithdrawable[controller][paymentToken] += _payment;
-
         amountWithdrawable[msg.sender][_tokenContract] += _amount;
-        detailsAllocation.unlockedTokensWithdrawn += _amount;
-        detailsAllocation.vestedTokensWithdrawn += _amount;
 
         emit MetaVesT_OptionExercised(msg.sender, _tokenContract, _amount);
     }
