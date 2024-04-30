@@ -6,7 +6,7 @@
                                      *************************************
                                                                         */
 
-pragma solidity ^0.8.18;
+pragma solidity 0.8.18;
 
 import "./MetaVesT.sol";
 
@@ -32,8 +32,6 @@ interface IMetaVesT {
     function transferees(address grantee) external view returns (address[] memory);
 
     function updateAuthority(address newAuthority) external;
-
-    function updateDao(address newDao) external;
 
     function updatePrice(address grantee, uint128 newPrice) external;
 
@@ -181,7 +179,7 @@ contract MetaVesTController is SafeTransferLib {
     constructor(address _authority, address _dao, address _paymentToken) {
         if (_authority == address(0) || _paymentToken == address(0)) revert MetaVesTController_ZeroAddress();
         authority = _authority;
-        MetaVesT _metavest = new MetaVesT(_authority, address(this), _dao, _paymentToken);
+        MetaVesT _metavest = new MetaVesT(_authority, address(this), _paymentToken);
         paymentToken = _paymentToken;
         dao = _dao;
         metavest = address(_metavest);
@@ -413,7 +411,8 @@ contract MetaVesTController is SafeTransferLib {
     }
 
     /// @notice for 'authority' to repurchase tokens from a restricted token award MetaVesT
-    /// @dev does not require '_grantee' consent nor condition check
+    /// @dev does not require '_grantee' consent nor condition check; note that for transferees of transferees of this '_grantee',
+    /// 'authority' will need to initiate another repurchase (which is not subject to consent or condition checks)
     /// @param _grantee address whose MetaVesT is subject to the repurchase
     /// @param _divisor divisor corresponding to the fraction of _grantee's repurchasable tokens being repurchased by 'authority'; to repurchase the full available amount, submit '1'
     function repurchaseMetavestTokens(address _grantee, uint256 _divisor) external onlyAuthority {
@@ -468,7 +467,7 @@ contract MetaVesTController is SafeTransferLib {
     }
 
     /// @notice allows the 'dao' to propose a replacement to their address. First step in two-step address change, as '_newDao' will subsequently need to call 'acceptDaoRole()'
-    /// @dev use care in updating 'dao' as it must have the ability to call 'acceptDaoRole()', or once it needs to be replaced, 'updateDao()'
+    /// @dev use care in updating 'dao' as it must have the ability to call 'acceptDaoRole()'
     /// @param _newDao new address for pending 'dao', who must accept the role by calling 'acceptDaoRole'
     function initiateDaoUpdate(address _newDao) external onlyDao {
         if (_newDao == address(0)) revert MetaVesTController_ZeroAddress();
@@ -483,7 +482,6 @@ contract MetaVesTController is SafeTransferLib {
 
         delete _pendingDao;
         dao = msg.sender;
-        imetavest.updateDao(msg.sender);
 
         emit MetaVesTController_DaoUpdated(msg.sender);
     }
