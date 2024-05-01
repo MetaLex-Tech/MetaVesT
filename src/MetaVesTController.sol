@@ -17,6 +17,8 @@ interface IMetaVesT {
 
     function getGoverningPower(address grantee) external returns (uint256);
 
+    function getMetavestDetails(address grantee) external view returns (MetaVesT.MetaVesTDetails memory);
+
     function removeMilestone(uint8 milestoneIndex, address grantee, address tokenContract) external;
 
     function repurchaseTokens(address grantee, uint256 divisor) external;
@@ -24,8 +26,6 @@ interface IMetaVesT {
     function terminate(address grantee) external;
 
     function terminateVesting(address grantee) external;
-
-    function metavestDetails(address grantee) external view returns (MetaVesT.MetaVesTDetails memory details);
 
     function refreshMetavest(address grantee) external;
 
@@ -143,10 +143,12 @@ contract MetaVesTController is SafeTransferLib {
     /// @notice implements a condition check if imposed by 'dao'; see https://github.com/MetaLex-Tech/BORG-CORE/tree/main/src/libs/conditions
     /// @dev all conditions must be satisfied, or will revert
     modifier conditionCheck() {
-        if (functionToConditions[msg.sig][0] != address(0)) {
-            for (uint256 i; i < functionToConditions[msg.sig].length; ++i) {
-                address _cond = functionToConditions[msg.sig][i];
-                if (!IConditionM(_cond).checkCondition()) revert MetaVesTController_ConditionNotSatisfied(_cond);
+        if (functionToConditions[msg.sig].length != 0) {
+            if (functionToConditions[msg.sig][0] != address(0)) {
+                for (uint256 i; i < functionToConditions[msg.sig].length; ++i) {
+                    address _cond = functionToConditions[msg.sig][i];
+                    if (!IConditionM(_cond).checkCondition()) revert MetaVesTController_ConditionNotSatisfied(_cond);
+                }
             }
         }
         _;
@@ -196,7 +198,7 @@ contract MetaVesTController is SafeTransferLib {
         if (
             !_checkFunctionToTokenToAmendmentTime(
                 _msgSig,
-                imetavest.metavestDetails(msg.sender).allocation.tokenContract
+                imetavest.getMetavestDetails(msg.sender).allocation.tokenContract
             )
         ) revert MetaVesTController_ProposedAmendmentExpired();
 
@@ -224,12 +226,11 @@ contract MetaVesTController is SafeTransferLib {
         MetaVesT.MetaVesTDetails calldata _metavestDetails
     ) external onlyAuthority conditionCheck {
         //prevent overwrite of existing MetaVesT
-        if (
-            imetavest.metavestDetails(_metavestDetails.grantee).grantee != address(0) ||
-            _metavestDetails.grantee == authority ||
-            _metavestDetails.grantee == address(this)
-        ) revert MetaVesTController_MetaVesTAlreadyExists();
-        if (_metavestDetails.grantee == address(0) || _metavestDetails.allocation.tokenContract == address(0))
+        address _grantee = _metavestDetails.grantee;
+        MetaVesT.MetaVesTDetails memory _currentDetails = imetavest.getMetavestDetails(_grantee);
+        if (_currentDetails.grantee != address(0)) revert MetaVesTController_MetaVesTAlreadyExists();
+
+        if (_grantee == address(0) || _metavestDetails.allocation.tokenContract == address(0))
             revert MetaVesTController_ZeroAddress();
         if (
             _metavestDetails.allocation.vestingCliffCredit > _metavestDetails.allocation.tokenStreamTotal ||
@@ -246,12 +247,16 @@ contract MetaVesTController is SafeTransferLib {
                 _metavestDetails.rta.repurchasePrice == 0)
         ) revert MetaVesTController_ZeroPrice();
 
-        // limit array length
-        if (_metavestDetails.milestones.length > ARRAY_LENGTH_LIMIT) revert MetaVesTController_LengthMismatch();
-
         uint256 _milestoneTotal;
-        for (uint256 i; i < _metavestDetails.milestones.length; ++i) {
-            _milestoneTotal += _metavestDetails.milestones[i].milestoneAward;
+        if (_metavestDetails.milestones.length != 0) {
+            // limit array length
+            if (_metavestDetails.milestones.length > ARRAY_LENGTH_LIMIT) revert MetaVesTController_LengthMismatch();
+
+            for (uint256 i; i < _metavestDetails.milestones.length; ++i) {
+                if (_metavestDetails.milestones[i].conditionContracts.length > ARRAY_LENGTH_LIMIT)
+                    revert MetaVesTController_LengthMismatch();
+                _milestoneTotal += _metavestDetails.milestones[i].milestoneAward;
+            }
         }
         uint256 _total = _metavestDetails.allocation.tokenStreamTotal + _milestoneTotal;
         if (_total == 0) revert MetaVesTController_ZeroAmount();
@@ -260,7 +265,7 @@ contract MetaVesTController is SafeTransferLib {
             IERC20M(_metavestDetails.allocation.tokenContract).balanceOf(msg.sender) < _total
         ) revert MetaVesTController_AmountNotApprovedForTransferFrom();
 
-        _tokenGrantees[_metavestDetails.allocation.tokenContract].push(_metavestDetails.grantee);
+        _tokenGrantees[_metavestDetails.allocation.tokenContract].push(_grantee);
 
         imetavest.createMetavest(_metavestDetails, _total);
     }
@@ -315,7 +320,7 @@ contract MetaVesTController is SafeTransferLib {
         uint8 _milestoneIndex
     ) external onlyAuthority conditionCheck consentCheck(_grantee) {
         imetavest.refreshMetavest(_grantee);
-        MetaVesT.MetaVesTDetails memory _metavest = imetavest.metavestDetails(_grantee);
+        MetaVesT.MetaVesTDetails memory _metavest = imetavest.getMetavestDetails(_grantee);
 
         // revert if the milestone corresponding to '_milestoneIndex' doesn't exist or has already been completed
         if (_milestoneIndex >= _metavest.milestones.length || _metavest.milestones[_milestoneIndex].complete)
@@ -329,7 +334,7 @@ contract MetaVesTController is SafeTransferLib {
     /// @param _milestone new Milestone struct added for '_grantee', to be added to their 'milestones' array
     function addMetavestMilestone(address _grantee, MetaVesT.Milestone calldata _milestone) external onlyAuthority {
         imetavest.refreshMetavest(_grantee);
-        address _tokenContract = imetavest.metavestDetails(_grantee).allocation.tokenContract;
+        address _tokenContract = imetavest.getMetavestDetails(_grantee).allocation.tokenContract;
         if (_milestone.milestoneAward == 0) revert MetaVesTController_ZeroAmount();
         if (
             IERC20M(_tokenContract).allowance(msg.sender, metavest) < _milestone.milestoneAward ||
@@ -382,7 +387,7 @@ contract MetaVesTController is SafeTransferLib {
         uint48 _vestingStopTime,
         uint48 _shortStopTime
     ) external onlyAuthority conditionCheck consentCheck(_grantee) {
-        if (_grantee != imetavest.metavestDetails(_grantee).grantee)
+        if (_grantee != imetavest.getMetavestDetails(_grantee).grantee)
             revert MetaVesTController_MetaVesTDoesNotExistForThisGrantee();
         if (_vestingStopTime < _shortStopTime) revert MetaVesTController_TimeVariableError();
         _resetAmendmentParams(_grantee, msg.sig);
@@ -417,7 +422,7 @@ contract MetaVesTController is SafeTransferLib {
     /// @param _divisor divisor corresponding to the fraction of _grantee's repurchasable tokens being repurchased by 'authority'; to repurchase the full available amount, submit '1'
     function repurchaseMetavestTokens(address _grantee, uint256 _divisor) external onlyAuthority {
         imetavest.refreshMetavest(_grantee);
-        MetaVesT.MetaVesTDetails memory _metavest = imetavest.metavestDetails(_grantee);
+        MetaVesT.MetaVesTDetails memory _metavest = imetavest.getMetavestDetails(_grantee);
         if (_metavest.metavestType != MetaVesT.MetaVesTType.RESTRICTED)
             revert MetaVesTController_IncorrectMetaVesTType();
         if (_metavest.rta.tokensRepurchasable == 0 || _divisor == 0) revert MetaVesTController_ZeroAmount();
@@ -430,7 +435,7 @@ contract MetaVesTController is SafeTransferLib {
         if (_transferees.length != 0) {
             for (uint256 i; i < _transferees.length; ++i) {
                 address _addr = _transferees[i];
-                MetaVesT.MetaVesTDetails memory _mv = imetavest.metavestDetails(_addr);
+                MetaVesT.MetaVesTDetails memory _mv = imetavest.getMetavestDetails(_addr);
                 _amount += _mv.rta.tokensRepurchasable / _divisor;
             }
         }
@@ -496,7 +501,7 @@ contract MetaVesTController is SafeTransferLib {
         bytes4 _msgSig
     ) external {
         for (uint256 i; i < _affectedGrantees.length; ++i) {
-            MetaVesT.MetaVesTDetails memory _metavest = imetavest.metavestDetails(_affectedGrantees[i]);
+            MetaVesT.MetaVesTDetails memory _metavest = imetavest.getMetavestDetails(_affectedGrantees[i]);
             if (_metavest.allocation.tokenContract != _tokenContract || _affectedGrantees[i] != _metavest.grantee)
                 revert MetaVesTController_MetaVesTDoesNotExistForThisGrantee();
             // override any previous votes for a new proposal
@@ -519,7 +524,7 @@ contract MetaVesTController is SafeTransferLib {
     /// @param _inFavor whether msg.sender is in favor of the applicable amendment
     function voteOnMetavestAmendment(address[] memory _affectedGrantees, bytes4 _msgSig, bool _inFavor) external {
         imetavest.refreshMetavest(msg.sender); // this will revert if msg.sender does not have a metavest
-        MetaVesT.MetaVesTDetails memory _metavest = imetavest.metavestDetails(msg.sender);
+        MetaVesT.MetaVesTDetails memory _metavest = imetavest.getMetavestDetails(msg.sender);
         uint256 _callerPower = _metavest.allocation.tokenGoverningPower;
         address _tokenContract = _metavest.allocation.tokenContract;
 
@@ -531,7 +536,7 @@ contract MetaVesTController is SafeTransferLib {
         for (uint256 x; x < _tokenGrantees[_tokenContract].length; ++x) {
             address _tokenGrantee = _tokenGrantees[_tokenContract][x];
             // check this otherwise 'getGoverningPower' will revert on the call to 'refreshMetavest' for terminated metavests
-            if (imetavest.metavestDetails(_tokenGrantee).grantee == _tokenGrantee)
+            if (imetavest.getMetavestDetails(_tokenGrantee).grantee == _tokenGrantee)
                 _totalPower += imetavest.getGoverningPower(_tokenGrantee);
         }
 
@@ -541,7 +546,7 @@ contract MetaVesTController is SafeTransferLib {
             // make sure the affected grantee has the same token metavested as the msg.sender
             if (
                 _metavest.allocation.tokenContract !=
-                imetavest.metavestDetails(_affectedGrantees[i]).allocation.tokenContract
+                imetavest.getMetavestDetails(_affectedGrantees[i]).allocation.tokenContract
             ) revert MetaVesTController_IncorrectMetaVesTToken(_affectedGrantees[i]);
 
             // use the last voting time as a check against re-votes, as the above '_checkFunctionToTokenToAmendmentTime' will ensure limit to one vote per proposed amendment per grantee
