@@ -11,7 +11,7 @@
                                      *************************************
                                                                         */
 
-pragma solidity 0.8.18;
+pragma solidity 0.8.20;
 
 /// @notice interface to a MetaLeX condition contract
 /// @dev see https://github.com/MetaLex-Tech/BORG-CORE/tree/main/src/libs/conditions
