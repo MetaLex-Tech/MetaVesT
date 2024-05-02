@@ -6,7 +6,7 @@
                                      *************************************
                                                                         */
 
-pragma solidity 0.8.18;
+pragma solidity 0.8.20;
 
 import "./MetaVesT.sol";
 
@@ -499,7 +499,7 @@ contract MetaVesTController is SafeTransferLib {
         address[] memory _affectedGrantees,
         address _tokenContract,
         bytes4 _msgSig
-    ) external {
+    ) external onlyAuthority {
         for (uint256 i; i < _affectedGrantees.length; ++i) {
             MetaVesT.MetaVesTDetails memory _metavest = imetavest.getMetavestDetails(_affectedGrantees[i]);
             if (_metavest.allocation.tokenContract != _tokenContract || _affectedGrantees[i] != _metavest.grantee)
@@ -580,6 +580,6 @@ contract MetaVesTController is SafeTransferLib {
 
     /// @notice check whether the applicable proposed amendment has expired
     function _checkFunctionToTokenToAmendmentTime(bytes4 _msgSig, address _tokenContract) internal view returns (bool) {
-        return (block.timestamp > _functionToTokenToAmendmentTime[_msgSig][_tokenContract] + AMENDMENT_TIME_LIMIT);
+        return (block.timestamp < _functionToTokenToAmendmentTime[_msgSig][_tokenContract] + AMENDMENT_TIME_LIMIT);
     }
 }
