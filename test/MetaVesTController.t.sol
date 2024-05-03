@@ -6,7 +6,8 @@ import "forge-std/Test.sol";
 import "src/MetaVesT.sol";
 import "src/MetaVesTController.sol";
 
-interface IWithdrawable {
+interface IMetaVesTHelper {
+    function authority() external view returns (address);
     function getAmountWithdrawable(address _address, address _tokenContract) external view returns (uint256);
     function nonwithdrawableAmount(address _address) external view returns (uint256);
 }
@@ -404,11 +405,11 @@ contract MetaVesTControllerTest is Test {
         if (_testDetails.grantee != _grantee) _testDetails = _createBasicMilestoneMetavest(_grantee, 1e20);
         vm.prank(AUTHORITY);
         controllerTest.createMetavestAndLockTokens(_testDetails);
-        uint256 _beforeControllerWithdrawable = IWithdrawable(metavestTestAddr).getAmountWithdrawable(
+        uint256 _beforeControllerWithdrawable = IMetaVesTHelper(metavestTestAddr).getAmountWithdrawable(
             controllerTestAddr,
             testTokenAddr
         );
-        uint256 _beforenonwithdrawableAmount = IWithdrawable(metavestTestAddr).nonwithdrawableAmount(_grantee);
+        uint256 _beforenonwithdrawableAmount = IMetaVesTHelper(metavestTestAddr).nonwithdrawableAmount(_grantee);
 
         // propose transferability amendment and consent to it
         bytes4 _sig = controllerTest.removeMetavestMilestone.selector;
@@ -434,11 +435,11 @@ contract MetaVesTControllerTest is Test {
             );
             assertGt(
                 _beforenonwithdrawableAmount,
-                IWithdrawable(metavestTestAddr).nonwithdrawableAmount(_grantee),
+                IMetaVesTHelper(metavestTestAddr).nonwithdrawableAmount(_grantee),
                 "nonwithdrawableAmount not reduced"
             );
             assertGt(
-                IWithdrawable(metavestTestAddr).getAmountWithdrawable(controllerTestAddr, testTokenAddr),
+                IMetaVesTHelper(metavestTestAddr).getAmountWithdrawable(controllerTestAddr, testTokenAddr),
                 _beforeControllerWithdrawable,
                 "controller withdrawable amount not increased"
             );
@@ -451,7 +452,7 @@ contract MetaVesTControllerTest is Test {
         vm.prank(address(3));
         vm.expectRevert();
         imetavest.addMilestone(_grantee, _getMilestone(_milestoneAward));
-        uint256 _beforeLocked = IWithdrawable(metavestTestAddr).nonwithdrawableAmount(_grantee);
+        uint256 _beforeLocked = IMetaVesTHelper(metavestTestAddr).nonwithdrawableAmount(_grantee);
         uint256 _beforeLength = _details.milestones.length;
         bool _reverted;
         testToken.mintToken(AUTHORITY, _milestoneAward);
@@ -469,7 +470,7 @@ contract MetaVesTControllerTest is Test {
                 "milestones array did not increment length"
             );
             assertGt(
-                IWithdrawable(metavestTestAddr).nonwithdrawableAmount(_grantee),
+                IMetaVesTHelper(metavestTestAddr).nonwithdrawableAmount(_grantee),
                 _beforeLocked,
                 "nonwithdrawableAmount did not increase"
             );
@@ -484,7 +485,7 @@ contract MetaVesTControllerTest is Test {
         controllerTest.createMetavestAndLockTokens(_testDetails);
         uint256 _beforeBalance = testToken.balanceOf(metavestTestAddr);
         uint256 _beforeAuthorityBalance = testToken.balanceOf(AUTHORITY);
-        uint256 _beforeNonWithdrawable = IWithdrawable(metavestTestAddr).nonwithdrawableAmount(_grantee);
+        uint256 _beforeNonWithdrawable = IMetaVesTHelper(metavestTestAddr).nonwithdrawableAmount(_grantee);
 
         vm.expectRevert();
         controllerTest.terminateMetavestVesting(_grantee);
@@ -493,7 +494,7 @@ contract MetaVesTControllerTest is Test {
 
         assertTrue(_beforeBalance >= testToken.balanceOf(metavestTestAddr), "metavest balance not properly changed");
         assertTrue(
-            _beforeNonWithdrawable >= IWithdrawable(metavestTestAddr).nonwithdrawableAmount(_grantee),
+            _beforeNonWithdrawable >= IMetaVesTHelper(metavestTestAddr).nonwithdrawableAmount(_grantee),
             "grantee's balance not properly changed"
         );
         assertTrue(
@@ -527,8 +528,8 @@ contract MetaVesTControllerTest is Test {
         uint256 _beforeBalance = testToken.balanceOf(metavestTestAddr);
         uint256 _beforeGranteeBalance = testToken.balanceOf(_grantee);
         uint256 _beforeAuthorityBalance = testToken.balanceOf(AUTHORITY);
-        uint256 _beforeLocked = IWithdrawable(metavestTestAddr).nonwithdrawableAmount(_grantee);
-        uint256 _beforeWithdrawable = IWithdrawable(metavestTestAddr).getAmountWithdrawable(
+        uint256 _beforeLocked = IMetaVesTHelper(metavestTestAddr).nonwithdrawableAmount(_grantee);
+        uint256 _beforeWithdrawable = IMetaVesTHelper(metavestTestAddr).getAmountWithdrawable(
             _grantee,
             _testDetails.allocation.tokenContract
         );
@@ -554,12 +555,12 @@ contract MetaVesTControllerTest is Test {
         assertGt(testToken.balanceOf(AUTHORITY), _beforeAuthorityBalance, "authority's balance not properly changed");
         assertEq(
             0,
-            IWithdrawable(metavestTestAddr).getAmountWithdrawable(_grantee, testTokenAddr),
+            IMetaVesTHelper(metavestTestAddr).getAmountWithdrawable(_grantee, testTokenAddr),
             "grantee still has withdrawable balance"
         );
         assertEq(
             0,
-            IWithdrawable(metavestTestAddr).nonwithdrawableAmount(_grantee),
+            IMetaVesTHelper(metavestTestAddr).nonwithdrawableAmount(_grantee),
             "nonwithdrawableAmount not deleted"
         );
         assertEq(address(0), imetavest.getMetavestDetails(_grantee).grantee, "grantee's metavest not deleted");
@@ -579,8 +580,8 @@ contract MetaVesTControllerTest is Test {
         uint256 _beforeAuthorityBalance = testToken2.balanceOf(AUTHORITY);
         uint256 _amount;
         if (_divisor != 0) _amount = _testDetails.rta.tokensRepurchasable / _divisor;
-        uint256 _beforeLocked = IWithdrawable(metavestTestAddr).nonwithdrawableAmount(_grantee);
-        uint256 _beforePaymentTokenWithdrawable = IWithdrawable(metavestTestAddr).getAmountWithdrawable(
+        uint256 _beforeLocked = IMetaVesTHelper(metavestTestAddr).nonwithdrawableAmount(_grantee);
+        uint256 _beforePaymentTokenWithdrawable = IMetaVesTHelper(metavestTestAddr).getAmountWithdrawable(
             _grantee,
             testToken2Addr
         );
@@ -604,7 +605,7 @@ contract MetaVesTControllerTest is Test {
             );
             assertGt(
                 _beforeLocked,
-                IWithdrawable(metavestTestAddr).nonwithdrawableAmount(_grantee),
+                IMetaVesTHelper(metavestTestAddr).nonwithdrawableAmount(_grantee),
                 "nonwithdrawableAmount not reduced by repurchased amount"
             );
             assertGt(
@@ -619,146 +620,104 @@ contract MetaVesTControllerTest is Test {
             );
             assertEq(
                 _beforePaymentTokenWithdrawable + _amount,
-                IWithdrawable(metavestTestAddr).getAmountWithdrawable(_grantee, testToken2Addr),
+                IMetaVesTHelper(metavestTestAddr).getAmountWithdrawable(_grantee, testToken2Addr),
                 "grantee's payment token withdrawable amount not increased by '_amount'"
             );
         }
     }
-    /*
 
-    function testWithdrawAllController() external {
-        _createTokenOptionMetavest(address(999));
-        vm.warp(block.timestamp + 10); // ten seconds worth of vesting
-        metavestTest.refreshMetavest(address(999)); // recalculate initiated values
-        uint256 _beforeControllerBalance = testToken2.balanceOf(metavestTest.controller());
-        uint256 _beforeMetavestContractBalance = testToken.balanceOf(metavestTestAddr);
-        vm.prank(address(999));
-        metavestTest.exerciseOption(100);
-        vm.startPrank(metavestTest.controller());
-        metavestTest.withdrawAll(metavestTest.paymentToken());
+    function testWithdrawFromController(uint256 _amount) external {
+        testToken2.mintToken(controllerTestAddr, _amount);
+        uint256 _beforeControllerBalance = testToken2.balanceOf(controllerTestAddr);
+        uint256 _beforeAuthorityBalance = testToken2.balanceOf(AUTHORITY);
 
-        assertGt(
-            testToken2.balanceOf(metavestTest.controller()),
-            _beforeControllerBalance,
-            "grantee's balance should have increased by amountWithdrawable"
+        vm.startPrank(AUTHORITY);
+        if (_amount == 0) vm.expectRevert();
+        controllerTest.withdrawFromController(testToken2Addr);
+
+        assertEq(
+            _amount,
+            testToken2.balanceOf(AUTHORITY) - _beforeAuthorityBalance,
+            "authority's balance should have increased by _amount"
         );
-        assertGt(
-            _beforeMetavestContractBalance,
+        assertEq(
+            _beforeControllerBalance - testToken2.balanceOf(controllerTestAddr),
+            _amount,
+            "controller's balance should have decreased by _amount"
+        );
+    }
+
+    function testWithdrawAllFromMetavestToController() external {
+        uint256 _beforeControllerBalance = testToken2.balanceOf(controllerTestAddr);
+        uint256 _beforeWithdrawable = IMetaVesTHelper(metavestTestAddr).getAmountWithdrawable(
+            controllerTestAddr,
+            testToken2Addr
+        );
+
+        vm.startPrank(AUTHORITY);
+        if (_beforeWithdrawable == 0) vm.expectRevert();
+        controllerTest.withdrawFromController(testToken2Addr);
+
+        assertEq(
+            testToken2.balanceOf(controllerTestAddr),
+            _beforeControllerBalance + _beforeWithdrawable,
+            "controller's balance should have increased by amountWithdrawable"
+        );
+        assertEq(
             testToken2.balanceOf(metavestTestAddr),
-            "tokens not withdrawn from metavest"
+            testToken2.balanceOf(metavestTestAddr) - _beforeWithdrawable,
+            "metavest's balance should have decreased by amountWithdrawable"
+        );
+        assertEq(
+            0,
+            IMetaVesTHelper(metavestTestAddr).getAmountWithdrawable(controllerTestAddr, testToken2Addr),
+            "amountWithdrawable not reset"
         );
     }
 
-    function testWithdrawAll(address _grantee, uint256 _unlocked, uint256 _vested) external {
-        vm.assume(_grantee != address(0));
-        vm.assume(
-            _unlocked != 0 && _vested != 0 && _unlocked < type(uint256).max / 2 && _vested < type(uint256).max / 2
-        );
-        _createWithdrawableMetavest(_grantee, _unlocked, _vested);
-        metavestTest.refreshMetavest(_grantee); // makes the _unlocked && _vested tokens withdrawable
-        MetaVesT.MetaVesTDetails memory _details = metavestTest.getMetavestDetails(_grantee);
-        uint256 _beforeGranteeBalance = testToken.balanceOf(_grantee);
-        uint256 _beforeMetavestContractBalance = testToken.balanceOf(metavestTestAddr);
-        uint256 _newlyWithdrawable = _min(_unlocked, _vested);
+    function testUpdateAuthority(address _newAuthority) external {
+        vm.expectRevert(); // not current authority calling
+        controllerTest.initiateAuthorityUpdate(_newAuthority);
+        vm.prank(AUTHORITY);
+        if (_newAuthority == address(0)) vm.expectRevert();
+        controllerTest.initiateAuthorityUpdate(_newAuthority);
+        if (_newAuthority != address(0)) {
+            address _newAddr = address(999);
+            if (_newAddr != _newAuthority) {
+                vm.expectRevert();
+                controllerTest.acceptAuthorityRole();
+            }
+            vm.prank(_newAuthority);
+            controllerTest.acceptAuthorityRole();
 
-        vm.startPrank(_grantee);
-        metavestTest.withdrawAll(testTokenAddr);
-
-        assertEq(
-            _newlyWithdrawable,
-            testToken.balanceOf(_grantee) - _beforeGranteeBalance,
-            "grantee's balance should have increased by amountWithdrawable"
-        );
-        assertGt(
-            _beforeMetavestContractBalance,
-            testToken.balanceOf(metavestTestAddr),
-            "tokens not withdrawn from metavest"
-        );
-        assertEq(
-            _details.allocation.tokensVested,
-            metavestTest.getMetavestDetails(_grantee).allocation.tokensVested,
-            "vested tracker should not have changed"
-        );
-        assertGt(
-            metavestTest.getMetavestDetails(_grantee).allocation.vestedTokensWithdrawn,
-            _details.allocation.vestedTokensWithdrawn,
-            "vested tokens withdrawn should have changed"
-        );
-        assertEq(
-            _details.allocation.tokensUnlocked,
-            metavestTest.getMetavestDetails(_grantee).allocation.tokensUnlocked,
-            "unlocked tracker should not have changed"
-        );
-        assertGt(
-            metavestTest.getMetavestDetails(_grantee).allocation.unlockedTokensWithdrawn,
-            _details.allocation.unlockedTokensWithdrawn,
-            "unlocked tokens withdrawn should have changed"
-        );
-        assertEq(
-            _details.allocation.tokenStreamTotal,
-            metavestTest.getMetavestDetails(_grantee).allocation.tokenStreamTotal,
-            "tokenStreamTotal should not have changed"
-        );
-    }
-
-    function testWithdraw(address _grantee, uint256 _unlocked, uint256 _vested, uint256 _amount) external {
-        vm.assume(_grantee != address(0));
-        vm.assume(
-            _unlocked != 0 && _vested != 0 && _unlocked < type(uint256).max / 2 && _vested < type(uint256).max / 2
-        );
-        _createWithdrawableMetavest(_grantee, _unlocked, _vested);
-        metavestTest.refreshMetavest(_grantee); // makes the _unlocked && _vested tokens withdrawable
-        MetaVesT.MetaVesTDetails memory _details = metavestTest.getMetavestDetails(_grantee);
-        uint256 _beforeGranteeBalance = testToken.balanceOf(_grantee);
-        uint256 _beforeMetavestContractBalance = testToken.balanceOf(metavestTestAddr);
-        uint256 _newlyWithdrawable = _min(_unlocked, _vested);
-        bool _reverted;
-
-        vm.startPrank(_grantee);
-        if (_amount > metavestTest.getAmountWithdrawable(_grantee, testTokenAddr) + _newlyWithdrawable) {
-            _reverted = true;
-            vm.expectRevert();
-        }
-        metavestTest.withdraw(testTokenAddr, _amount);
-        if (!_reverted && _amount != 0) {
+            assertEq(controllerTest.authority(), _newAuthority, "authority address did not update in controller");
             assertEq(
-                _beforeGranteeBalance + _amount,
-                testToken.balanceOf(_grantee),
-                "grantee's balance should have increased by _amount"
-            );
-            assertGt(
-                _beforeMetavestContractBalance,
-                testToken.balanceOf(metavestTestAddr),
-                "tokens not withdrawn from metavest"
-            );
-            assertGt(
-                metavestTest.getMetavestDetails(_grantee).allocation.vestedTokensWithdrawn,
-                _details.allocation.vestedTokensWithdrawn,
-                "vested tokens withdrawn should have changed"
-            );
-            assertGt(
-                metavestTest.getMetavestDetails(_grantee).allocation.unlockedTokensWithdrawn,
-                _details.allocation.unlockedTokensWithdrawn,
-                "unlocked tokens withdrawn should have changed"
+                IMetaVesTHelper(metavestTestAddr).authority(),
+                _newAuthority,
+                "authority address did not update in metavest"
             );
         }
-        assertEq(
-            _details.allocation.tokenStreamTotal,
-            metavestTest.getMetavestDetails(_grantee).allocation.tokenStreamTotal,
-            "tokenStreamTotal should not have changed"
-        );
-        assertEq(
-            _details.allocation.tokensVested,
-            metavestTest.getMetavestDetails(_grantee).allocation.tokensVested,
-            "vested tracker should not have changed"
-        );
-        assertEq(
-            _details.allocation.tokensUnlocked,
-            metavestTest.getMetavestDetails(_grantee).allocation.tokensUnlocked,
-            "unlocked tracker should not have changed"
-        );
     }
- */
+
+    function testUpdateDao(address _newDao) external {
+        vm.expectRevert(); // not current Dao calling
+        controllerTest.initiateDaoUpdate(_newDao);
+        vm.prank(controllerTest.dao());
+        if (_newDao == address(0)) vm.expectRevert();
+        controllerTest.initiateDaoUpdate(_newDao);
+        if (_newDao != address(0)) {
+            address _newAddr = address(999);
+            if (_newAddr != _newDao) {
+                vm.expectRevert();
+                controllerTest.acceptDaoRole();
+            }
+            vm.prank(_newDao);
+            controllerTest.acceptDaoRole();
+
+            assertEq(controllerTest.dao(), _newDao, "Dao address did not update in controller");
+        }
+    }
+
     /// @dev mock a BaseCondition call
     function checkCondition() public view returns (bool) {
         return (baseCondition);
@@ -907,12 +866,4 @@ contract MetaVesTControllerTest is Test {
 
         return _metavestDetails;
     }
-    /*
-    // same min function as MetaVesT.sol
-    function _min(uint256 x, uint256 y) internal pure returns (uint256 z) {
-        /// @solidity memory-safe-assembly
-        assembly {
-            z := xor(x, mul(xor(x, y), lt(y, x)))
-        }
-    } */
 }
