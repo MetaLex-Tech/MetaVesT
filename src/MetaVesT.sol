@@ -1249,10 +1249,11 @@ contract MetaVesT is ReentrancyGuard, SafeTransferLib {
                     detailsAllocation.tokensVested - detailsAllocation.vestedTokensWithdrawn,
                     detailsAllocation.tokensUnlocked - detailsAllocation.unlockedTokensWithdrawn
                 );
+                if(_amount > _newlyWithdrawable + _preAmtWithdrawable) revert MetaVesT_AmountGreaterThanWithdrawable();
 
                 amountWithdrawable[msg.sender][_tokenAddress] = _preAmtWithdrawable + _newlyWithdrawable;
-                detailsAllocation.unlockedTokensWithdrawn += _newlyWithdrawable;
-                detailsAllocation.vestedTokensWithdrawn += _newlyWithdrawable;
+                detailsAllocation.unlockedTokensWithdrawn += _amount;
+                detailsAllocation.vestedTokensWithdrawn += _amount;
             }
         } else if (_tokenAddress == detailsAllocation.tokenContract && details.metavestType == MetaVesTType.OPTION) {
             uint256 _preAmtWithdrawable = amountWithdrawable[msg.sender][_tokenAddress];
@@ -1266,10 +1267,11 @@ contract MetaVesT is ReentrancyGuard, SafeTransferLib {
                 detailsAllocation.tokensUnlocked - detailsAllocation.unlockedTokensWithdrawn
             );
             // add newly withdrawable tokens to amountWithdrawable, unlockedTokensWithdrawn, and vestedTokensWithdrawn, and deduct from _tokensExercised
+             if(_amount > _newlyWithdrawable + _preAmtWithdrawable) revert MetaVesT_AmountGreaterThanWithdrawable();
             amountWithdrawable[msg.sender][_tokenAddress] = _preAmtWithdrawable + _newlyWithdrawable;
-            detailsAllocation.unlockedTokensWithdrawn += _newlyWithdrawable;
-            detailsAllocation.vestedTokensWithdrawn += _newlyWithdrawable;
-            _tokensExercised[msg.sender] -= _newlyWithdrawable;
+            detailsAllocation.unlockedTokensWithdrawn += _amount;
+            detailsAllocation.vestedTokensWithdrawn += _amount;
+            _tokensExercised[msg.sender] -= _amount;
         }
         if (_amount > amountWithdrawable[msg.sender][_tokenAddress]) revert MetaVesT_AmountGreaterThanWithdrawable();
 
