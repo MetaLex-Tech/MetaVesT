@@ -1167,7 +1167,7 @@ contract MetaVesT is ReentrancyGuard, SafeTransferLib {
         if (_tokenAddress == address(0)) revert MetaVesT_ZeroAddress();
         uint256 _amt;
         MetaVesTDetails storage details = metavestDetails[msg.sender];
-        Allocation storage detailsAllocation = metavestDetails[msg.sender].allocation;
+        Allocation storage detailsAllocation = details.allocation;
         /// @dev if caller has a MetaVesT which is a Token Option, they must call 'exerciseOption' in order to exercise their option and make their 'tokensVested' (vested) exercised and then call this function, otherwise they would be withdrawing vested but not exercised tokens here
         uint256 _preAmtWithdrawable = amountWithdrawable[msg.sender][_tokenAddress];
         if (_tokenAddress == detailsAllocation.tokenContract && details.metavestType != MetaVesTType.OPTION) {
@@ -1183,8 +1183,8 @@ contract MetaVesT is ReentrancyGuard, SafeTransferLib {
                 );
                 // add newly withdrawable tokens to amountWithdrawable, unlockedTokensWithdrawn, and vestedTokensWithdrawn, since all are being withdrawn now
                 amountWithdrawable[msg.sender][_tokenAddress] = _preAmtWithdrawable + _newlyWithdrawable;
-                detailsAllocation.unlockedTokensWithdrawn += _newlyWithdrawable;
-                detailsAllocation.vestedTokensWithdrawn += _newlyWithdrawable;
+                detailsAllocation.unlockedTokensWithdrawn += amountWithdrawable[msg.sender][_tokenAddress];
+                detailsAllocation.vestedTokensWithdrawn += amountWithdrawable[msg.sender][_tokenAddress];
             }
         } else if (_tokenAddress == detailsAllocation.tokenContract && details.metavestType == MetaVesTType.OPTION) {
             if (msg.sender != details.grantee) revert MetaVesT_OnlyGrantee();
@@ -1197,8 +1197,8 @@ contract MetaVesT is ReentrancyGuard, SafeTransferLib {
             );
             // add newly withdrawable tokens to amountWithdrawable, unlockedTokensWithdrawn, and vestedTokensWithdrawn, and deduct from _tokensExercised
             amountWithdrawable[msg.sender][_tokenAddress] = _preAmtWithdrawable + _newlyWithdrawable;
-            detailsAllocation.unlockedTokensWithdrawn += _newlyWithdrawable;
-            detailsAllocation.vestedTokensWithdrawn += _newlyWithdrawable;
+            detailsAllocation.unlockedTokensWithdrawn += amountWithdrawable[msg.sender][_tokenAddress];
+            detailsAllocation.vestedTokensWithdrawn += amountWithdrawable[msg.sender][_tokenAddress];
             _tokensExercised[msg.sender] -= _newlyWithdrawable;
         }
 
@@ -1280,6 +1280,67 @@ contract MetaVesT is ReentrancyGuard, SafeTransferLib {
 
         safeTransfer(_tokenAddress, msg.sender, _amount);
         emit MetaVesT_Withdrawal(msg.sender, _tokenAddress, _amount);
+    }
+
+    /// @notice View the calculated amount withdrawable for '_grantee''s MetaVesT without any state changes
+    /// @param _grantee address whose MetaVesT details are being viewed
+    /// @return withdrawableAmount The calculated amount that could be withdrawn based on current time
+    function viewWithdrawableAmount(address _grantee) public view returns (uint256 withdrawableAmount) {
+        MetaVesTDetails memory details = metavestDetails[_grantee];
+        if (details.grantee != _grantee || _grantee == address(0)) revert MetaVesT_NoMetaVesT();
+
+        Allocation memory _allocation = details.allocation;
+        uint256 _streamTotal = _allocation.tokenStreamTotal;
+
+        uint256 vested = 0;
+        uint256 unlocked = 0;
+        uint256 forfeited = 0;
+        uint256 milestoneVested = _milestoneVested[_grantee];
+        uint256 milestoneUnlocked = _milestoneUnlocked[_grantee];
+
+        // Vesting calculations
+        uint256 _vestingStart = uint256(_allocation.vestingStartTime);
+        uint256 _vestingEnd = details.metavestType == MetaVesTType.OPTION ? uint256(details.option.shortStopTime) :
+                            details.metavestType == MetaVesTType.RESTRICTED ? uint256(details.rta.shortStopTime) :
+                            uint256(_allocation.vestingStopTime);
+        if (block.timestamp >= _vestingStart) {
+            if (block.timestamp >= _vestingEnd) {
+                vested = _streamTotal + milestoneVested - _allocation.vestedTokensWithdrawn;
+            } else {
+                uint256 _timeElapsed = block.timestamp - _vestingStart;
+                uint256 potentialVested = (_allocation.vestingRate * _timeElapsed) + uint256(_allocation.vestingCliffCredit);
+                vested = potentialVested > _streamTotal ? _streamTotal : potentialVested;
+                vested += milestoneVested;
+                vested -= _allocation.vestedTokensWithdrawn;
+            }
+        }
+    
+        // Unlocking calculations
+        uint256 _unlockingStart = uint256(_allocation.unlockStartTime);
+        uint256 _unlockingEnd = uint256(_allocation.unlockStopTime);
+
+        if (block.timestamp >= _unlockingStart) {
+            if (block.timestamp >= _unlockingEnd) {
+                unlocked = _streamTotal + milestoneUnlocked - _allocation.unlockedTokensWithdrawn;
+            } else {
+                uint256 _timeElapsed = block.timestamp - _unlockingStart;
+                uint256 potentialUnlocked = (_allocation.unlockRate * _timeElapsed) + uint256(_allocation.unlockingCliffCredit);
+                unlocked = potentialUnlocked > _streamTotal ? _streamTotal : potentialUnlocked;
+                unlocked += milestoneUnlocked;
+                unlocked -= _allocation.unlockedTokensWithdrawn;
+            }
+        }
+
+        // Calculate forfeited if applicable
+        if (details.metavestType == MetaVesTType.OPTION && block.timestamp >= _allocation.vestingStopTime) {
+            forfeited = vested - (_tokensExercised[_grantee] < vested ? _tokensExercised[_grantee] : vested);  // Prevent underflow
+            vested = 0; // All vested tokens are forfeited if not exercised
+        }
+
+      
+        uint256 minimum = vested < unlocked ? vested : unlocked;
+
+        return minimum;
     }
 
     /// @notice retrieve the MetaVesT details for a grantee
