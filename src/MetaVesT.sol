@@ -1333,7 +1333,6 @@ contract MetaVesT is ReentrancyGuard, SafeTransferLib {
 
         // Calculate forfeited if applicable
         if (details.metavestType == MetaVesTType.OPTION && block.timestamp >= _allocation.vestingStopTime) {
-            forfeited = vested - (_tokensExercised[_grantee] < vested ? _tokensExercised[_grantee] : vested);  // Prevent underflow
             vested = 0; // All vested tokens are forfeited if not exercised
         }
 
