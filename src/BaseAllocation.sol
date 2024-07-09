@@ -98,7 +98,7 @@ abstract contract BaseAllocation is ReentrancyGuard, SafeTransferLib{
         /// @notice MetaVesTController contract address, immutably tied to this MetaVesT
         address public immutable controller;
         /// @notice authority address, may replace itself in 'controller'
-        address public authority;
+        address public authority; // REVIEW: probably just have `getAuthority` which calls thru to `controller`? Saves having to worry about updating if it changes?
         struct Milestone {
             uint256 milestoneAward; // per-milestone indexed lump sums of tokens vested upon corresponding milestone completion
             bool unlockOnCompletion; // whether the 'milestoneAward' is to be unlocked upon completion
@@ -164,6 +164,7 @@ abstract contract BaseAllocation is ReentrancyGuard, SafeTransferLib{
 
 
         constructor(address _grantee, address _controller) {
+            // REVIEW: ever a case where no controller is wanted? Immutable vest?
             if (_controller == address(0) || _grantee == address(0)) revert MetaVesT_ZeroAddress();
             grantee = _grantee;
             controller = _controller;
@@ -171,6 +172,8 @@ abstract contract BaseAllocation is ReentrancyGuard, SafeTransferLib{
 
         function getVestingType() external view virtual returns (uint256);
         function getGoverningPower() external virtual returns (uint256);
+        
+        // REVIEW: implement here? Same for all variants? Possibly some of the other update functions, too?
         function updateTransferability(bool _transferable) external virtual;// onlyController;
         function updateVestingRate(uint160 _newVestingRate) external virtual;// onlyController;
         function updateUnlockRate(uint160 _newUnlockRate) external virtual;// onlyController;

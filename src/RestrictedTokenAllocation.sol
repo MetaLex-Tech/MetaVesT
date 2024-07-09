@@ -145,7 +145,8 @@ contract RestrictedTokenAward is BaseAllocation {
         }
         allocation.vestingRate = 0;
         // remaining tokens must be repruchased by 'authority'
-        shortStopTime = block.timestamp + shortStopDuration;
+        // REVIEW: unused.
+        uint256 shortStopTime = block.timestamp + shortStopDuration;
         terminated = true;
         emit MetaVesT_Terminated(grantee, tokensToRecover);
     }

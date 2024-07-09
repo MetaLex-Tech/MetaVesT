@@ -21,6 +21,7 @@ contract VestingAllocation is BaseAllocation {
         if (_allocation.vestingRate >  1000*1e18 || _allocation.unlockRate > 1000*1e18) revert MetaVesT_RateTooHigh();
 
         //set vesting allocation variables
+        // REVIEW: these are validated in the controller, but this could potentially be called from elsewhere - is that ok?
         allocation.tokenContract = _allocation.tokenContract;
         allocation.tokenStreamTotal = _allocation.tokenStreamTotal;
         allocation.vestingCliffCredit = _allocation.vestingCliffCredit;
@@ -41,6 +42,7 @@ contract VestingAllocation is BaseAllocation {
         return 1;
     }
 
+    // REVIEW: confirm that this should not exclude withdrawn tokens?
     function getGoverningPower() external view override returns (uint256) {
         uint256 governingPower;
         if(GovNonwithdrawable)
@@ -50,14 +52,14 @@ contract VestingAllocation is BaseAllocation {
             {
                     totalMilestoneAward += milestones[i].milestoneAward;
             }
-            governingPower = allocation.tokenStreamTotal + totalMilestoneAward;
+            governingPower = (allocation.tokenStreamTotal + totalMilestoneAward);
         }
         else 
         {
             if(GovVested)
                 governingPower = getVestedTokenAmount();
             else if(GovUnlocked)
-                governingPower = min(getVestedTokenAmount(), getUnlockedTokenAmount());
+                governingPower = _min(getVestedTokenAmount(), getUnlockedTokenAmount());
         }
         return governingPower;
     }
@@ -83,7 +85,9 @@ contract VestingAllocation is BaseAllocation {
         emit MetaVesT_StopTimesUpdated(grantee, _newVestingStopTime, _newUnlockStopTime, 0);
     }
 
+    // REVIEW: Does this need onlyAuthority or some other access limitation? How is a signature condition done?
     function confirmMilestone(uint256 _milestoneIndex) external override nonReentrant {
+        // REVIEW: hold milestone in memory for gas efficiency
         if (_milestoneIndex >= milestones.length || milestones[_milestoneIndex].complete)
             revert MetaVesT_MilestoneIndexCompletedOrDoesNotExist();
 

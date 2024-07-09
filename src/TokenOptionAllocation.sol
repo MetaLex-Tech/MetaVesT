@@ -78,7 +78,7 @@ contract TokenOptionAllocation is BaseAllocation {
             if(GovVested)
                 governingPower = getVestedTokenAmount();
             else if(GovUnlocked)
-                governingPower = min(getVestedTokenAmount(), getUnlockedTokenAmount());
+                governingPower = _min(getVestedTokenAmount(), getUnlockedTokenAmount());
         }
         return governingPower;
     }

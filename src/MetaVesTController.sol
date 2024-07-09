@@ -9,7 +9,6 @@
 pragma solidity 0.8.20;
 
 //import "./MetaVesT.sol";
-import "./MetaVesTAccountManager.sol";
 import "./VestingAllocation.sol";
 import "./RestrictedTokenAllocation.sol";
 import "./TokenOptionAllocation.sol";
@@ -48,7 +47,7 @@ contract MetaVesTController is SafeTransferLib {
     /// @notice maps a metavest-parameter-updating function's signature to the grantee's address whose MetaVesT is being amended to whether such update is mutually agreed between 'authority' and 'grantee'
     mapping(bytes4 => mapping(address => bool)) public functionToGranteeToMutualAgreement;
 
-    /// @notice maps a metavest-parameter-updating function's signature to token contract to whether such update is has been consented to by a voting power majority of such metavest's tokenContract grantees
+    /// @notice maps a metavest-parameter-updating function's signature to token contract to whether such update has been consented to by a voting power majority of such metavest's tokenContract grantees
     mapping(bytes4 => mapping(address => bool)) public functionToGranteeMajorityConsent;
 
     /// @notice maps a metavest-parameter-updating function's signature to affected grantee address to whether an amendment is pending
@@ -113,10 +112,13 @@ contract MetaVesTController is SafeTransferLib {
     /// @notice implements a condition check if imposed by 'dao'; see https://github.com/MetaLex-Tech/BORG-CORE/tree/main/src/libs/conditions
     /// @dev all conditions must be satisfied, or will revert
     modifier conditionCheck() {
+        // REVIEW: probably read this array into memory from state once for big gas savings (called in a lot of places, and looped over) 
         if (functionToConditions[msg.sig].length != 0) {
-            if (functionToConditions[msg.sig][0] != address(0)) {
+            if (functionToConditions[msg.sig][0] != address(0)) { // REVIEW: check if this array will ever be not empty.
                 for (uint256 i; i < functionToConditions[msg.sig].length; ++i) {
                     address _cond = functionToConditions[msg.sig][i];
+                    // REVIEW: worried about bricking the contract if a condition reverts. Wondering if we should try catch
+                    //         and assume reverts pass? That could also be dangerous. Alternatively see `updateFunctionCondition` comment
                     if (!IConditionM(_cond).checkCondition()) revert MetaVesTController_ConditionNotSatisfied(_cond);
                 }
             }
@@ -151,6 +153,7 @@ contract MetaVesTController is SafeTransferLib {
     constructor(address _authority, address _dao, address _paymentToken) {
         if (_authority == address(0) || _paymentToken == address(0)) revert MetaVesTController_ZeroAddress();
         authority = _authority;
+        // REVIEW: seems that some DAOs or grants will not use the functionality that paymentToken enables - don't think it's the end of the world to make it optional?
         paymentToken = _paymentToken;
         dao = _dao;
     }
@@ -179,23 +182,25 @@ contract MetaVesTController is SafeTransferLib {
     /// @param _functionSig signature of the function which is having its condition requirement updated
     function updateFunctionCondition(address _condition, uint256 _index, bytes4 _functionSig) external onlyDao {
         // indexed address may be replaced can be up to the length of the array (and thus adds a new array member if == length)
+        // REVIEW: should revert if it does nothing (i.e. index is too large).
         if (_index <= functionToConditions[_functionSig].length) functionToConditions[_functionSig][_index] = _condition;
+        // REVIEW: should require `_condition` implements an interface with ERC165 check.
         emit MetaVesTController_ConditionUpdated(_condition, _functionSig);
     }
 
     function createVestingAllocation(address _grantee, VestingAllocation.Allocation calldata _allocation, VestingAllocation.Milestone[] calldata _milestones) external onlyAuthority conditionCheck {
-         if (_grantee == address(0) || _allocation.tokenContract == address(0))
+        if (_grantee == address(0) || _allocation.tokenContract == address(0))
             revert MetaVesTController_ZeroAddress();
         if (
             _allocation.vestingCliffCredit > _allocation.tokenStreamTotal ||
             _allocation.unlockingCliffCredit > _allocation.tokenStreamTotal
         ) revert MetaVesTController_CliffGreaterThanTotal();
-        if (
+        if ( // REVIEW: Probably allow stop == start for when not using the features?
             _allocation.vestingStopTime <= _allocation.vestingStartTime ||
             _allocation.unlockStopTime <= _allocation.unlockStartTime
         ) revert MetaVesTController_TimeVariableError();
 
-         uint256 _milestoneTotal;
+        uint256 _milestoneTotal;
         if (_milestones.length != 0) {
             // limit array length
             if (_milestones.length > ARRAY_LENGTH_LIMIT) revert MetaVesTController_LengthMismatch();
@@ -216,6 +221,7 @@ contract MetaVesTController is SafeTransferLib {
 
         VestingAllocation vestingAllocation = new VestingAllocation(_grantee, address(this), _allocation, _milestones);
         safeTransferFrom(_allocation.tokenContract, authority, address(vestingAllocation), totalAmount);
+        // REVIEW: let's emit an event?
         vestingAllocations[_grantee].push(address(vestingAllocation));
     }
 
@@ -226,18 +232,19 @@ contract MetaVesTController is SafeTransferLib {
         Allocation memory _allocation,
         Milestone[] memory _milestones*/
     function createTokenOptionAllocation(address _grantee, uint256 _exercisePrice, address _paymentToken, VestingAllocation.Allocation calldata _allocation, VestingAllocation.Milestone[] calldata _milestones) external onlyAuthority conditionCheck {
-         if (_grantee == address(0) || _allocation.tokenContract == address(0) || _paymentToken == address(0) || _exercisePrice == 0)
+        // REVIEW: May be neater to extract checks comment to all vest types (20+ lines) to internal function, leaving just type specific checks here.
+        if (_grantee == address(0) || _allocation.tokenContract == address(0) || _paymentToken == address(0) || _exercisePrice == 0)
             revert MetaVesTController_ZeroAddress();
         if (
             _allocation.vestingCliffCredit > _allocation.tokenStreamTotal ||
             _allocation.unlockingCliffCredit > _allocation.tokenStreamTotal
         ) revert MetaVesTController_CliffGreaterThanTotal();
-        if (
+        if ( // REVIEW: as above.
             _allocation.vestingStopTime <= _allocation.vestingStartTime ||
             _allocation.unlockStopTime <= _allocation.unlockStartTime
         ) revert MetaVesTController_TimeVariableError();
 
-         uint256 _milestoneTotal;
+        uint256 _milestoneTotal;
         if (_milestones.length != 0) {
             // limit array length
             if (_milestones.length > ARRAY_LENGTH_LIMIT) revert MetaVesTController_LengthMismatch();
@@ -258,11 +265,13 @@ contract MetaVesTController is SafeTransferLib {
 
         TokenOptionAllocation tokenOptionAllocation = new TokenOptionAllocation(_grantee, address(this), _paymentToken, _exercisePrice, _allocation, _milestones);
         safeTransferFrom(_allocation.tokenContract, authority, address(tokenOptionAllocation), totalAmount);
+        // REVIEW: Emit event.
         tokenOptionAllocations[_grantee].push(address(tokenOptionAllocation));
     }
 
         function createRestrictedTokenAward(address _grantee, uint256 _repurchasePrice, address _paymentToken, uint256 _shortStopDuration, VestingAllocation.Allocation calldata _allocation, VestingAllocation.Milestone[] calldata _milestones) external onlyAuthority conditionCheck {
-         if (_grantee == address(0) || _allocation.tokenContract == address(0) || _paymentToken == address(0) || _repurchasePrice == 0)
+        // REVIEW: shortStopDuration validation?
+        if (_grantee == address(0) || _allocation.tokenContract == address(0) || _paymentToken == address(0) || _repurchasePrice == 0)
             revert MetaVesTController_ZeroAddress();
         if (
             _allocation.vestingCliffCredit > _allocation.tokenStreamTotal ||
@@ -294,6 +303,7 @@ contract MetaVesTController is SafeTransferLib {
 
         RestrictedTokenAward restrictedTokenAward = new RestrictedTokenAward(_grantee, address(this), _paymentToken, _repurchasePrice, _shortStopDuration, _allocation, _milestones);
         safeTransferFrom(_allocation.tokenContract, authority, address(restrictedTokenAward), totalAmount);
+        // REVIEW: event.
         restrictedTokenAllocations[_grantee].push(address(restrictedTokenAward));
     }
 
@@ -440,7 +450,8 @@ contract MetaVesTController is SafeTransferLib {
             IERC20M(paymentToken).balanceOf(msg.sender) < _payment
         ) revert MetaVesT_AmountNotApprovedForTransferFrom();
 
-        safeTransferFrom(paymentToken, msg.sender, _grant, _payment);
+        // REVIEW: deleted duplicate transfer here. `repurchaseTokens` will transfer the tokens from the authority.
+        // REVIEW: repurchasePrice is likely to be a fraction - need to multiply by something to facilitate
         rta.repurchaseTokens(_amount);
     }
 
@@ -455,6 +466,7 @@ contract MetaVesTController is SafeTransferLib {
     /// @notice allows the pending new authority to accept the role transfer
     /// @dev access restricted to the address stored as '_pendingauthority' to accept the two-step change. Transfers 'authority' role to the caller (reflected in 'metavest') and deletes '_pendingauthority' to reset.
     /// no 'conditionCheck' necessary as it more properly contained in 'initiateAuthorityUpdate'
+    // REVIEW: comment above refers to a condition check, but doesn't appear to be one on `initiateAuthorityUpdate` unless it means `onlyAuthority`.
     function acceptAuthorityRole() external {
         if (msg.sender != _pendingAuthority) revert MetaVesTController_OnlyPendingAuthority();
 
@@ -494,11 +506,13 @@ contract MetaVesTController is SafeTransferLib {
         address[] memory _affectedGrantees,
         address _tokenContract,
         bytes4 _msgSig
+        // REVIEW: should add calldata in here to ensure there's no bait and switch. May also then be able bulk execute.
     ) external onlyAuthority {
         for (uint256 i; i < _affectedGrantees.length; ++i) {
             BaseAllocation.Allocation memory _metavest = BaseAllocation(_affectedGrantees[i]).getMetavestDetails();
             if (_metavest.tokenContract != _tokenContract || _affectedGrantees[i] != BaseAllocation(_affectedGrantees[i]).grantee())
                 revert MetaVesTController_MetaVesTDoesNotExistForThisGrantee();
+            // REVIEW: Is it ok that an approved but not fully executed amendment is overwritten?
             // override any previous votes for a new proposal
             _resetAmendmentParams(_affectedGrantees[i], _msgSig);
 
@@ -525,7 +539,7 @@ contract MetaVesTController is SafeTransferLib {
 
         if (!_checkFunctionToTokenToAmendmentTime(_msgSig, _tokenContract))
             revert MetaVesTController_ProposedAmendmentExpired();
-
+        // REVIEW: Is there a case where none of the grantees have any governing power? Is that ok? (Auto-consent when this fn is called?)
         uint256 _totalPower;
         // calculate total voting power for this tokenContract (current voting power of all grantees of this token)
        /* for (uint256 x; x < _tokenGrantees[_tokenContract].length; ++x) {
@@ -556,7 +570,7 @@ contract MetaVesTController is SafeTransferLib {
             if (_inFavor) {
                 functionToGranteeToPercentageInFavor[_msgSig][_affectedGrantees[i]] +=
                     (_callerPower * BUFFER) /
-                    _totalPower;
+                    _totalPower; // REVIEW: divide by zero if no power?
                 // if this vote pushes the aggregate adjusted percentage in favor over 50% (50 * 1e16 for this calculation method), update the 'functionToGranteeMajorityConsent' to true
                 if (functionToGranteeToPercentageInFavor[_msgSig][_affectedGrantees[i]] > BUFFERED_FIFTY_PERCENT)
                     functionToGranteeMajorityConsent[_msgSig][_affectedGrantees[i]] = true;
