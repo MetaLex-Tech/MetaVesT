@@ -30,10 +30,8 @@ interface IBaseAllocation {
         uint128 unlockingCliffCredit;
         uint160 vestingRate;
         uint48 vestingStartTime;
-        uint48 vestingStopTime;
         uint160 unlockRate;
         uint48 unlockStartTime;
-        uint48 unlockStopTime;
         address tokenContract;
     }
 

@@ -12,6 +12,7 @@ contract TokenOptionAllocation is BaseAllocation {
     uint256 public exercisePrice; 
     uint256 public shortStopDuration;
     uint256 public shortStopTime;
+    uint256 public longStoptDate;
 
 
     error MetaVesT_InsufficientPaymentTokenBalance();
@@ -23,6 +24,8 @@ contract TokenOptionAllocation is BaseAllocation {
         address _controller,
         address _paymentToken,
         uint256 _exercisePrice,
+        uint256 _shortStopDuration,
+        uint256 _longStopDate,
         Allocation memory _allocation,
         Milestone[] memory _milestones
     ) BaseAllocation(
@@ -41,13 +44,13 @@ contract TokenOptionAllocation is BaseAllocation {
         allocation.unlockingCliffCredit = _allocation.unlockingCliffCredit;
         allocation.vestingRate = _allocation.vestingRate;
         allocation.vestingStartTime = _allocation.vestingStartTime;
-        allocation.vestingStopTime = _allocation.vestingStopTime;
         allocation.unlockRate = _allocation.unlockRate;
         allocation.unlockStartTime = _allocation.unlockStartTime;
-        allocation.unlockStopTime = _allocation.unlockStopTime;
+
 
         // set token option variables
         exercisePrice = exercisePrice;
+        longStoptDate = _longStopDate;
 
         paymentToken = _paymentToken;
         ipaymentToken = IERC20M(_paymentToken);
@@ -75,10 +78,10 @@ contract TokenOptionAllocation is BaseAllocation {
         }
         else 
         {
-            if(GovVested)
-                governingPower = getVestedTokenAmount();
-            else if(GovUnlocked)
-                governingPower = _min(getVestedTokenAmount(), getUnlockedTokenAmount());
+    //        if(GovVested)
+    //            governingPower = getVestedTokenAmount();
+    //        else if(GovUnlocked)
+    //            governingPower = _min(getVestedTokenAmount(), getUnlockedTokenAmount());
         }
         return governingPower;
     }

@@ -32,8 +32,7 @@ contract MetaVesTFactoryTest is Test {
         address _dao = address(0xB);
         address _paymentToken = address(0xC);
         address _controller = factory.deployMetavestAndController(_authority, _dao, _paymentToken);
-        MetaVesTController controller = MetaVesTController(_controller);
+        metavestController controller = metavestController(_controller);
         console.log(controller.authority());
-        
     }
 }

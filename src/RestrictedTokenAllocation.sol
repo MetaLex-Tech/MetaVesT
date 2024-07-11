@@ -41,10 +41,8 @@ contract RestrictedTokenAward is BaseAllocation {
         allocation.unlockingCliffCredit = _allocation.unlockingCliffCredit;
         allocation.vestingRate = _allocation.vestingRate;
         allocation.vestingStartTime = _allocation.vestingStartTime;
-        allocation.vestingStopTime = _allocation.vestingStopTime;
         allocation.unlockRate = _allocation.unlockRate;
         allocation.unlockStartTime = _allocation.unlockStartTime;
-        allocation.unlockStopTime = _allocation.unlockStopTime;
 
         // set token option variables
         repurchasePrice = _repurchasePrice;

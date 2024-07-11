@@ -28,10 +28,8 @@ contract VestingAllocation is BaseAllocation {
         allocation.unlockingCliffCredit = _allocation.unlockingCliffCredit;
         allocation.vestingRate = _allocation.vestingRate;
         allocation.vestingStartTime = _allocation.vestingStartTime;
-        allocation.vestingStopTime = _allocation.vestingStopTime;
         allocation.unlockRate = _allocation.unlockRate;
         allocation.unlockStartTime = _allocation.unlockStartTime;
-        allocation.unlockStopTime = _allocation.unlockStopTime;
         // manually copy milestones
         for (uint256 i; i < _milestones.length; ++i) {
             milestones.push(_milestones[i]);
@@ -49,7 +47,7 @@ contract VestingAllocation is BaseAllocation {
         {
             uint256 totalMilestoneAward = 0;
             for(uint256 i; i < milestones.length; ++i)
-            {
+            { 
                     totalMilestoneAward += milestones[i].milestoneAward;
             }
             governingPower = (allocation.tokenStreamTotal + totalMilestoneAward);
