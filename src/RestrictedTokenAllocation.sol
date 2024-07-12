@@ -82,8 +82,6 @@ contract RestrictedTokenAward is BaseAllocation {
     }
 
     function updateStopTimes(uint48 _newVestingStopTime, uint48 _newUnlockStopTime, uint48 _shortStopTime) external override onlyController {
-        allocation.vestingStopTime = _newVestingStopTime;
-        allocation.unlockStopTime = _newUnlockStopTime;
         shortStopDuration = _shortStopTime;
         emit MetaVesT_StopTimesUpdated(grantee, _newVestingStopTime, _newUnlockStopTime, _shortStopTime);
     }
@@ -169,13 +167,11 @@ contract RestrictedTokenAward is BaseAllocation {
         uint256 _tokensVested = 0;
         uint256 _timeElapsedSinceVest = block.timestamp - allocation.vestingStartTime;
 
-        if(block.timestamp>allocation.vestingStopTime)
-            _tokensVested = allocation.tokenStreamTotal;
-        else {
+
             _tokensVested = (_timeElapsedSinceVest * allocation.vestingRate);
             if(block.timestamp>allocation.vestingStartTime)
                 _tokensVested += allocation.vestingCliffCredit;
-        }
+        
 
         return allocation.tokenStreamTotal - _tokensVested - tokensRepurchased;
     }
@@ -187,24 +183,20 @@ contract RestrictedTokenAward is BaseAllocation {
         uint256 _timeElapsedSinceVest = block.timestamp - allocation.vestingStartTime;
         uint256 _timeElapsedSinceUnlock = block.timestamp - allocation.unlockStartTime;
 
-        if(block.timestamp>allocation.vestingStopTime)
-            _tokensVested = allocation.tokenStreamTotal + milestoneAwardTotal;
-        else {
+
             _tokensVested = (_timeElapsedSinceVest * allocation.vestingRate) + milestoneAwardTotal;
             if(block.timestamp>allocation.vestingStartTime)
                 _tokensVested += allocation.vestingCliffCredit;
-        }
+        
 
         if(_tokensVested > allocation.tokenStreamTotal - tokensRepurchased + milestoneAwardTotal)
             _tokensVested = allocation.tokenStreamTotal - tokensRepurchased  + milestoneAwardTotal;
         
-        if(block.timestamp>allocation.unlockStopTime)
-            _tokensUnlocked = allocation.tokenStreamTotal + milestoneUnlockedTotal;
-        else {
+
         _tokensUnlocked = (_timeElapsedSinceUnlock * allocation.unlockRate) + milestoneUnlockedTotal;
         if(block.timestamp>allocation.unlockStartTime)
             _tokensUnlocked += allocation.unlockingCliffCredit;
-        }
+        
         if(_tokensUnlocked > allocation.tokenStreamTotal - tokensRepurchased + milestoneUnlockedTotal)
             _tokensUnlocked = allocation.tokenStreamTotal - tokensRepurchased + milestoneUnlockedTotal;
 

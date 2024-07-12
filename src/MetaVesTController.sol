@@ -190,39 +190,37 @@ contract metavestController is SafeTransferLib {
         emit MetaVesTController_ConditionUpdated(_condition, _functionSig);
     }
 
-    function createMetavest(metavestController.metavestType _type, address _grantee,  VestingAllocation.Allocation calldata _allocation, VestingAllocation.Milestone[] calldata _milestones, uint256 _exercisePrice, address _paymentToken,  uint256 _shortStopDuration, uint256 _longStopDate)
-    external onlyAuthority conditionCheck
+    // REVIEW: needs authority check -- all implants and borg
+    function createMetavest(metavestType _type, address _grantee,  VestingAllocation.Allocation calldata _allocation, VestingAllocation.Milestone[] calldata _milestones, uint256 _exercisePrice, address _paymentToken,  uint256 _shortStopDuration, uint256 _longStopDate) external conditionCheck returns (address)
     {
+        address newMetavest;
         if(_type == metavestType.Vesting)
         {
-            createVestingAllocation(_grantee, _allocation, _milestones);
+            newMetavest = createVestingAllocation(_grantee, _allocation, _milestones);
         }
         else if(_type == metavestType.TokenOption)
         {
-            createTokenOptionAllocation(_grantee, _exercisePrice, _paymentToken, _shortStopDuration, _longStopDate, _allocation, _milestones);
+            newMetavest = createTokenOptionAllocation(_grantee, _exercisePrice, _paymentToken, _shortStopDuration, _longStopDate, _allocation, _milestones);
         }
         else if(_type == metavestType.RestrictedTokenAward)
         {
-            createRestrictedTokenAward(_grantee, _exercisePrice, _paymentToken, _shortStopDuration, _allocation, _milestones);
+            newMetavest = createRestrictedTokenAward(_grantee, _exercisePrice, _paymentToken, _shortStopDuration, _allocation, _milestones);
         }
         else
         {
             revert MetaVesTController_IncorrectMetaVesTType();
         }
+        return newMetavest;
     }
 
 
-    function createVestingAllocation(address _grantee, VestingAllocation.Allocation calldata _allocation, VestingAllocation.Milestone[] calldata _milestones) internal conditionCheck {
+    function createVestingAllocation(address _grantee, VestingAllocation.Allocation calldata _allocation, VestingAllocation.Milestone[] calldata _milestones) internal conditionCheck returns (address){
         if (_grantee == address(0) || _allocation.tokenContract == address(0))
             revert MetaVesTController_ZeroAddress();
         if (
             _allocation.vestingCliffCredit > _allocation.tokenStreamTotal ||
             _allocation.unlockingCliffCredit > _allocation.tokenStreamTotal
         ) revert MetaVesTController_CliffGreaterThanTotal();
-        if ( // REVIEW: Probably allow stop == start for when not using the features?
-            _allocation.vestingStopTime <= _allocation.vestingStartTime ||
-            _allocation.unlockStopTime <= _allocation.unlockStartTime
-        ) revert MetaVesTController_TimeVariableError();
 
         uint256 _milestoneTotal;
         if (_milestones.length != 0) {
@@ -239,14 +237,15 @@ contract metavestController is SafeTransferLib {
         uint256 _total = _allocation.tokenStreamTotal + _milestoneTotal;
         if (_total == 0) revert MetaVesTController_ZeroAmount();
         if (
-            IERC20M(_allocation.tokenContract).allowance(msg.sender, address(this)) < _total ||
-            IERC20M(_allocation.tokenContract).balanceOf(msg.sender) < _total
+            IERC20M(_allocation.tokenContract).allowance(authority, address(this)) < _total ||
+            IERC20M(_allocation.tokenContract).balanceOf(authority) < _total
         ) revert MetaVesTController_AmountNotApprovedForTransferFrom();
 
         VestingAllocation vestingAllocation = new VestingAllocation(_grantee, address(this), _allocation, _milestones);
         safeTransferFrom(_allocation.tokenContract, authority, address(vestingAllocation), _total);
         // REVIEW: let's emit an event?
         vestingAllocations[_grantee].push(address(vestingAllocation));
+        return address(vestingAllocation);
     }
 
         /*address _authority,
@@ -255,7 +254,7 @@ contract metavestController is SafeTransferLib {
         uint256 _exercisePrice,
         Allocation memory _allocation,
         Milestone[] memory _milestones*/
-    function createTokenOptionAllocation(address _grantee, uint256 _exercisePrice, address _paymentToken,  uint256 _shortStopDuration, uint256 _longStopDate, VestingAllocation.Allocation calldata _allocation, VestingAllocation.Milestone[] calldata _milestones) internal conditionCheck {
+    function createTokenOptionAllocation(address _grantee, uint256 _exercisePrice, address _paymentToken,  uint256 _shortStopDuration, uint256 _longStopDate, VestingAllocation.Allocation calldata _allocation, VestingAllocation.Milestone[] calldata _milestones) internal conditionCheck returns (address) {
         // REVIEW: May be neater to extract checks comment to all vest types (20+ lines) to internal function, leaving just type specific checks here.
         if (_grantee == address(0) || _allocation.tokenContract == address(0) || _paymentToken == address(0) || _exercisePrice == 0)
             revert MetaVesTController_ZeroAddress();
@@ -263,10 +262,7 @@ contract metavestController is SafeTransferLib {
             _allocation.vestingCliffCredit > _allocation.tokenStreamTotal ||
             _allocation.unlockingCliffCredit > _allocation.tokenStreamTotal
         ) revert MetaVesTController_CliffGreaterThanTotal();
-        if ( // REVIEW: as above.
-            _allocation.vestingStopTime <= _allocation.vestingStartTime ||
-            _allocation.unlockStopTime <= _allocation.unlockStartTime
-        ) revert MetaVesTController_TimeVariableError();
+
 
         uint256 _milestoneTotal;
         if (_milestones.length != 0) {
@@ -283,17 +279,18 @@ contract metavestController is SafeTransferLib {
         uint256 _total = _allocation.tokenStreamTotal + _milestoneTotal;
         if (_total == 0) revert MetaVesTController_ZeroAmount();
         if (
-            IERC20M(_allocation.tokenContract).allowance(msg.sender, address(this)) < _total ||
-            IERC20M(_allocation.tokenContract).balanceOf(msg.sender) < _total
+            IERC20M(_allocation.tokenContract).allowance(authority, address(this)) < _total ||
+            IERC20M(_allocation.tokenContract).balanceOf(authority) < _total
         ) revert MetaVesTController_AmountNotApprovedForTransferFrom();
 
         TokenOptionAllocation tokenOptionAllocation = new TokenOptionAllocation(_grantee, address(this), _paymentToken, _exercisePrice, _shortStopDuration, _longStopDate, _allocation, _milestones);
         safeTransferFrom(_allocation.tokenContract, authority, address(tokenOptionAllocation), _total);
         // REVIEW: Emit event.
         tokenOptionAllocations[_grantee].push(address(tokenOptionAllocation));
+        return address(tokenOptionAllocation);
     }
 
-        function createRestrictedTokenAward(address _grantee, uint256 _repurchasePrice, address _paymentToken, uint256 _shortStopDuration, VestingAllocation.Allocation calldata _allocation, VestingAllocation.Milestone[] calldata _milestones) internal conditionCheck {
+        function createRestrictedTokenAward(address _grantee, uint256 _repurchasePrice, address _paymentToken, uint256 _shortStopDuration, VestingAllocation.Allocation calldata _allocation, VestingAllocation.Milestone[] calldata _milestones) internal conditionCheck returns (address){
         // REVIEW: shortStopDuration validation?
         if (_grantee == address(0) || _allocation.tokenContract == address(0) || _paymentToken == address(0) || _repurchasePrice == 0)
             revert MetaVesTController_ZeroAddress();
@@ -301,10 +298,7 @@ contract metavestController is SafeTransferLib {
             _allocation.vestingCliffCredit > _allocation.tokenStreamTotal ||
             _allocation.unlockingCliffCredit > _allocation.tokenStreamTotal
         ) revert MetaVesTController_CliffGreaterThanTotal();
-        if (
-            _allocation.vestingStopTime <= _allocation.vestingStartTime ||
-            _allocation.unlockStopTime <= _allocation.unlockStartTime
-        ) revert MetaVesTController_TimeVariableError();
+
 
          uint256 _milestoneTotal;
         if (_milestones.length != 0) {
@@ -321,14 +315,15 @@ contract metavestController is SafeTransferLib {
         uint256 _total = _allocation.tokenStreamTotal + _milestoneTotal;
         if (_total == 0) revert MetaVesTController_ZeroAmount();
         if (
-            IERC20M(_allocation.tokenContract).allowance(msg.sender, address(this)) < _total ||
-            IERC20M(_allocation.tokenContract).balanceOf(msg.sender) < _total
+            IERC20M(_allocation.tokenContract).allowance(authority, address(this)) < _total ||
+            IERC20M(_allocation.tokenContract).balanceOf(authority) < _total
         ) revert MetaVesTController_AmountNotApprovedForTransferFrom();
 
         RestrictedTokenAward restrictedTokenAward = new RestrictedTokenAward(_grantee, address(this), _paymentToken, _repurchasePrice, _shortStopDuration, _allocation, _milestones);
         safeTransferFrom(_allocation.tokenContract, authority, address(restrictedTokenAward), _total);
         // REVIEW: event.
         restrictedTokenAllocations[_grantee].push(address(restrictedTokenAward));
+        return address(restrictedTokenAward);
     }
 
 

@@ -104,8 +104,6 @@ contract TokenOptionAllocation is BaseAllocation {
 
 
     function updateStopTimes(uint48 _newVestingStopTime, uint48 _newUnlockStopTime, uint48 _shortStopTime) external override onlyController {
-        allocation.vestingStopTime = _newVestingStopTime;
-        allocation.unlockStopTime = _newUnlockStopTime;
         shortStopDuration = _shortStopTime;
         emit MetaVesT_StopTimesUpdated(grantee, _newVestingStopTime, _newUnlockStopTime, _shortStopTime);
     }
@@ -197,8 +195,6 @@ contract TokenOptionAllocation is BaseAllocation {
 
         if(block.timestamp>shortStopTime && shortStopTime>0)
             _tokensVested = 0;
-        else if(block.timestamp>allocation.vestingStopTime)
-            _tokensVested = allocation.tokenStreamTotal;
         else {
             _tokensVested = (_timeElapsedSinceVest * allocation.vestingRate);
             if(block.timestamp>allocation.vestingStartTime)
@@ -213,13 +209,11 @@ contract TokenOptionAllocation is BaseAllocation {
         uint256 _tokensUnlocked = 0;
         uint256 _timeElapsedSinceUnlock = block.timestamp - allocation.unlockStartTime;
 
-        if(block.timestamp>allocation.unlockStopTime)
-            _tokensUnlocked = allocation.tokenStreamTotal + milestoneUnlockedTotal;
-        else {
+
         _tokensUnlocked = (_timeElapsedSinceUnlock * allocation.unlockRate) + milestoneUnlockedTotal;
         if(block.timestamp>allocation.unlockStartTime)
             _tokensUnlocked += allocation.unlockingCliffCredit;
-        }
+        
         _tokensUnlocked += milestoneAwardTotal;
 
         return _min(tokensExercised, _tokensUnlocked) - tokensWithdrawn;
