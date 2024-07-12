@@ -191,7 +191,7 @@ contract metavestController is SafeTransferLib {
     }
 
     // REVIEW: needs authority check -- all implants and borg
-    function createMetavest(metavestType _type, address _grantee,  VestingAllocation.Allocation calldata _allocation, VestingAllocation.Milestone[] calldata _milestones, uint256 _exercisePrice, address _paymentToken,  uint256 _shortStopDuration, uint256 _longStopDate) external conditionCheck returns (address)
+    function createMetavest(metavestType _type, address _grantee,  BaseAllocation.Allocation calldata _allocation, BaseAllocation.Milestone[] calldata _milestones, uint256 _exercisePrice, address _paymentToken,  uint256 _shortStopDuration, uint256 _longStopDate) external onlyAuthority conditionCheck returns (address)
     {
         address newMetavest;
         if(_type == metavestType.Vesting)

@@ -149,12 +149,16 @@ contract VestingAllocation is BaseAllocation {
             return 0;
         uint256 _timeElapsedSinceVest = block.timestamp - allocation.vestingStartTime;
 
+            _tokensVested = (_timeElapsedSinceVest * allocation.vestingRate);
 
-            _tokensVested = (_timeElapsedSinceVest * allocation.vestingRate) + milestoneAwardTotal;
             if(block.timestamp>allocation.vestingStartTime)
                 _tokensVested += allocation.vestingCliffCredit;
-        
 
+            if(_tokensVested>allocation.tokenStreamTotal) 
+                _tokensVested = allocation.tokenStreamTotal;
+
+             _tokensVested += milestoneAwardTotal;
+        
         return _tokensVested;
     }
 
@@ -164,10 +168,15 @@ contract VestingAllocation is BaseAllocation {
             return 0;
         uint256 _timeElapsedSinceUnlock = block.timestamp - allocation.unlockStartTime;
 
-        _tokensUnlocked = (_timeElapsedSinceUnlock * allocation.unlockRate) + milestoneUnlockedTotal;
+        _tokensUnlocked = (_timeElapsedSinceUnlock * allocation.unlockRate);
+
         if(block.timestamp>allocation.unlockStartTime)
             _tokensUnlocked += allocation.unlockingCliffCredit;
-        
+
+        if(_tokensUnlocked>allocation.tokenStreamTotal) 
+            _tokensUnlocked = allocation.tokenStreamTotal;
+
+        _tokensUnlocked += milestoneUnlockedTotal;
 
         return _tokensUnlocked;
     }
