@@ -59,7 +59,13 @@ contract MetaVesTFactoryTest is Test {
         IERC20(dai_addr).approve(_controller, 2 ether);
 
         vm.prank(_authority);
-        address vest = controller.createMetavest(metavestController.metavestType.Vesting, address(0xDA0), _metavestDetails, emptyMilestones, 0, address(0), 0, 0);
+        BaseAllocation vest = BaseAllocation(controller.createMetavest(metavestController.metavestType.Vesting, address(0xDA0), _metavestDetails, emptyMilestones, 0, address(0), 0, 0));
         console.log(controller.authority());
+        skip(10);
+        
+        vm.startPrank(address(0xDA0));
+        vest.withdraw(vest.getAmountWithdrawable());
+        skip(10);
+        vest.withdraw(vest.getAmountWithdrawable());    
     }
 }
