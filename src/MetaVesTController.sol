@@ -9,10 +9,9 @@
 pragma solidity 0.8.20;
 
 //import "./MetaVesT.sol";
-import "./VestingAllocation.sol";
-import "./RestrictedTokenAllocation.sol";
-import "./TokenOptionAllocation.sol";
+import "./interfaces/IAllocationFactory.sol";
 import "./BaseAllocation.sol";
+import "./RestrictedTokenAllocation.sol";
 import "./interfaces/IPriceAllocation.sol";
 
 //interface deleted
@@ -38,6 +37,9 @@ contract metavestController is SafeTransferLib {
 
     address public authority;
     address public dao;
+    address public vestingFactory;
+    address public tokenOptionFactory;
+    address public restrictedTokenFactory;
     address internal _pendingAuthority;
     address internal _pendingDao;
 
@@ -152,11 +154,14 @@ contract metavestController is SafeTransferLib {
     /// @param _dao DAO governance contract address which exercises control over ability of 'authority' to call certain functions via imposing
     /// conditions through 'updateFunctionCondition'.
     /// @param _paymentToken contract address of the token used as payment/consideration for 'authority' to repurchase tokens according to a restricted token award, or for 'grantee' to exercise a token option
-    constructor(address _authority, address _dao, address _paymentToken) {
+    constructor(address _authority, address _dao, address _paymentToken, address _vestingFactory, address _tokenOptionFactory, address _restrictedTokenFactory) {
         if (_authority == address(0) || _paymentToken == address(0)) revert MetaVesTController_ZeroAddress();
         authority = _authority;
         // REVIEW: seems that some DAOs or grants will not use the functionality that paymentToken enables - don't think it's the end of the world to make it optional?
         paymentToken = _paymentToken;
+        vestingFactory = _vestingFactory;
+        tokenOptionFactory = _tokenOptionFactory;
+        restrictedTokenFactory = _restrictedTokenFactory;
         dao = _dao;
     }
 
@@ -241,11 +246,21 @@ contract metavestController is SafeTransferLib {
             IERC20M(_allocation.tokenContract).balanceOf(authority) < _total
         ) revert MetaVesTController_AmountNotApprovedForTransferFrom();
 
-        VestingAllocation vestingAllocation = new VestingAllocation(_grantee, address(this), _allocation, _milestones);
-        safeTransferFrom(_allocation.tokenContract, authority, address(vestingAllocation), _total);
+        address vestingAllocation = IAllocationFactory(vestingFactory).createAllocation(
+            IAllocationFactory.AllocationType.Vesting,
+            _grantee,
+            address(this),
+            _allocation,
+            _milestones,
+            address(0),
+            0,
+            0,
+            0
+        );
+        safeTransferFrom(_allocation.tokenContract, authority, vestingAllocation, _total);
         // REVIEW: let's emit an event?
-        vestingAllocations[_grantee].push(address(vestingAllocation));
-        return address(vestingAllocation);
+        vestingAllocations[_grantee].push(vestingAllocation);
+        return vestingAllocation;
     }
 
         /*address _authority,
@@ -283,11 +298,22 @@ contract metavestController is SafeTransferLib {
             IERC20M(_allocation.tokenContract).balanceOf(authority) < _total
         ) revert MetaVesTController_AmountNotApprovedForTransferFrom();
 
-        TokenOptionAllocation tokenOptionAllocation = new TokenOptionAllocation(_grantee, address(this), _paymentToken, _exercisePrice, _shortStopDuration, _longStopDate, _allocation, _milestones);
-        safeTransferFrom(_allocation.tokenContract, authority, address(tokenOptionAllocation), _total);
+       // TokenOptionAllocation tokenOptionAllocation = new TokenOptionAllocation(_grantee, address(this), _paymentToken, _exercisePrice, _shortStopDuration, _longStopDate, _allocation, _milestones);
+        address tokenOptionAllocation = IAllocationFactory(tokenOptionFactory).createAllocation(
+            IAllocationFactory.AllocationType.TokenOption,
+            _grantee,
+            address(this),
+            _allocation,
+            _milestones,
+            _paymentToken,
+            _exercisePrice,
+            _shortStopDuration,
+            _longStopDate
+        );
+        safeTransferFrom(_allocation.tokenContract, authority, tokenOptionAllocation, _total);
         // REVIEW: Emit event.
-        tokenOptionAllocations[_grantee].push(address(tokenOptionAllocation));
-        return address(tokenOptionAllocation);
+        tokenOptionAllocations[_grantee].push(tokenOptionAllocation);
+        return tokenOptionAllocation;
     }
 
         function createRestrictedTokenAward(address _grantee, uint256 _repurchasePrice, address _paymentToken, uint256 _shortStopDuration, VestingAllocation.Allocation calldata _allocation, VestingAllocation.Milestone[] calldata _milestones) internal conditionCheck returns (address){
@@ -319,11 +345,21 @@ contract metavestController is SafeTransferLib {
             IERC20M(_allocation.tokenContract).balanceOf(authority) < _total
         ) revert MetaVesTController_AmountNotApprovedForTransferFrom();
 
-        RestrictedTokenAward restrictedTokenAward = new RestrictedTokenAward(_grantee, address(this), _paymentToken, _repurchasePrice, _shortStopDuration, _allocation, _milestones);
-        safeTransferFrom(_allocation.tokenContract, authority, address(restrictedTokenAward), _total);
+        //RestrictedTokenAward restrictedTokenAward = new RestrictedTokenAward(_grantee, address(this), _paymentToken, _repurchasePrice, _shortStopDuration, _allocation, _milestones);
+         address restrictedTokenAward = IAllocationFactory(restrictedTokenFactory).createAllocation(
+            IAllocationFactory.AllocationType.RestrictedToken,
+            _grantee,
+            address(this),
+            _allocation,
+            _milestones,
+            _paymentToken,
+            _repurchasePrice,
+            _shortStopDuration,
+            0);
+        safeTransferFrom(_allocation.tokenContract, authority, restrictedTokenAward, _total);
         // REVIEW: event.
-        restrictedTokenAllocations[_grantee].push(address(restrictedTokenAward));
-        return address(restrictedTokenAward);
+        restrictedTokenAllocations[_grantee].push(restrictedTokenAward);
+        return restrictedTokenAward;
     }
 
 

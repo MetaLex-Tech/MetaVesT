@@ -5,6 +5,9 @@ pragma solidity ^0.8.18;
 import "forge-std/Test.sol";
 import "../src/MetaVesTFactory.sol";
 import "../src/MetaVesTController.sol";
+import "../src/VestingAllocationFactory.sol";
+import "../src/TokenOptionFactory.sol";
+import "../src/RestrictedTokenFactory.sol";
 
 interface IERC20 {
     function transfer(address recipient, uint256 amount) external returns (bool);
@@ -40,7 +43,11 @@ contract MetaVesTFactoryTest is Test {
         deal(dai_addr, _authority, 2000 ether);
         address _dao = address(0xB);
         address _paymentToken = address(0xC);
-        address _controller = factory.deployMetavestAndController(_authority, _dao, _paymentToken);
+        VestingAllocationFactory _factory = new VestingAllocationFactory();
+        RestrictedTokenFactory _factory2 = new RestrictedTokenFactory();
+        TokenOptionFactory _factory3 = new TokenOptionFactory();
+
+        address _controller = factory.deployMetavestAndController(_authority, _dao, _paymentToken, address(_factory), address(_factory2), address(_factory3));
         metavestController controller = metavestController(_controller);
 
          BaseAllocation.Milestone[] memory emptyMilestones;

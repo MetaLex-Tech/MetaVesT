@@ -37,8 +37,8 @@ contract MetaVesTFactory {
     /// @param _authority: address which initiates and may update each MetaVesT, such as a BORG or DAO
     /// @param _dao: contract address which token may be staked and used for voting, typically a DAO pool, governor, staking address. Submit address(0) for no such functionality.
     /// @param _paymentToken contract address of the token used as payment/consideration for 'authority' to repurchase tokens according to a restricted token award, or for 'grantee' to exercise a token option.
-    function deployMetavestAndController(address _authority, address _dao, address _paymentToken) external returns(address) {
-        metavestController _controller = new metavestController(_authority, _dao, _paymentToken);
+    function deployMetavestAndController(address _authority, address _dao, address _paymentToken, address _vestingAllocationFactory, address _tokenOptionFactory, address _restrictedTokenFactory) external returns(address) {
+        metavestController _controller = new metavestController(_authority, _dao, _paymentToken, _vestingAllocationFactory, _tokenOptionFactory, _restrictedTokenFactory);
 
        // address _metaVesT = IMetaVesTController(address(_controller)).metavest();
 
