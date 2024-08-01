@@ -145,7 +145,7 @@ contract TokenOptionAllocation is BaseAllocation {
         if (_tokensToExercise > getAmountExercisable()) revert MetaVesT_MoreThanAvailable();
         
         uint8 paymentDecimals = IERC20M(paymentToken).decimals();
-        uint8 optionTokenDecimals = IERC20M(optionToken).decimals();
+        uint8 optionTokenDecimals = IERC20M(allocation.tokenContract).decimals();
         
         // Calculate paymentAmount
         uint256 paymentAmount;

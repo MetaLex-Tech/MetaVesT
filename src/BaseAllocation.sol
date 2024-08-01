@@ -157,7 +157,7 @@ abstract contract BaseAllocation is ReentrancyGuard, SafeTransferLib{
         bool GovNonwithdrawable; // whether 'nonwithdrawableAmount' counts towards 'tokenGoverningPower'
         bool GovVested; // whether 'tokensVested' counts towards 'tokenGoverningPower'
         bool GovUnlocked; // whether 'tokensUnlocked' counts towards 'tokenGoverningPower'
-        bool terminated;
+        bool public terminated;
         address[] prevOwners;
 
 

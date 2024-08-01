@@ -124,7 +124,7 @@ contract RestrictedTokenAward is BaseAllocation {
     if (_amount > getAmountRepurchasable()) revert MetaVesT_MoreThanAvailable();
 
     uint8 paymentDecimals = IERC20M(paymentToken).decimals();
-    uint8 repurchaseTokenDecimals = IERC20M(tokenToRepurchase).decimals();
+    uint8 repurchaseTokenDecimals = IERC20M(allocation.tokenContract).decimals();
     
     // Calculate repurchaseAmount
     uint256 repurchaseAmount;
@@ -138,9 +138,9 @@ contract RestrictedTokenAward is BaseAllocation {
 
     safeTransferFrom(paymentToken, getAuthority(), address(this), repurchaseAmount);
     // transfer all repurchased tokens to 'authority'
-    safeTransfer(tokenToRepurchase, getAuthority(), _amount);
+    safeTransfer(allocation.tokenContract, getAuthority(), _amount);
     tokensRepurchased += _amount;
-    emit MetaVesT_RepurchaseAndWithdrawal(grantee, tokenToRepurchase, _amount, repurchaseAmount);
+    emit MetaVesT_RepurchaseAndWithdrawal(grantee, allocation.tokenContract, _amount, repurchaseAmount);
 }
 
     function terminate() external override onlyController nonReentrant {
