@@ -195,7 +195,6 @@ contract metavestController is SafeTransferLib {
         emit MetaVesTController_ConditionUpdated(_condition, _functionSig);
     }
 
-    // REVIEW: needs authority check -- all implants and borg
     function createMetavest(metavestType _type, address _grantee,  BaseAllocation.Allocation calldata _allocation, BaseAllocation.Milestone[] calldata _milestones, uint256 _exercisePrice, address _paymentToken,  uint256 _shortStopDuration, uint256 _longStopDate) external onlyAuthority conditionCheck returns (address)
     {
         address newMetavest;
@@ -217,6 +216,87 @@ contract metavestController is SafeTransferLib {
         }
         return newMetavest;
     }
+    
+
+    function validateInputParameters(
+        address _grantee,
+        address _paymentToken,
+        uint256 _exercisePrice,
+        VestingAllocation.Allocation calldata _allocation
+    ) internal pure {
+        if (_grantee == address(0) || _allocation.tokenContract == address(0) || _paymentToken == address(0) || _exercisePrice == 0)
+            revert MetaVesTController_ZeroAddress();
+    }
+
+    function validateAllocation(VestingAllocation.Allocation calldata _allocation) internal pure {
+        if (
+            _allocation.vestingCliffCredit > _allocation.tokenStreamTotal ||
+            _allocation.unlockingCliffCredit > _allocation.tokenStreamTotal
+        ) revert MetaVesTController_CliffGreaterThanTotal();
+    }
+
+    function validateAndCalculateMilestones(
+        VestingAllocation.Milestone[] calldata _milestones
+    ) internal pure returns (uint256 _milestoneTotal) {
+        if (_milestones.length != 0) {
+            if (_milestones.length > ARRAY_LENGTH_LIMIT) revert MetaVesTController_LengthMismatch();
+            for (uint256 i; i < _milestones.length; ++i) {
+                if (_milestones[i].conditionContracts.length > ARRAY_LENGTH_LIMIT)
+                    revert MetaVesTController_LengthMismatch();
+                _milestoneTotal += _milestones[i].milestoneAward;
+            }
+        }
+    }
+
+    function validateTokenApprovalAndBalance(address tokenContract, uint256 total) internal view {
+        if (
+            IERC20M(tokenContract).allowance(authority, address(this)) < total ||
+            IERC20M(tokenContract).balanceOf(authority) < total
+        ) revert MetaVesTController_AmountNotApprovedForTransferFrom();
+    }
+
+     function createAndInitializeTokenOptionAllocation(
+            address _grantee,
+            address _paymentToken,
+            uint256 _exercisePrice,
+            uint256 _shortStopDuration,
+            uint256 _longStopDate,
+            VestingAllocation.Allocation calldata _allocation,
+            VestingAllocation.Milestone[] calldata _milestones
+        ) internal returns (address) {
+            return IAllocationFactory(tokenOptionFactory).createAllocation(
+                IAllocationFactory.AllocationType.TokenOption,
+                _grantee,
+                address(this),
+                _allocation,
+                _milestones,
+                _paymentToken,
+                _exercisePrice,
+                _shortStopDuration,
+                _longStopDate
+            );
+        }
+
+        function createAndInitializeRestrictedTokenAward(
+            address _grantee,
+            address _paymentToken,
+            uint256 _repurchasePrice,
+            uint256 _shortStopDuration,
+            VestingAllocation.Allocation calldata _allocation,
+            VestingAllocation.Milestone[] calldata _milestones
+        ) internal returns (address) {
+            return IAllocationFactory(restrictedTokenFactory).createAllocation(
+                IAllocationFactory.AllocationType.RestrictedToken,
+                _grantee,
+                address(this),
+                _allocation,
+                _milestones,
+                _paymentToken,
+                _repurchasePrice,
+                _shortStopDuration,
+                0
+            );
+        }
 
 
     function createVestingAllocation(address _grantee, VestingAllocation.Allocation calldata _allocation, VestingAllocation.Milestone[] calldata _milestones) internal conditionCheck returns (address){
@@ -258,109 +338,59 @@ contract metavestController is SafeTransferLib {
             0
         );
         safeTransferFrom(_allocation.tokenContract, authority, vestingAllocation, _total);
-        // REVIEW: let's emit an event?
+
         vestingAllocations[_grantee].push(vestingAllocation);
         return vestingAllocation;
     }
 
-        /*address _authority,
-        address _controller,
-        address _paymentToken,
-        uint256 _exercisePrice,
-        Allocation memory _allocation,
-        Milestone[] memory _milestones*/
     function createTokenOptionAllocation(address _grantee, uint256 _exercisePrice, address _paymentToken,  uint256 _shortStopDuration, uint256 _longStopDate, VestingAllocation.Allocation calldata _allocation, VestingAllocation.Milestone[] calldata _milestones) internal conditionCheck returns (address) {
-        // REVIEW: May be neater to extract checks comment to all vest types (20+ lines) to internal function, leaving just type specific checks here.
-        if (_grantee == address(0) || _allocation.tokenContract == address(0) || _paymentToken == address(0) || _exercisePrice == 0)
-            revert MetaVesTController_ZeroAddress();
-        if (
-            _allocation.vestingCliffCredit > _allocation.tokenStreamTotal ||
-            _allocation.unlockingCliffCredit > _allocation.tokenStreamTotal
-        ) revert MetaVesTController_CliffGreaterThanTotal();
-
-
-        uint256 _milestoneTotal;
-        if (_milestones.length != 0) {
-            // limit array length
-            if (_milestones.length > ARRAY_LENGTH_LIMIT) revert MetaVesTController_LengthMismatch();
-
-            for (uint256 i; i < _milestones.length; ++i) {
-                if (_milestones[i].conditionContracts.length > ARRAY_LENGTH_LIMIT)
-                    revert MetaVesTController_LengthMismatch();
-                _milestoneTotal += _milestones[i].milestoneAward;
-            }
-        }
+        
+        validateInputParameters(_grantee, _paymentToken, _exercisePrice, _allocation);
+        validateAllocation(_allocation);
+        uint256 _milestoneTotal = validateAndCalculateMilestones(_milestones);
 
         uint256 _total = _allocation.tokenStreamTotal + _milestoneTotal;
         if (_total == 0) revert MetaVesTController_ZeroAmount();
-        if (
-            IERC20M(_allocation.tokenContract).allowance(authority, address(this)) < _total ||
-            IERC20M(_allocation.tokenContract).balanceOf(authority) < _total
-        ) revert MetaVesTController_AmountNotApprovedForTransferFrom();
+        validateTokenApprovalAndBalance(_allocation.tokenContract, _total);
+        
+        address tokenOptionAllocation = createAndInitializeTokenOptionAllocation(
+                _grantee,
+                _paymentToken,
+                _exercisePrice,
+                _shortStopDuration,
+                _longStopDate,
+                _allocation,
+                _milestones
+            );
 
-       // TokenOptionAllocation tokenOptionAllocation = new TokenOptionAllocation(_grantee, address(this), _paymentToken, _exercisePrice, _shortStopDuration, _longStopDate, _allocation, _milestones);
-        address tokenOptionAllocation = IAllocationFactory(tokenOptionFactory).createAllocation(
-            IAllocationFactory.AllocationType.TokenOption,
-            _grantee,
-            address(this),
-            _allocation,
-            _milestones,
-            _paymentToken,
-            _exercisePrice,
-            _shortStopDuration,
-            _longStopDate
-        );
-        safeTransferFrom(_allocation.tokenContract, authority, tokenOptionAllocation, _total);
-        // REVIEW: Emit event.
-        tokenOptionAllocations[_grantee].push(tokenOptionAllocation);
-        return tokenOptionAllocation;
-    }
+            safeTransferFrom(_allocation.tokenContract, authority, tokenOptionAllocation, _total);
+            tokenOptionAllocations[_grantee].push(tokenOptionAllocation);
+            return tokenOptionAllocation;
+        }
 
         function createRestrictedTokenAward(address _grantee, uint256 _repurchasePrice, address _paymentToken, uint256 _shortStopDuration, VestingAllocation.Allocation calldata _allocation, VestingAllocation.Milestone[] calldata _milestones) internal conditionCheck returns (address){
-        // REVIEW: shortStopDuration validation?
-        if (_grantee == address(0) || _allocation.tokenContract == address(0) || _paymentToken == address(0) || _repurchasePrice == 0)
-            revert MetaVesTController_ZeroAddress();
-        if (
-            _allocation.vestingCliffCredit > _allocation.tokenStreamTotal ||
-            _allocation.unlockingCliffCredit > _allocation.tokenStreamTotal
-        ) revert MetaVesTController_CliffGreaterThanTotal();
+            validateInputParameters(_grantee, _paymentToken, _repurchasePrice, _allocation);
+            validateAllocation(_allocation);
+            uint256 _milestoneTotal = validateAndCalculateMilestones(_milestones);
 
+            uint256 _total = _allocation.tokenStreamTotal + _milestoneTotal;
+            if (_total == 0) revert MetaVesTController_ZeroAmount();
+            validateTokenApprovalAndBalance(_allocation.tokenContract, _total);
 
-         uint256 _milestoneTotal;
-        if (_milestones.length != 0) {
-            // limit array length
-            if (_milestones.length > ARRAY_LENGTH_LIMIT) revert MetaVesTController_LengthMismatch();
+            address restrictedTokenAward = createAndInitializeRestrictedTokenAward(
+                _grantee,
+                _paymentToken,
+                _repurchasePrice,
+                _shortStopDuration,
+                _allocation,
+                _milestones
+            );
 
-            for (uint256 i; i < _milestones.length; ++i) {
-                if (_milestones[i].conditionContracts.length > ARRAY_LENGTH_LIMIT)
-                    revert MetaVesTController_LengthMismatch();
-                _milestoneTotal += _milestones[i].milestoneAward;
-            }
+            safeTransferFrom(_allocation.tokenContract, authority, restrictedTokenAward, _total);
+            restrictedTokenAllocations[_grantee].push(restrictedTokenAward);
+            return restrictedTokenAward;
         }
-
-        uint256 _total = _allocation.tokenStreamTotal + _milestoneTotal;
-        if (_total == 0) revert MetaVesTController_ZeroAmount();
-        if (
-            IERC20M(_allocation.tokenContract).allowance(authority, address(this)) < _total ||
-            IERC20M(_allocation.tokenContract).balanceOf(authority) < _total
-        ) revert MetaVesTController_AmountNotApprovedForTransferFrom();
-
-        //RestrictedTokenAward restrictedTokenAward = new RestrictedTokenAward(_grantee, address(this), _paymentToken, _repurchasePrice, _shortStopDuration, _allocation, _milestones);
-         address restrictedTokenAward = IAllocationFactory(restrictedTokenFactory).createAllocation(
-            IAllocationFactory.AllocationType.RestrictedToken,
-            _grantee,
-            address(this),
-            _allocation,
-            _milestones,
-            _paymentToken,
-            _repurchasePrice,
-            _shortStopDuration,
-            0);
-        safeTransferFrom(_allocation.tokenContract, authority, restrictedTokenAward, _total);
-        // REVIEW: event.
-        restrictedTokenAllocations[_grantee].push(restrictedTokenAward);
-        return restrictedTokenAward;
-    }
+    
 
 
     function getMetaVestType(address _grant) public view returns (uint256) {
@@ -520,8 +550,6 @@ contract metavestController is SafeTransferLib {
 
     /// @notice allows the pending new authority to accept the role transfer
     /// @dev access restricted to the address stored as '_pendingauthority' to accept the two-step change. Transfers 'authority' role to the caller (reflected in 'metavest') and deletes '_pendingauthority' to reset.
-    /// no 'conditionCheck' necessary as it more properly contained in 'initiateAuthorityUpdate'
-    // REVIEW: comment above refers to a condition check, but doesn't appear to be one on `initiateAuthorityUpdate` unless it means `onlyAuthority`.
     function acceptAuthorityRole() external {
         if (msg.sender != _pendingAuthority) revert MetaVesTController_OnlyPendingAuthority();
 

@@ -47,7 +47,6 @@ contract TokenOptionAllocation is BaseAllocation {
         allocation.unlockRate = _allocation.unlockRate;
         allocation.unlockStartTime = _allocation.unlockStartTime;
 
-
         // set token option variables
         exercisePrice = exercisePrice;
         longStoptDate = _longStopDate;
@@ -144,22 +143,35 @@ contract TokenOptionAllocation is BaseAllocation {
     function exerciseTokenOption(uint256 _tokensToExercise) external nonReentrant onlyGrantee {
         if (_tokensToExercise == 0) revert MetaVesT_ZeroAmount();
         if (_tokensToExercise > getAmountExercisable()) revert MetaVesT_MoreThanAvailable();
-        if (ipaymentToken.balanceOf(msg.sender) < _tokensToExercise * exercisePrice) revert MetaVesT_InsufficientPaymentTokenBalance();
         
-        safeTransferFrom(paymentToken, msg.sender, getAuthority(), _tokensToExercise * exercisePrice);
+        uint8 paymentDecimals = IERC20M(paymentToken).decimals();
+        uint8 optionTokenDecimals = IERC20M(optionToken).decimals();
+        
+        // Calculate paymentAmount
+        uint256 paymentAmount;
+        if (paymentDecimals >= optionTokenDecimals) {
+            // Case: Payment token has more or equal decimals (e.g., WETH to USDC)
+            paymentAmount = (_tokensToExercise * exercisePrice) / (10**optionTokenDecimals);
+        } else {
+            // Case: Payment token has fewer decimals (e.g., USDC to WETH)
+            paymentAmount = (_tokensToExercise * exercisePrice) / (10**paymentDecimals);
+        }
+        
+        if (IERC20M(paymentToken).balanceOf(msg.sender) < paymentAmount) revert MetaVesT_InsufficientPaymentTokenBalance();
+        safeTransferFrom(paymentToken, msg.sender, getAuthority(), paymentAmount);
         tokensExercised += _tokensToExercise;
-        emit MetaVesT_TokenOptionExercised(msg.sender, _tokensToExercise, _tokensToExercise * exercisePrice);
+        emit MetaVesT_TokenOptionExercised(msg.sender, _tokensToExercise, paymentAmount);
     }
 
     function terminate() external override onlyController nonReentrant {
         if(terminated) revert MetaVesT_AlreadyTerminated();
-        uint256 tokensToRecover = 0;
+        
         uint256 unfinishedMilestonesAllocation = 0;
         for (uint256 i; i < milestones.length; ++i) {
             if (!milestones[i].complete)
                 unfinishedMilestonesAllocation += milestones[i].milestoneAward;
         }
-        tokensToRecover = allocation.tokenStreamTotal + unfinishedMilestonesAllocation - getAmountExercisable() - tokensExercised;
+        uint256 tokensToRecover = allocation.tokenStreamTotal + unfinishedMilestonesAllocation - getAmountExercisable() - tokensExercised;
         allocation.vestingRate = 0;
         shortStopTime = block.timestamp + shortStopDuration;
         safeTransfer(allocation.tokenContract, getAuthority(), tokensToRecover);

@@ -120,16 +120,28 @@ contract RestrictedTokenAward is BaseAllocation {
     }
 
     function repurchaseTokens(uint256 _amount) external onlyController nonReentrant {
-        if (_amount == 0) revert MetaVesT_ZeroAmount();
-        if (_amount > getAmountRepurchasable()) revert MetaVesT_MoreThanAvailable();
+    if (_amount == 0) revert MetaVesT_ZeroAmount();
+    if (_amount > getAmountRepurchasable()) revert MetaVesT_MoreThanAvailable();
 
-        safeTransferFrom(paymentToken, getAuthority(), address(this), _amount * repurchasePrice);
-
-        // transfer all repurchased tokens to 'authority'
-        safeTransfer(allocation.tokenContract, getAuthority(), _amount);
-        tokensRepurchased += _amount;
-        emit MetaVesT_RepurchaseAndWithdrawal(grantee, allocation.tokenContract, _amount, _amount * repurchasePrice);
+    uint8 paymentDecimals = IERC20M(paymentToken).decimals();
+    uint8 repurchaseTokenDecimals = IERC20M(tokenToRepurchase).decimals();
+    
+    // Calculate repurchaseAmount
+    uint256 repurchaseAmount;
+    if (paymentDecimals >= repurchaseTokenDecimals) {
+        // Case: Payment token has more or equal decimals
+        repurchaseAmount = (_amount * repurchasePrice) / (10**(paymentDecimals - repurchaseTokenDecimals));
+    } else {
+        // Case: Payment token has fewer decimals
+        repurchaseAmount = (_amount * repurchasePrice * 10**(repurchaseTokenDecimals - paymentDecimals)) / (10**repurchaseTokenDecimals);
     }
+
+    safeTransferFrom(paymentToken, getAuthority(), address(this), repurchaseAmount);
+    // transfer all repurchased tokens to 'authority'
+    safeTransfer(tokenToRepurchase, getAuthority(), _amount);
+    tokensRepurchased += _amount;
+    emit MetaVesT_RepurchaseAndWithdrawal(grantee, tokenToRepurchase, _amount, repurchaseAmount);
+}
 
     function terminate() external override onlyController nonReentrant {
          if(terminated) revert MetaVesT_AlreadyTerminated();
