@@ -40,9 +40,8 @@ contract VestingAllocation is BaseAllocation {
         return 1;
     }
 
-    // REVIEW: confirm that this should not exclude withdrawn tokens?
-    function getGoverningPower() external view override returns (uint256) {
-        uint256 governingPower;
+    function getGoverningPower() external view override returns (uint256 governingPower) {
+
         if(GovNonwithdrawable)
         {
             uint256 totalMilestoneAward = 0;
@@ -50,7 +49,7 @@ contract VestingAllocation is BaseAllocation {
             { 
                     totalMilestoneAward += milestones[i].milestoneAward;
             }
-            governingPower = (allocation.tokenStreamTotal + totalMilestoneAward);
+            governingPower = (allocation.tokenStreamTotal + totalMilestoneAward) - tokensWithdrawn;
         }
         else 
         {

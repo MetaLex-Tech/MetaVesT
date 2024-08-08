@@ -24,6 +24,9 @@ contract MetaVesTFactoryTest is Test {
     MetaVesTFactory internal factory;
     address factoryAddr;
     address dai_addr = 0x3e622317f8C93f7328350cF0B56d9eD4C620C5d6;
+            VestingAllocationFactory _factory;// = new VestingAllocationFactory();
+        RestrictedTokenFactory _factory2;// = new RestrictedTokenFactory();
+        TokenOptionFactory _factory3;// = new TokenOptionFactory();
 
     event MetaVesT_Deployment(
         address newMetaVesT,
@@ -34,7 +37,10 @@ contract MetaVesTFactoryTest is Test {
     );
 
     function setUp() public {
-        factory = new MetaVesTFactory();
+         _factory = new VestingAllocationFactory();
+         _factory2 = new RestrictedTokenFactory();
+         _factory3 = new TokenOptionFactory();
+        factory = new MetaVesTFactory(address(_factory), address(_factory2), address(_factory3), address(this));
         factoryAddr = address(factory);
     }
 
@@ -43,11 +49,9 @@ contract MetaVesTFactoryTest is Test {
         deal(dai_addr, _authority, 2000 ether);
         address _dao = address(0xB);
         address _paymentToken = address(0xC);
-        VestingAllocationFactory _factory = new VestingAllocationFactory();
-        RestrictedTokenFactory _factory2 = new RestrictedTokenFactory();
-        TokenOptionFactory _factory3 = new TokenOptionFactory();
+        
 
-        address _controller = factory.deployMetavestAndController(_authority, _dao, _paymentToken, address(_factory), address(_factory2), address(_factory3));
+        address _controller = factory.deployMetavestAndController(_authority, _dao);
         metavestController controller = metavestController(_controller);
 
          BaseAllocation.Milestone[] memory emptyMilestones;

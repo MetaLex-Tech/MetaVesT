@@ -10,7 +10,7 @@ interface IAllocationFactory {
         RestrictedToken,
         TokenOption
     }
-    
+
     function createAllocation(
         AllocationType _allocationType,
         address _grantee,

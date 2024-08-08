@@ -12,6 +12,7 @@ contract RestrictedTokenAward is BaseAllocation {
     uint256 public shortStopDate;
     uint256 public repurchasePrice;
     uint256 public tokensRepurchased;
+    uint256 public tokensRepurchasedWithdrawn;
 
 
     error MetaVesT_InsufficientPaymentTokenBalance();
@@ -86,7 +87,7 @@ contract RestrictedTokenAward is BaseAllocation {
         emit MetaVesT_StopTimesUpdated(grantee, _newVestingStopTime, _newUnlockStopTime, _shortStopTime);
     }
 
-    function updatePrice(uint128 _newPrice) external onlyController {
+    function updatePrice(uint256 _newPrice) external onlyController {
         repurchasePrice = _newPrice;
         emit MetaVesT_PriceUpdated(grantee, _newPrice);
     }
@@ -119,6 +120,22 @@ contract RestrictedTokenAward is BaseAllocation {
         emit MetaVesT_MilestoneAdded(grantee, _milestone);
     }
 
+    function getRepurchaseAmount(uint256 _amount) external view returns (uint256) {
+
+        uint8 paymentDecimals = IERC20M(paymentToken).decimals();
+        uint8 repurchaseTokenDecimals = IERC20M(allocation.tokenContract).decimals();
+        // Calculate repurchaseAmount
+        uint256 repurchaseAmount;
+        if (paymentDecimals >= repurchaseTokenDecimals) {
+            // Case: Payment token has more or equal decimals
+            repurchaseAmount = (_amount * repurchasePrice) / (10**(paymentDecimals - repurchaseTokenDecimals));
+        } else {
+            // Case: Payment token has fewer decimals
+            repurchaseAmount = (_amount * repurchasePrice * 10**(repurchaseTokenDecimals - paymentDecimals)) / (10**repurchaseTokenDecimals);
+        }
+        return repurchaseAmount;
+    }
+
     function repurchaseTokens(uint256 _amount) external onlyController nonReentrant {
     if (_amount == 0) revert MetaVesT_ZeroAmount();
     if (_amount > getAmountRepurchasable()) revert MetaVesT_MoreThanAvailable();
@@ -143,6 +160,14 @@ contract RestrictedTokenAward is BaseAllocation {
     emit MetaVesT_RepurchaseAndWithdrawal(grantee, allocation.tokenContract, _amount, repurchaseAmount);
 }
 
+    function claimRepurchasedTokens() external onlyGrantee nonReentrant {
+        if(IERC20M(paymentToken).balanceOf(address(this)) == 0) revert MetaVesT_MoreThanAvailable();
+        uint256 _amount = IERC20M(paymentToken).balanceOf(address(this));
+        safeTransfer(paymentToken, msg.sender, _amount);
+        tokensRepurchasedWithdrawn += _amount;
+        emit MetaVesT_Withdrawn(msg.sender, paymentToken, _amount);
+    }
+
     function terminate() external override onlyController nonReentrant {
          if(terminated) revert MetaVesT_AlreadyTerminated();
         uint256 tokensToRecover = 0;
@@ -154,7 +179,7 @@ contract RestrictedTokenAward is BaseAllocation {
         allocation.vestingRate = 0;
         // remaining tokens must be repruchased by 'authority'
         // REVIEW: unused.
-        uint256 shortStopTime = block.timestamp + shortStopDuration;
+        shortStopDate = block.timestamp + shortStopDuration;
         terminated = true;
         emit MetaVesT_Terminated(grantee, tokensToRecover);
     }

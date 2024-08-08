@@ -107,7 +107,7 @@ contract TokenOptionAllocation is BaseAllocation {
         emit MetaVesT_StopTimesUpdated(grantee, _newVestingStopTime, _newUnlockStopTime, _shortStopTime);
     }
 
-    function updatePrice(uint128 _newPrice) external onlyController {
+    function updatePrice(uint256 _newPrice) external onlyController {
         exercisePrice = _newPrice;
         emit MetaVesT_PriceUpdated(grantee, _newPrice);
     }

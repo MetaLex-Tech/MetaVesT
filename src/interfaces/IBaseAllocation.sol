@@ -17,7 +17,7 @@ interface IBaseAllocation {
     function withdraw(uint256 _amount) external;
     function getMetavestDetails() external view returns (IBaseAllocation.Allocation memory);
     function getAmountWithdrawable() external view returns (uint256);
-    function updatePrice(uint128 _newPrice) external;
+    function updatePrice(uint256 _newPrice) external;
     struct Milestone {
         uint256 milestoneAward;
         bool unlockOnCompletion;

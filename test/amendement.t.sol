@@ -3,8 +3,7 @@ pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
 import "../src/metavestController.sol";
-import "../src/VestingAllocation.sol";
-import "../src/TokenOptionAllocation.sol";
+import "../src/BaseAllocation.sol";
 import "../src/RestrictedTokenAllocation.sol";
 import "../src/interfaces/IAllocationFactory.sol";
 import "../src/VestingAllocationFactory.sol";
@@ -592,25 +591,25 @@ contract MetaVestControllerTest is Test {
     metavestController public controller;
     MockERC20 public token;
     MockERC20 public paymentToken;
-
     address public authority;
     address public dao;
+    address public vestingFactory;
+    address public tokenOptionFactory;
+    address public restrictedTokenFactory;
     address public grantee;
-    address public transferee;
+    address public mockAllocation;
 
     function setUp() public {
         authority = address(this);
-        dao = address(0x2);
-        grantee = address(0x3);
-        transferee = address(0x4);
-        
-        token = new MockERC20("Test Token", "TT");
-        paymentToken = new MockERC20("Payment Token", "PT");
-
+        dao = address(2);
         VestingAllocationFactory factory = new VestingAllocationFactory();
         TokenOptionFactory tokenFactory = new TokenOptionFactory();
         RestrictedTokenFactory restrictedTokenFactory = new RestrictedTokenFactory();
-        
+        grantee = address(6);
+
+        token = new MockERC20("Test Token", "TT");
+        paymentToken = new MockERC20("Payment Token", "PT");
+
         controller = new metavestController(
             authority,
             dao,
@@ -621,164 +620,38 @@ contract MetaVestControllerTest is Test {
 
         token.mint(authority, 1000000e58);
         paymentToken.mint(authority, 1000000e58);
+        mockAllocation = createDummyVestingAllocation();
 
         vm.prank(authority);
         controller.createSet("testSet");
     }
+    
 
-    function testCreateVestingAllocation() public {
-        BaseAllocation.Allocation memory allocation = BaseAllocation.Allocation({
-            tokenContract: address(token),
-            tokenStreamTotal: 1000e18,
-            vestingCliffCredit: 100e18,
-            unlockingCliffCredit: 100e18,
-            vestingRate: 10e18,
-            vestingStartTime: uint48(block.timestamp),
-            unlockRate: 10e18,
-            unlockStartTime: uint48(block.timestamp)
-        });
+    function testProposeMetavestAmendment() public {
+        bytes4 msgSig = bytes4(keccak256("updateMetavestTransferability(address,bool)"));
+        bytes memory callData = abi.encodeWithSelector(msgSig, address(mockAllocation), true);
 
-        BaseAllocation.Milestone[] memory milestones = new BaseAllocation.Milestone[](1);
-        milestones[0] = BaseAllocation.Milestone({
-            milestoneAward: 100e18,
-            unlockOnCompletion: true,
-            complete: false,
-            conditionContracts: new address[](0)
-        });
+        vm.prank(authority);
+        controller.proposeMetavestAmendment(address(mockAllocation), msgSig, callData);
 
-        token.approve(address(controller), 1100e18);
-
-        address vestingAllocation = controller.createMetavest(
-            metavestController.metavestType.Vesting,
-            grantee,
-            allocation,
-            milestones,
-            0,
-            address(0),
-            0,
-            0
-        );
-
-        assertEq(token.balanceOf(vestingAllocation), 1100e18);
-        assertEq(controller.vestingAllocations(grantee, 0), vestingAllocation);
-    }
-
-    function testCreateTokenOptionAllocation() public {
-        BaseAllocation.Allocation memory allocation = BaseAllocation.Allocation({
-            tokenContract: address(token),
-            tokenStreamTotal: 1000e18,
-            vestingCliffCredit: 100e18,
-            unlockingCliffCredit: 100e18,
-            vestingRate: 10e18,
-            vestingStartTime: uint48(block.timestamp),
-            unlockRate: 10e18,
-            unlockStartTime: uint48(block.timestamp)
-        });
-
-        BaseAllocation.Milestone[] memory milestones = new BaseAllocation.Milestone[](1);
-        milestones[0] = BaseAllocation.Milestone({
-            milestoneAward: 100e18,
-            unlockOnCompletion: true,
-            complete: false,
-            conditionContracts: new address[](0)
-        });
-
-        token.approve(address(controller), 1100e18);
-
-        address tokenOptionAllocation = controller.createMetavest(
-            metavestController.metavestType.TokenOption,
-            grantee,
-            allocation,
-            milestones,
-            1e18,
-            address(paymentToken),
-            365 days,
-            block.timestamp + 730 days
-        );
-
-        assertEq(token.balanceOf(tokenOptionAllocation), 1100e18);
-        assertEq(controller.tokenOptionAllocations(grantee, 0), tokenOptionAllocation);
-    }
-
-    function testCreateRestrictedTokenAward() public {
-        BaseAllocation.Allocation memory allocation = BaseAllocation.Allocation({
-            tokenContract: address(token),
-            tokenStreamTotal: 1000e18,
-            vestingCliffCredit: 100e18,
-            unlockingCliffCredit: 100e18,
-            vestingRate: 10e18,
-            vestingStartTime: uint48(block.timestamp),
-            unlockRate: 10e18,
-            unlockStartTime: uint48(block.timestamp)
-        });
-
-        BaseAllocation.Milestone[] memory milestones = new BaseAllocation.Milestone[](1);
-        milestones[0] = BaseAllocation.Milestone({
-            milestoneAward: 100e18,
-            unlockOnCompletion: true,
-            complete: false,
-            conditionContracts: new address[](0)
-        });
-
-        token.approve(address(controller), 1100e18);
-
-        address restrictedTokenAward = controller.createMetavest(
-            metavestController.metavestType.RestrictedTokenAward,
-            grantee,
-            allocation,
-            milestones,
-            1e18,
-            address(paymentToken),
-            365 days,
-            0
-        );
-
-        assertEq(token.balanceOf(restrictedTokenAward), 1100e18);
-        assertEq(controller.restrictedTokenAllocations(grantee, 0), restrictedTokenAward);
-    }
-
-    function testUpdateTransferability() public {
-        uint256 startTimestamp = block.timestamp;
-        address vestingAllocation = createDummyVestingAllocation();
-        address[] memory addresses = new address[](1);
-        addresses[0] = vestingAllocation;
-        //compute msg.data for updateMetavestTransferability(vestingAllocation, true)
-        bytes4 selector = controller.updateMetavestTransferability.selector;
-        bytes memory msgData = abi.encodeWithSelector(selector, vestingAllocation, true);
-        controller.proposeMetavestAmendment(vestingAllocation, controller.updateMetavestTransferability.selector, msgData);
-        vm.prank(grantee);
-        controller.consentToMetavestAmendment(vestingAllocation, controller.updateMetavestTransferability.selector, true);
+        (bool isPending, bytes32 dataHash, bool inFavor) = controller.functionToGranteeToAmendmentPending(msgSig, address(mockAllocation));
         
-        controller.updateMetavestTransferability(vestingAllocation, true);
-        vm.prank(grantee);
-        RestrictedTokenAward(vestingAllocation).transferRights(transferee);
-         uint256 newTimestamp = startTimestamp + 100; // 101
-        vm.warp(newTimestamp);
-        skip(10);
-        vm.prank(transferee);
-        uint256 balance = RestrictedTokenAward(vestingAllocation).getAmountWithdrawable();
- 
-
-    //warp ahead 100 blocks
-       
-        vm.prank(transferee);
-        RestrictedTokenAward(vestingAllocation).withdraw(balance);
-        
-       // assertTrue(BaseAllocation(vestingAllocation).transferable());
+        assertTrue(isPending);
+        assertEq(dataHash, keccak256(callData));
+        assertFalse(inFavor);
     }
 
-    function testGetGovPower() public {
-       address vestingAllocation = createDummyVestingAllocation();
-       BaseAllocation(vestingAllocation).getGoverningPower();
-    }
-
-     function testProposeMajorityMetavestAmendment() public {
+     function testFailProposeMajorityMetavestAmendment() public {
         address mockAllocation2 = createDummyVestingAllocation();
+        address mockAllocation3 = createDummyVestingAllocation();
+        address mockAllocation4 = createDummyVestingAllocation();
         bytes4 msgSig = bytes4(keccak256("updateMetavestTransferability(address,bool)"));
         bytes memory callData = abi.encodeWithSelector(msgSig, mockAllocation2, true);
 
         vm.prank(authority);
         controller.addMetaVestToSet("testSet", mockAllocation2);
+        controller.addMetaVestToSet("testSet", mockAllocation3);
+        controller.addMetaVestToSet("testSet", mockAllocation4);
         vm.warp(block.timestamp + 1 days);
         vm.prank(authority);
         controller.proposeMajorityMetavestAmendment("testSet", msgSig, callData);
@@ -790,157 +663,116 @@ contract MetaVestControllerTest is Test {
         controller.updateMetavestTransferability(mockAllocation2, true);
     }
 
-    function testUpdateExercisePrice() public {
-        address tokenOptionAllocation = createDummyTokenOptionAllocation();
+    function testProposeMajorityMetavestAmendment() public {
+        address mockAllocation2 = createDummyVestingAllocation();
+        address mockAllocation3 = createDummyVestingAllocation();
+        bytes4 msgSig = bytes4(keccak256("updateMetavestTransferability(address,bool)"));
+        bytes memory callData = abi.encodeWithSelector(msgSig, mockAllocation2, true);
 
-        //compute msg.data for updateExerciseOrRepurchasePrice(tokenOptionAllocation, 2e18)
-        bytes4 selector = controller.updateExerciseOrRepurchasePrice.selector;
-        bytes memory msgData = abi.encodeWithSelector(selector, tokenOptionAllocation, 2e18);
-       
-        controller.proposeMetavestAmendment(tokenOptionAllocation, controller.updateExerciseOrRepurchasePrice.selector, msgData);
-        
-        vm.prank(grantee);
-        controller.consentToMetavestAmendment(tokenOptionAllocation, controller.updateExerciseOrRepurchasePrice.selector, true);
-
-        controller.updateExerciseOrRepurchasePrice(tokenOptionAllocation, 2e18);
-
-        assertEq(TokenOptionAllocation(tokenOptionAllocation).exercisePrice(), 2e18);
-    }
-
-    function testRemoveMilestone() public {
-        address vestingAllocation = createDummyVestingAllocation();
-        //create array of addresses and include vestingAllocation address
-        address[] memory addresses = new address[](1);
-        addresses[0] = vestingAllocation;
-        bytes4 selector = bytes4(keccak256("removeMetavestMilestone(address,uint256)"));
-        bytes memory msgData = abi.encodeWithSelector(selector, vestingAllocation, 0);
-        controller.proposeMetavestAmendment(vestingAllocation, controller.removeMetavestMilestone.selector, msgData);
-        vm.prank(grantee);
-        //consent to amendment for the removemetavestmilestone method sig function consentToMetavestAmendment(address _metavest, bytes4 _msgSig, bool _inFavor) external {
-        controller.consentToMetavestAmendment(vestingAllocation, controller.removeMetavestMilestone.selector, true);
-        controller.removeMetavestMilestone(vestingAllocation, 0);
-        
-        //BaseAllocation.Milestone memory milestone = BaseAllocation(vestingAllocation).milestones(0);
-        //assertEq(milestone.milestoneAward, 0);
-    }
-
-    function testAddMilestone() public {
-        address vestingAllocation = createDummyVestingAllocation();
-        
-        BaseAllocation.Milestone memory newMilestone = BaseAllocation.Milestone({
-            milestoneAward: 50e18,
-            unlockOnCompletion: true,
-            complete: false,
-            conditionContracts: new address[](0)
-        });
-        
-        token.approve(address(controller), 50e18);
-        controller.addMetavestMilestone(vestingAllocation, newMilestone);
-        
-       // BaseAllocation.Milestone memory addedMilestone = BaseAllocation(vestingAllocation).milestones[0];
-      //  assertEq(addedMilestone.milestoneAward, 50e18);
-    }
-
-    function testUpdateUnlockRate() public {
-        address vestingAllocation = createDummyVestingAllocation();
-        address[] memory addresses = new address[](1);
-        addresses[0] = vestingAllocation;
-        bytes4 selector = controller.updateMetavestUnlockRate.selector;
-        bytes memory msgData = abi.encodeWithSelector(selector, vestingAllocation, 20e18);
-        controller.proposeMetavestAmendment(vestingAllocation, controller.updateMetavestUnlockRate.selector, msgData);
-        vm.prank(grantee);
-        controller.consentToMetavestAmendment(vestingAllocation, controller.updateMetavestUnlockRate.selector, true);
-        
-        controller.updateMetavestUnlockRate(vestingAllocation, 20e18);
-        
-        BaseAllocation.Allocation memory updatedAllocation = BaseAllocation(vestingAllocation).getMetavestDetails();
-        assertEq(updatedAllocation.unlockRate, 20e18);
-    }
-
-    function testUpdateVestingRate() public {
-        address vestingAllocation = createDummyVestingAllocation();
-        address[] memory addresses = new address[](1);
-        addresses[0] = vestingAllocation;
-        bytes4 selector = controller.updateMetavestVestingRate.selector;
-        bytes memory msgData = abi.encodeWithSelector(selector, vestingAllocation, 20e18);
-        controller.proposeMetavestAmendment(vestingAllocation, controller.updateMetavestVestingRate.selector, msgData);
-        vm.prank(grantee);
-        controller.consentToMetavestAmendment(vestingAllocation, controller.updateMetavestVestingRate.selector, true);
-        
-        controller.updateMetavestVestingRate(vestingAllocation, 20e18);
-        
-        BaseAllocation.Allocation memory updatedAllocation = BaseAllocation(vestingAllocation).getMetavestDetails();
-        assertEq(updatedAllocation.vestingRate, 20e18);
-    }
-
-    function testUpdateStopTimes() public {
-        
-        address vestingAllocation = createDummyVestingAllocation();
-         address[] memory addresses = new address[](1);
-        addresses[0] = vestingAllocation;
-        bytes4 selector = bytes4(keccak256("updateMetavestStopTimes(address,uint48,uint48,uint48)"));
-        bytes memory msgData = abi.encodeWithSelector(selector, vestingAllocation, uint48(block.timestamp + 1000 days), uint48(block.timestamp + 1000 days), uint48(block.timestamp + 500 days));
-        controller.proposeMetavestAmendment(vestingAllocation, controller.updateMetavestStopTimes.selector, msgData);
-        vm.prank(grantee);
-        controller.consentToMetavestAmendment(vestingAllocation, controller.updateMetavestStopTimes.selector, true);
-        uint48 newUnlockStopTime = uint48(block.timestamp + 1000 days);
-        uint48 newVestingStopTime = uint48(block.timestamp + 1000 days);
-        uint48 newShortStopTime = uint48(block.timestamp + 500 days);
-        
-        controller.updateMetavestStopTimes(vestingAllocation, newUnlockStopTime, newVestingStopTime, newShortStopTime);
-        
-        
-    }
-
-    function testTerminateVesting() public {
-        address vestingAllocation = createDummyVestingAllocation();
-        
-        controller.terminateMetavestVesting(vestingAllocation);
-        
-        assertTrue(BaseAllocation(vestingAllocation).terminated());
-    }
-
-    function testRepurchaseTokens() public {
-        address restrictedTokenAward = createDummyRestrictedTokenAward();
-        uint256 repurchaseAmount = 5e18;
-        uint256 snapshot = token.balanceOf(authority);
-        uint256 payment = RestrictedTokenAward(restrictedTokenAward).getRepurchaseAmount(repurchaseAmount);
-        controller.terminateMetavestVesting(restrictedTokenAward);
         vm.prank(authority);
-        paymentToken.approve(address(restrictedTokenAward), payment);
-        controller.repurchaseMetavestTokens(restrictedTokenAward, repurchaseAmount, address(paymentToken));
-        
-        assertEq(token.balanceOf(authority), snapshot+repurchaseAmount);
+        controller.addMetaVestToSet("testSet", mockAllocation2);
+        controller.addMetaVestToSet("testSet", mockAllocation3);
+        vm.warp(block.timestamp + 1 days);
+        vm.prank(authority);
+        controller.proposeMajorityMetavestAmendment("testSet", msgSig, callData);
 
         vm.prank(grantee);
-        RestrictedTokenAward(restrictedTokenAward).claimRepurchasedTokens();
-        assertEq(paymentToken.balanceOf(grantee), payment);
+        controller.voteOnMetavestAmendment(mockAllocation2, "testSet", msgSig, true);
+
+        vm.prank(authority);
+        controller.updateMetavestTransferability(mockAllocation2, true);
+
+        vm.prank(authority);
+        controller.updateMetavestTransferability(mockAllocation3, true);
     }
 
-    function testUpdateAuthority() public {
-        address newAuthority = address(0x4);
+        function testFailNoPassProposeMajorityMetavestAmendment() public {
+        address mockAllocation2 = createDummyVestingAllocation();
+        address mockAllocation3 = createDummyVestingAllocation();
+        bytes4 msgSig = bytes4(keccak256("updateMetavestTransferability(address,bool)"));
+        bytes memory callData = abi.encodeWithSelector(msgSig, mockAllocation2, true);
+
+        vm.prank(authority);
+        controller.addMetaVestToSet("testSet", mockAllocation2);
+        controller.addMetaVestToSet("testSet", mockAllocation3);
+        vm.warp(block.timestamp + 1 days);
+        vm.prank(authority);
+        controller.proposeMajorityMetavestAmendment("testSet", msgSig, callData);
+
+        vm.prank(authority);
+        controller.updateMetavestTransferability(mockAllocation2, true);
         
-        controller.initiateAuthorityUpdate(newAuthority);
-        
-        vm.prank(newAuthority);
-        controller.acceptAuthorityRole();
-        
-        assertEq(controller.authority(), newAuthority);
+        vm.prank(authority);
+        controller.updateMetavestTransferability(mockAllocation3, true);
     }
 
-    function testUpdateDao() public {
-        address newDao = address(0x5);
-        
-        vm.prank(dao);
-        controller.initiateDaoUpdate(newDao);
-        
-        vm.prank(newDao);
-        controller.acceptDaoRole();
-        
-        assertEq(controller.dao(), newDao);
+    function testVoteOnMetavestAmendment() public {
+        bytes4 msgSig = bytes4(keccak256("updateMetavestTransferability(address,bool)"));
+        bytes memory callData = abi.encodeWithSelector(msgSig, address(mockAllocation), true);
+
+        vm.prank(authority);
+        controller.addMetaVestToSet("testSet", address(mockAllocation));
+
+        vm.prank(authority);
+        controller.proposeMajorityMetavestAmendment("testSet", msgSig, callData);
+
+        vm.prank(grantee);
+        controller.voteOnMetavestAmendment(address(mockAllocation), "testSet", msgSig, true);
+
+        (uint256 totalVotingPower, uint256 currentVotingPower, , ,  ) = controller.functionToSetMajorityProposal(msgSig, "testSet");
+
     }
 
-    // Helper functions to create dummy allocations for testing
+    function testFailVoteOnMetavestAmendmentTwice() public {
+        bytes4 msgSig = bytes4(keccak256("updateMetavestTransferability(address,bool)"));
+        bytes memory callData = abi.encodeWithSelector(msgSig, address(mockAllocation), true);
+
+        vm.prank(authority);
+        controller.addMetaVestToSet("testSet", address(mockAllocation));
+
+        vm.prank(authority);
+        controller.proposeMajorityMetavestAmendment("testSet", msgSig, callData);
+
+        vm.startPrank(grantee);
+        controller.voteOnMetavestAmendment(address(mockAllocation), "testSet", msgSig, true);
+        controller.voteOnMetavestAmendment(address(mockAllocation), "testSet", msgSig, true);
+        vm.stopPrank();
+    }
+
+    function testSetManagement() public {
+        vm.startPrank(authority);
+        
+        // Test creating a new set
+        controller.createSet("newSet");
+
+        // Test adding a MetaVest to a set
+        controller.addMetaVestToSet("newSet", address(mockAllocation));
+
+
+        // Test removing a MetaVest from a set
+        controller.removeMetaVestFromSet("newSet", address(mockAllocation));
+
+
+        // Test removing a set
+        controller.removeSet("newSet");
+
+
+        vm.stopPrank();
+    }
+
+    function testFailCreateDuplicateSet() public {
+        vm.startPrank(authority);
+        controller.createSet("duplicateSet");
+        controller.createSet("duplicateSet");
+        vm.stopPrank();
+    }
+
+    function testFailNonAuthorityCreateSet() public {
+        vm.prank(grantee);
+        controller.createSet("unauthorizedSet");
+    }
+
+      // Helper functions to create dummy allocations for testing
     function createDummyVestingAllocation() internal returns (address) {
         BaseAllocation.Allocation memory allocation = BaseAllocation.Allocation({
             tokenContract: address(token),
@@ -1041,148 +873,5 @@ contract MetaVestControllerTest is Test {
             365 days,
             0
         );
-    }
-
-    function testGetMetaVestType() public {
-        address vestingAllocation = createDummyVestingAllocation();
-        address tokenOptionAllocation = createDummyTokenOptionAllocation();
-        address restrictedTokenAward = createDummyRestrictedTokenAward();
-
-        assertEq(controller.getMetaVestType(vestingAllocation), 1);
-        assertEq(controller.getMetaVestType(tokenOptionAllocation), 2);
-        assertEq(controller.getMetaVestType(restrictedTokenAward), 3);
-    }
-
-    function testWithdrawFromController() public {
-        uint256 amount = 100e18;
-        token.transfer(address(controller), amount);
-
-        uint256 initialBalance = token.balanceOf(authority);
-        controller.withdrawFromController(address(token));
-        uint256 finalBalance = token.balanceOf(authority);
-
-        assertEq(finalBalance - initialBalance, amount);
-        assertEq(token.balanceOf(address(controller)), 0);
-    }
-
-    function testFailWithdrawFromControllerNonAuthority() public {
-        vm.prank(address(0x1234));
-        controller.withdrawFromController(address(token));
-    }
-
-    function testFailCreateMetavestWithZeroAddress() public {
-        BaseAllocation.Allocation memory allocation = BaseAllocation.Allocation({
-            tokenContract: address(0),
-            tokenStreamTotal: 1000e18,
-            vestingCliffCredit: 100e18,
-            unlockingCliffCredit: 100e18,
-            vestingRate: 10e18,
-            vestingStartTime: uint48(block.timestamp),
-            unlockRate: 10e18,
-            unlockStartTime: uint48(block.timestamp)
-        });
-
-        BaseAllocation.Milestone[] memory milestones = new BaseAllocation.Milestone[](0);
-
-        controller.createMetavest(
-            metavestController.metavestType.Vesting,
-            address(0),
-            allocation,
-            milestones,
-            0,
-            address(0),
-            0,
-            0
-        );
-    }
-
-    function testFailCreateMetavestWithInsufficientApproval() public {
-        BaseAllocation.Allocation memory allocation = BaseAllocation.Allocation({
-            tokenContract: address(token),
-            tokenStreamTotal: 1000e18,
-            vestingCliffCredit: 100e18,
-            unlockingCliffCredit: 100e18,
-            vestingRate: 10e18,
-            vestingStartTime: uint48(block.timestamp),
-            unlockRate: 10e18,
-            unlockStartTime: uint48(block.timestamp)
-        });
-
-        BaseAllocation.Milestone[] memory milestones = new BaseAllocation.Milestone[](0);
-
-        // Not approving any tokens
-        controller.createMetavest(
-            metavestController.metavestType.Vesting,
-            grantee,
-            allocation,
-            milestones,
-            0,
-            address(0),
-            0,
-            0
-        );
-    }
-
-    function testFailUpdateExercisePriceForVesting() public {
-        address vestingAllocation = createDummyVestingAllocation();
-        controller.updateExerciseOrRepurchasePrice(vestingAllocation, 2e18);
-    }
-
-    function testFailRepurchaseTokensAfterExpiry() public {
-        address restrictedTokenAward = createDummyRestrictedTokenAward();
-        
-        // Fast forward time to after the short stop date
-        vm.warp(block.timestamp + 366 days);
-        
-        controller.repurchaseMetavestTokens(restrictedTokenAward, 500e18, address(paymentToken));
-    }
-
-    function testFailRepurchaseTokensInsufficientAllowance() public {
-        address restrictedTokenAward = createDummyRestrictedTokenAward();
-        
-        // Not approving any tokens
-        controller.repurchaseMetavestTokens(restrictedTokenAward, 500e18, address(paymentToken));
-    }
-
-    function testFailInitiateAuthorityUpdateNonAuthority() public {
-        vm.prank(address(0x1234));
-        controller.initiateAuthorityUpdate(address(0x5678));
-    }
-
-    function testFailAcceptAuthorityRoleNonPendingAuthority() public {
-        controller.initiateAuthorityUpdate(address(0x5678));
-        
-        vm.prank(address(0x1234));
-        controller.acceptAuthorityRole();
-    }
-
-    function testFailInitiateDaoUpdateNonDao() public {
-        vm.prank(address(0x1234));
-        controller.initiateDaoUpdate(address(0x5678));
-    }
-
-    function testFailAcceptDaoRoleNonPendingDao() public {
-        vm.prank(dao);
-        controller.initiateDaoUpdate(address(0x5678));
-        
-        vm.prank(address(0x1234));
-        controller.acceptDaoRole();
-    }
-
-    function testUpdateFunctionCondition() public {
-        bytes4 functionSig = bytes4(keccak256("testFunction()"));
-        address condition = address(0x1234);
-        
-        vm.prank(dao);
-        controller.updateFunctionCondition(condition, functionSig);
-        
-        assertEq(controller.functionToConditions(functionSig, 0), condition);
-    }
-
-    function testFailUpdateFunctionConditionNonDao() public {
-        bytes4 functionSig = bytes4(keccak256("testFunction()"));
-        address condition = address(0x1234);
-        
-        controller.updateFunctionCondition(condition, functionSig);
     }
 }

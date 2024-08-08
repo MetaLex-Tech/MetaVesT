@@ -131,9 +131,10 @@ abstract contract BaseAllocation is ReentrancyGuard, SafeTransferLib{
         event MetaVesT_UnlockRateUpdated(address indexed grantee, uint208 unlockRate);
         event MetaVesT_VestingRateUpdated(address indexed grantee, uint208 vestingRate);
         event MetaVesT_Withdrawn(address indexed grantee, address indexed tokenAddress, uint256 amount);
-        event MetaVesT_PriceUpdated(address indexed grantee, uint128 exercisePrice);
+        event MetaVesT_PriceUpdated(address indexed grantee, uint256 exercisePrice);
         event MetaVesT_RepurchaseAndWithdrawal(address indexed grantee, address indexed tokenAddress, uint256 withdrawalAmount, uint256 repurchaseAmount);
         event MetaVesT_Terminated(address indexed grantee, uint256 tokensRecovered);
+        event MetaVest_GovVariablesUpdated(address indexed grantee, bool govNonwithdrawable, bool govVested, bool govUnlocked);
 
 
         struct Allocation {
@@ -150,11 +151,11 @@ abstract contract BaseAllocation is ReentrancyGuard, SafeTransferLib{
         address public grantee; // grantee of the tokens
         bool transferable; // whether grantee can transfer their MetaVesT in whole
         Milestone[] public milestones; // array of Milestone structs
-        Allocation allocation; // struct containing vesting and unlocking details
+        Allocation public allocation; // struct containing vesting and unlocking details
         uint256 public milestoneAwardTotal; // total number of tokens awarded in milestones
         uint256 public milestoneUnlockedTotal; // total number of tokens unlocked in milestones
         uint256 public tokensWithdrawn; // total number of tokens withdrawn
-        bool GovNonwithdrawable; // whether 'nonwithdrawableAmount' counts towards 'tokenGoverningPower'
+        bool GovNonwithdrawable = true; // whether 'nonwithdrawableAmount' counts towards 'tokenGoverningPower'
         bool GovVested; // whether 'tokensVested' counts towards 'tokenGoverningPower'
         bool GovUnlocked; // whether 'tokensUnlocked' counts towards 'tokenGoverningPower'
         bool public terminated;
@@ -166,6 +167,7 @@ abstract contract BaseAllocation is ReentrancyGuard, SafeTransferLib{
             if (_controller == address(0) || _grantee == address(0)) revert MetaVesT_ZeroAddress();
             grantee = _grantee;
             controller = _controller;
+            GovVested = true;
         }
 
         function getVestingType() external view virtual returns (uint256);
@@ -184,6 +186,13 @@ abstract contract BaseAllocation is ReentrancyGuard, SafeTransferLib{
         function withdraw(uint256 _amount) external virtual;// nonReentrant;
         function getMetavestDetails() public view virtual returns (Allocation memory);
         function getAmountWithdrawable() external view virtual returns (uint256);
+
+        function setGovVariables(bool _govNonwithdrawable, bool _govVested, bool _govUnlocked) external onlyController {
+            GovNonwithdrawable = _govNonwithdrawable;
+            GovVested = _govVested;
+            GovUnlocked = _govUnlocked;
+            emit MetaVest_GovVariablesUpdated(grantee, _govNonwithdrawable, _govVested, _govUnlocked);
+        }
 
         function getAuthority() public view returns (address){
             return IController(controller).authority();
