@@ -162,8 +162,8 @@ abstract contract BaseAllocation is ReentrancyGuard, SafeTransferLib{
         address[] prevOwners;
 
         constructor(address _grantee, address _controller) {
-            // REVIEW: ever a case where no controller is wanted? Immutable vest?
-            if (_controller == address(0) || _grantee == address(0)) revert MetaVesT_ZeroAddress();
+            // Controller can be 0 for an immuatable version, but grantee cannot
+            if ( _grantee == address(0)) revert MetaVesT_ZeroAddress();
             grantee = _grantee;
             controller = _controller;
             govType = GovType.vested;

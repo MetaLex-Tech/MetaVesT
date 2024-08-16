@@ -124,7 +124,6 @@ contract VestingAllocation is BaseAllocation {
                 milestonesAllocation += milestones[i].milestoneAward;
         }
         tokensToRecover = allocation.tokenStreamTotal + milestonesAllocation - getVestedTokenAmount() + tokensWithdrawn;
-        // REVIEW: must lock in the termination time rather than setting rate to 0
         terminationTime = block.timestamp;
         safeTransfer(allocation.tokenContract, getAuthority(), tokensToRecover);
         terminated = true;
