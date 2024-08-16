@@ -3,7 +3,18 @@
 pragma solidity ^0.8.18;
 
 import "forge-std/Test.sol";
-import "src/MetaVesTFactory.sol";
+import "../src/MetaVesTFactory.sol";
+import "../src/MetaVesTController.sol";
+import "../src/VestingAllocationFactory.sol";
+import "../src/TokenOptionFactory.sol";
+import "../src/RestrictedTokenFactory.sol";
+
+interface IERC20 {
+    function transfer(address recipient, uint256 amount) external returns (bool);
+    function balanceOf(address account) external view returns (uint256);
+    function approve(address spender, uint256 amount) external returns (bool);
+
+}
 
 /// @dev foundry framework testing of MetaVesTFactory.sol
 /// forge t --via-ir
@@ -12,6 +23,10 @@ import "src/MetaVesTFactory.sol";
 contract MetaVesTFactoryTest is Test {
     MetaVesTFactory internal factory;
     address factoryAddr;
+    address dai_addr = 0x3e622317f8C93f7328350cF0B56d9eD4C620C5d6;
+            VestingAllocationFactory _factory;// = new VestingAllocationFactory();
+        RestrictedTokenFactory _factory2;// = new RestrictedTokenFactory();
+        TokenOptionFactory _factory3;// = new TokenOptionFactory();
 
     event MetaVesT_Deployment(
         address newMetaVesT,
@@ -22,12 +37,61 @@ contract MetaVesTFactoryTest is Test {
     );
 
     function setUp() public {
+         _factory = new VestingAllocationFactory();
+         _factory2 = new RestrictedTokenFactory();
+         _factory3 = new TokenOptionFactory();
         factory = new MetaVesTFactory();
         factoryAddr = address(factory);
+        address _authority = address(0xa);
+
+        address _dao = address(0xB);
+        address _paymentToken = address(0xC);
+        
+        address _controller = factory.deployMetavestAndController(_authority, _dao, address(_factory), address(_factory2), address(_factory3));
     }
 
-    function testDeployMetavestAndController(address _authority, address _dao, address _paymentToken) public {
-        if (_authority == address(0) || _paymentToken == address(0)) vm.expectRevert();
-        factory.deployMetavestAndController(_authority, _dao, _paymentToken);
+    function testDeployMetavestAndController() public {
+        address _authority = address(0xa);
+        deal(dai_addr, _authority, 2000 ether);
+        address _dao = address(0xB);
+        address _paymentToken = address(0xC);
+        
+
+        address _controller = factory.deployMetavestAndController(_authority, _dao, address(_factory), address(_factory2), address(_factory3));
+        metavestController controller = metavestController(_controller);
+
+         BaseAllocation.Milestone[] memory emptyMilestones;
+               BaseAllocation.Allocation memory _metavestDetails = BaseAllocation.Allocation({
+                tokenStreamTotal: 2 ether,
+                vestingCliffCredit: 0,
+                unlockingCliffCredit: 0,
+                vestingRate: uint160(10),
+                vestingStartTime: uint48(block.timestamp),
+                unlockRate: uint160(10),
+                unlockStartTime: uint48(block.timestamp),
+                tokenContract: dai_addr
+            });
+        
+        vm.prank(_authority);
+        IERC20(dai_addr).approve(_controller, 2 ether);
+
+        vm.prank(_authority);
+        BaseAllocation vest = BaseAllocation(controller.createMetavest(metavestController.metavestType.Vesting, address(0xDA0), _metavestDetails, emptyMilestones, 0, address(0), 0));
+        console.log(controller.authority());
+        skip(10);
+        
+        vm.startPrank(address(0xDA0));
+        vest.withdraw(vest.getAmountWithdrawable());
+        skip(10);
+        vest.withdraw(vest.getAmountWithdrawable());    
     }
+
+    function testFailControllerZeroAddress() public {
+        address _authority = address(0);
+        address _dao = address(0);
+        address _paymentToken = address(0);
+        factory.deployMetavestAndController(_authority, _dao, address(0), address(0), address(0));
+    }   
+
+
 }
