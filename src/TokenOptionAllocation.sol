@@ -14,7 +14,6 @@ contract TokenOptionAllocation is BaseAllocation {
     uint256 public shortStopTime;
     uint256 public longStoptDate;
 
-
     error MetaVesT_InsufficientPaymentTokenBalance();
     //emit MetaVesT_TokenOptionExercised(msg.sender, _tokensToExercise, _tokensToExercise * tokenOption.exercisePrice);
     event MetaVesT_TokenOptionExercised(address indexed _grantee, uint256 _tokensToExercise, uint256 _paymentAmount);
@@ -25,7 +24,6 @@ contract TokenOptionAllocation is BaseAllocation {
         address _paymentToken,
         uint256 _exercisePrice,
         uint256 _shortStopDuration,
-        uint256 _longStopDate,
         Allocation memory _allocation,
         Milestone[] memory _milestones
     ) BaseAllocation(
@@ -48,8 +46,8 @@ contract TokenOptionAllocation is BaseAllocation {
         allocation.unlockStartTime = _allocation.unlockStartTime;
 
         // set token option variables
-        exercisePrice = exercisePrice;
-        longStoptDate = _longStopDate;
+        exercisePrice = _exercisePrice;
+        shortStopDuration = _shortStopDuration;
 
         paymentToken = _paymentToken;
         ipaymentToken = IERC20M(_paymentToken);
@@ -66,22 +64,20 @@ contract TokenOptionAllocation is BaseAllocation {
 
     function getGoverningPower() external view override returns (uint256) {
         uint256 governingPower;
-        if(GovNonwithdrawable)
+        if(govType==GovType.all)
         {
             uint256 totalMilestoneAward = 0;
             for(uint256 i; i < milestones.length; ++i)
-            {
+            { 
                     totalMilestoneAward += milestones[i].milestoneAward;
             }
-            governingPower = allocation.tokenStreamTotal + totalMilestoneAward;
+            governingPower = (allocation.tokenStreamTotal + totalMilestoneAward) - tokensWithdrawn;
         }
+        else if(govType==GovType.vested)
+            governingPower = tokensExercised - tokensWithdrawn;
         else 
-        {
-    //        if(GovVested)
-    //            governingPower = getVestedTokenAmount();
-    //        else if(GovUnlocked)
-    //            governingPower = _min(getVestedTokenAmount(), getUnlockedTokenAmount());
-        }
+            governingPower = _min(tokensExercised, getUnlockedTokenAmount()) - tokensWithdrawn;
+        
         return governingPower;
     }
 
@@ -92,33 +88,39 @@ contract TokenOptionAllocation is BaseAllocation {
     }
 
     function updateVestingRate(uint160 _newVestingRate) external override onlyController {
+        if(terminated) revert MetaVesT_AlreadyTerminated();
         allocation.vestingRate = _newVestingRate;
           emit MetaVesT_VestingRateUpdated(grantee, _newVestingRate);
     }
 
     function updateUnlockRate(uint160 _newUnlockRate) external override onlyController {
+        if(terminated) revert MetaVesT_AlreadyTerminated();
         allocation.unlockRate = _newUnlockRate;
         emit MetaVesT_UnlockRateUpdated(grantee, _newUnlockRate);
     }
 
-
-    function updateStopTimes(uint48 _newVestingStopTime, uint48 _newUnlockStopTime, uint48 _shortStopTime) external override onlyController {
+    function updateStopTimes(uint48 _shortStopTime) external override onlyController {
+        if(terminated) revert MetaVesT_AlreadyTerminated();
         shortStopDuration = _shortStopTime;
-        emit MetaVesT_StopTimesUpdated(grantee, _newVestingStopTime, _newUnlockStopTime, _shortStopTime);
+        emit MetaVesT_StopTimesUpdated(grantee, _shortStopTime);
     }
 
     function updatePrice(uint256 _newPrice) external onlyController {
+        if(terminated) revert MetaVesT_AlreadyTerminated();
         exercisePrice = _newPrice;
         emit MetaVesT_PriceUpdated(grantee, _newPrice);
     }
 
     function confirmMilestone(uint256 _milestoneIndex) external override nonReentrant {
+        if(terminated) revert MetaVesT_AlreadyTerminated();
         if (_milestoneIndex >= milestones.length || milestones[_milestoneIndex].complete)
             revert MetaVesT_MilestoneIndexCompletedOrDoesNotExist();
 
+        //encode the milestone index to bytes for signature verification
+        bytes memory _data = abi.encodePacked(_milestoneIndex);
         // perform any applicable condition checks, including whether 'authority' has a signatureCondition
         for (uint256 i; i < milestones[_milestoneIndex].conditionContracts.length; ++i) {
-            if (!IConditionM(milestones[_milestoneIndex].conditionContracts[i]).checkCondition())
+            if (!IConditionM(milestones[_milestoneIndex].conditionContracts[i]).checkCondition(address(this), msg.sig, _data))
                 revert MetaVesT_ConditionNotSatisfied();
         }
 
@@ -131,31 +133,38 @@ contract TokenOptionAllocation is BaseAllocation {
     }
 
     function removeMilestone(uint256 _milestoneIndex) external override onlyController {
+        if(terminated) revert MetaVesT_AlreadyTerminated();
         if (_milestoneIndex >= milestones.length) revert MetaVesT_ZeroAmount();
         delete milestones[_milestoneIndex];
     }
 
     function addMilestone(Milestone calldata _milestone) external override onlyController {
+        if(terminated) revert MetaVesT_AlreadyTerminated();
         milestones.push(_milestone);
         emit MetaVesT_MilestoneAdded(grantee, _milestone);
     }
 
-    function exerciseTokenOption(uint256 _tokensToExercise) external nonReentrant onlyGrantee {
-        if (_tokensToExercise == 0) revert MetaVesT_ZeroAmount();
-        if (_tokensToExercise > getAmountExercisable()) revert MetaVesT_MoreThanAvailable();
-        
+    function getPaymentAmount(uint256 _amount) public view returns (uint256) {
         uint8 paymentDecimals = IERC20M(paymentToken).decimals();
-        uint8 optionTokenDecimals = IERC20M(allocation.tokenContract).decimals();
+        uint8 exerciseTokenDecimals = IERC20M(allocation.tokenContract).decimals();
         
         // Calculate paymentAmount
         uint256 paymentAmount;
-        if (paymentDecimals >= optionTokenDecimals) {
-            // Case: Payment token has more or equal decimals (e.g., WETH to USDC)
-            paymentAmount = (_tokensToExercise * exercisePrice) / (10**optionTokenDecimals);
+        if (paymentDecimals >= exerciseTokenDecimals) {
+            paymentAmount = _amount * exercisePrice / (10**exerciseTokenDecimals);
         } else {
-            // Case: Payment token has fewer decimals (e.g., USDC to WETH)
-            paymentAmount = (_tokensToExercise * exercisePrice) / (10**paymentDecimals);
+            paymentAmount = _amount * exercisePrice / (10**exerciseTokenDecimals);
+            paymentAmount = paymentAmount / (10**(exerciseTokenDecimals - paymentDecimals));
         }
+        return paymentAmount;
+    }
+
+    function exerciseTokenOption(uint256 _tokensToExercise) external nonReentrant onlyGrantee {
+        if(block.timestamp>shortStopTime && terminated) revert MetaVesT_ShortStopTimeNotReached();
+        if (_tokensToExercise == 0) revert MetaVesT_ZeroAmount();
+        if (_tokensToExercise > getAmountExercisable()) revert MetaVesT_MoreThanAvailable();
+        // Calculate paymentAmount
+        uint256 paymentAmount = getPaymentAmount(_tokensToExercise);
         
         if (IERC20M(paymentToken).balanceOf(msg.sender) < paymentAmount) revert MetaVesT_InsufficientPaymentTokenBalance();
         safeTransferFrom(paymentToken, msg.sender, getAuthority(), paymentAmount);
@@ -166,13 +175,12 @@ contract TokenOptionAllocation is BaseAllocation {
     function terminate() external override onlyController nonReentrant {
         if(terminated) revert MetaVesT_AlreadyTerminated();
         
-        uint256 unfinishedMilestonesAllocation = 0;
+        uint256 milestonesAllocation = 0;
         for (uint256 i; i < milestones.length; ++i) {
-            if (!milestones[i].complete)
-                unfinishedMilestonesAllocation += milestones[i].milestoneAward;
+                milestonesAllocation += milestones[i].milestoneAward;
         }
-        uint256 tokensToRecover = allocation.tokenStreamTotal + unfinishedMilestonesAllocation - getAmountExercisable() - tokensExercised;
-        allocation.vestingRate = 0;
+        uint256 tokensToRecover = allocation.tokenStreamTotal + milestonesAllocation - getAmountExercisable() - tokensExercised + tokensWithdrawn;
+        terminationTime = block.timestamp;
         shortStopTime = block.timestamp + shortStopDuration;
         safeTransfer(allocation.tokenContract, getAuthority(), tokensToRecover);
         terminated = true;
@@ -202,32 +210,35 @@ contract TokenOptionAllocation is BaseAllocation {
     }
 
     function getAmountExercisable() public view returns (uint256) {
-        uint256 _tokensVested = 0;
-         uint256 _timeElapsedSinceVest = block.timestamp - allocation.vestingStartTime;
+        if(block.timestamp<allocation.vestingStartTime || (block.timestamp>shortStopTime && shortStopTime>0))
+            return 0;
 
-        if(block.timestamp>shortStopTime && shortStopTime>0)
-            _tokensVested = 0;
-        else {
-            _tokensVested = (_timeElapsedSinceVest * allocation.vestingRate);
-            if(block.timestamp>allocation.vestingStartTime)
-                _tokensVested += allocation.vestingCliffCredit;
-        }
+        uint256 _timeElapsedSinceVest = block.timestamp - allocation.vestingStartTime;
+        if(terminated)
+            _timeElapsedSinceVest = terminationTime - allocation.vestingStartTime;
 
+        uint256 _tokensVested = (_timeElapsedSinceVest * allocation.vestingRate) + allocation.vestingCliffCredit;
+
+        if(_tokensVested>allocation.tokenStreamTotal) 
+            _tokensVested = allocation.tokenStreamTotal;
+    
         return _tokensVested + milestoneAwardTotal - tokensExercised;
     }
 
-    function getAmountWithdrawable() public view override returns (uint256) {
-
-        uint256 _tokensUnlocked = 0;
+    function getUnlockedTokenAmount() public view returns (uint256) {
+        if(block.timestamp<allocation.unlockStartTime)
+            return 0;
         uint256 _timeElapsedSinceUnlock = block.timestamp - allocation.unlockStartTime;
+        uint256 _tokensUnlocked = (_timeElapsedSinceUnlock * allocation.unlockRate) + allocation.unlockingCliffCredit;
+    
+        if(_tokensUnlocked>allocation.tokenStreamTotal) 
+            _tokensUnlocked = allocation.tokenStreamTotal;
 
+        return _tokensUnlocked + milestoneUnlockedTotal;
+    }
 
-        _tokensUnlocked = (_timeElapsedSinceUnlock * allocation.unlockRate) + milestoneUnlockedTotal;
-        if(block.timestamp>allocation.unlockStartTime)
-            _tokensUnlocked += allocation.unlockingCliffCredit;
-        
-        _tokensUnlocked += milestoneAwardTotal;
-
+    function getAmountWithdrawable() public view override returns (uint256) {
+        uint256 _tokensUnlocked = getUnlockedTokenAmount();
         return _min(tokensExercised, _tokensUnlocked) - tokensWithdrawn;
     }
 

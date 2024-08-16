@@ -14,8 +14,7 @@ contract RestrictedTokenFactory is IAllocationFactory {
         RestrictedTokenAward.Milestone[] memory _milestones,
         address _paymentToken,
         uint256 _exercisePrice,
-        uint256 _shortStopDuration,
-        uint256 _longStopDate
+        uint256 _shortStopDuration
     ) external returns (address) {
        if (_allocationType == AllocationType.RestrictedToken) {
             return address(new RestrictedTokenAward(_grantee, _controller, _paymentToken, _exercisePrice, _shortStopDuration, _allocation, _milestones));

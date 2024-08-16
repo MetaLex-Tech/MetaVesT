@@ -72,21 +72,23 @@ contract metavestController is SafeTransferLib {
     /// @notice tracks if an address has voted for an amendment by mapping a hash of the pertinent details to time they last voted for these details (voter, function and affected grantee)
     mapping(bytes32 => uint256) internal _lastVoted;
 
-    /// @notice maps a token contract address to each of its grantees
-    mapping(address => address[]) internal _tokenGrantees;
-
     ///
     /// EVENTS
     ///
 
-    event MetaVesTController_AmendmentConsentUpdated(bytes4 msgSig, address grantee, bool inFavor);
-    event MetaVesTController_AmendmentProposed(address grant, bytes4 msgSig);
-    event MetaVesTController_AuthorityUpdated(address newAuthority);
-    event MetaVesTController_ConditionUpdated(address condition, bytes4 functionSig);
+    event MetaVesTController_AmendmentConsentUpdated(bytes4 indexed msgSig, address indexed grantee, bool inFavor);
+    event MetaVesTController_AmendmentProposed(address indexed grant, bytes4 msgSig);
+    event MetaVesTController_AuthorityUpdated(address indexed newAuthority);
+    event MetaVesTController_ConditionUpdated(address indexed condition, bytes4 functionSig);
     event MetaVesTController_DaoUpdated(address newDao);
-    event MetaVesTController_MetaVesTDeployed(address metavest);
-    event MetaVesTController_MetaVesTCreated(address grantee, address allocationAddress, uint256 totalAmount);
-    event MetaVesTController_MajorityAmendmentProposed(string set, bytes4 msgSig, bytes callData);
+    event MetaVesTController_MetaVesTDeployed(address indexed metavest);
+    event MetaVesTController_MetaVesTCreated(address indexed grantee, address allocationAddress, uint256 totalAmount);
+    event MetaVesTController_MajorityAmendmentProposed(string indexed set, bytes4 msgSig, bytes callData);
+    event MetaVesTController_MajorityAmendmentConsentUpdated(string indexed set, bytes4 msgSig, address grantee, bool inFavor);
+    event MetaVesTController_SetCreated(string indexed set);
+    event MetaVesTController_SetRemoved(string indexed set);
+    event MetaVesTController_AddressAddedToSet(string set, address indexed grantee);
+    event MetaVesTController_AddressRemovedFromSet(string set, address indexed grantee);
 
     ///
     /// ERRORS
@@ -128,7 +130,7 @@ contract metavestController is SafeTransferLib {
     modifier conditionCheck() {
         address[] memory conditions = functionToConditions[msg.sig];
         for (uint256 i; i < conditions.length; ++i) {
-            if (!IConditionM(conditions[i]).checkCondition()) {
+            if (!IConditionM(conditions[i]).checkCondition(address(this), msg.sig, "")) {
                 revert MetaVesTController_ConditionNotSatisfied(conditions[i]);
             }
         }
@@ -139,10 +141,13 @@ contract metavestController is SafeTransferLib {
         if (isMetavestInSet(_grant)) {
             string memory set = getSetOfMetavest(_grant);
             MajorityAmendmentProposal memory proposal = functionToSetMajorityProposal[msg.sig][set];
-
-            if (!proposal.isPending || proposal.totalVotingPower>proposal.currentVotingPower*2 || keccak256(_data[_data.length - 32:]) != proposal.dataHash ) {
-                revert MetaVesTController_AmendmentNeitherMutualNorMajorityConsented();
+            if (_data.length>32)
+            {
+                if (!proposal.isPending || proposal.totalVotingPower>proposal.currentVotingPower*2 || keccak256(_data[_data.length - 32:]) != proposal.dataHash ) {
+                    revert MetaVesTController_AmendmentNeitherMutualNorMajorityConsented();
+                }
             }
+            else revert MetaVesTController_AmendmentNeitherMutualNorMajorityConsented();
         } else {
             AmendmentProposal memory proposal = functionToGranteeToAmendmentPending[msg.sig][_grant];
             if (!proposal.inFavor || proposal.dataHash != keccak256(_data)) {
@@ -151,7 +156,6 @@ contract metavestController is SafeTransferLib {
         }
         _;
     }
-
 
     modifier onlyAuthority() {
         if (msg.sender != authority) revert MetaVesTController_OnlyAuthority();
@@ -193,14 +197,25 @@ contract metavestController is SafeTransferLib {
     /// @param _condition address of the applicable Condition contract-- pass address(0) to remove the requirement for '_functionSig'
     /// @param _functionSig signature of the function which is having its condition requirement updated
     function updateFunctionCondition(address _condition, bytes4 _functionSig) external onlyDao {
-        // indexed address may be replaced can be up to the length of the array (and thus adds a new array member if == length)
-        // REVIEW: should revert if it does nothing (i.e. index is too large).
+        //call check condition to ensure the condition is valid
+        IConditionM(_condition).checkCondition(address(this), msg.sig, "");
         functionToConditions[_functionSig].push(_condition);
-        // REVIEW: should require `_condition` implements an interface with ERC165 check.
         emit MetaVesTController_ConditionUpdated(_condition, _functionSig);
     }
 
-    function createMetavest(metavestType _type, address _grantee,  BaseAllocation.Allocation calldata _allocation, BaseAllocation.Milestone[] calldata _milestones, uint256 _exercisePrice, address _paymentToken,  uint256 _shortStopDuration, uint256 _longStopDate) external onlyAuthority conditionCheck returns (address)
+    function removeFunctionCondition(address _condition, bytes4 _functionSig) external onlyDao {
+        address[] storage conditions = functionToConditions[_functionSig];
+        for (uint256 i; i < conditions.length; ++i) {
+            if (conditions[i] == _condition) {
+                conditions[i] = conditions[conditions.length - 1];
+                conditions.pop();
+                break;
+            }
+        }
+        emit MetaVesTController_ConditionUpdated(_condition, _functionSig);
+    }
+
+    function createMetavest(metavestType _type, address _grantee,  BaseAllocation.Allocation calldata _allocation, BaseAllocation.Milestone[] calldata _milestones, uint256 _exercisePrice, address _paymentToken,  uint256 _shortStopDuration) external onlyAuthority conditionCheck returns (address)
     {
         address newMetavest;
         if(_type == metavestType.Vesting)
@@ -209,7 +224,7 @@ contract metavestController is SafeTransferLib {
         }
         else if(_type == metavestType.TokenOption)
         {
-            newMetavest = createTokenOptionAllocation(_grantee, _exercisePrice, _paymentToken, _shortStopDuration, _longStopDate, _allocation, _milestones);
+            newMetavest = createTokenOptionAllocation(_grantee, _exercisePrice, _paymentToken, _shortStopDuration, _allocation, _milestones);
         }
         else if(_type == metavestType.RestrictedTokenAward)
         {
@@ -265,7 +280,6 @@ contract metavestController is SafeTransferLib {
             address _paymentToken,
             uint256 _exercisePrice,
             uint256 _shortStopDuration,
-            uint256 _longStopDate,
             VestingAllocation.Allocation calldata _allocation,
             VestingAllocation.Milestone[] calldata _milestones
         ) internal returns (address) {
@@ -277,8 +291,7 @@ contract metavestController is SafeTransferLib {
                 _milestones,
                 _paymentToken,
                 _exercisePrice,
-                _shortStopDuration,
-                _longStopDate
+                _shortStopDuration
             );
         }
 
@@ -298,38 +311,20 @@ contract metavestController is SafeTransferLib {
                 _milestones,
                 _paymentToken,
                 _repurchasePrice,
-                _shortStopDuration,
-                0
+                _shortStopDuration
             );
         }
 
 
     function createVestingAllocation(address _grantee, VestingAllocation.Allocation calldata _allocation, VestingAllocation.Milestone[] calldata _milestones) internal conditionCheck returns (address){
-        if (_grantee == address(0) || _allocation.tokenContract == address(0))
-            revert MetaVesTController_ZeroAddress();
-        if (
-            _allocation.vestingCliffCredit > _allocation.tokenStreamTotal ||
-            _allocation.unlockingCliffCredit > _allocation.tokenStreamTotal
-        ) revert MetaVesTController_CliffGreaterThanTotal();
-
-        uint256 _milestoneTotal;
-        if (_milestones.length != 0) {
-            // limit array length
-            if (_milestones.length > ARRAY_LENGTH_LIMIT) revert MetaVesTController_LengthMismatch();
-
-            for (uint256 i; i < _milestones.length; ++i) {
-                if (_milestones[i].conditionContracts.length > ARRAY_LENGTH_LIMIT)
-                    revert MetaVesTController_LengthMismatch();
-                _milestoneTotal += _milestones[i].milestoneAward;
-            }
-        }
+        //hard code values not to trigger the failure for the 2 parameters that don't matter for this type of allocation
+        validateInputParameters(_grantee, address(this), 1, _allocation);
+        validateAllocation(_allocation);
+        uint256 _milestoneTotal = validateAndCalculateMilestones(_milestones);
 
         uint256 _total = _allocation.tokenStreamTotal + _milestoneTotal;
         if (_total == 0) revert MetaVesTController_ZeroAmount();
-        if (
-            IERC20M(_allocation.tokenContract).allowance(authority, address(this)) < _total ||
-            IERC20M(_allocation.tokenContract).balanceOf(authority) < _total
-        ) revert MetaVesTController_AmountNotApprovedForTransferFrom();
+        validateTokenApprovalAndBalance(_allocation.tokenContract, _total);
 
         address vestingAllocation = IAllocationFactory(vestingFactory).createAllocation(
             IAllocationFactory.AllocationType.Vesting,
@@ -339,7 +334,6 @@ contract metavestController is SafeTransferLib {
             _milestones,
             address(0),
             0,
-            0,
             0
         );
         safeTransferFrom(_allocation.tokenContract, authority, vestingAllocation, _total);
@@ -348,7 +342,7 @@ contract metavestController is SafeTransferLib {
         return vestingAllocation;
     }
 
-    function createTokenOptionAllocation(address _grantee, uint256 _exercisePrice, address _paymentToken,  uint256 _shortStopDuration, uint256 _longStopDate, VestingAllocation.Allocation calldata _allocation, VestingAllocation.Milestone[] calldata _milestones) internal conditionCheck returns (address) {
+    function createTokenOptionAllocation(address _grantee, uint256 _exercisePrice, address _paymentToken,  uint256 _shortStopDuration, VestingAllocation.Allocation calldata _allocation, VestingAllocation.Milestone[] calldata _milestones) internal conditionCheck returns (address) {
         
         validateInputParameters(_grantee, _paymentToken, _exercisePrice, _allocation);
         validateAllocation(_allocation);
@@ -363,7 +357,6 @@ contract metavestController is SafeTransferLib {
                 _paymentToken,
                 _exercisePrice,
                 _shortStopDuration,
-                _longStopDate,
                 _allocation,
                 _milestones
             );
@@ -396,12 +389,9 @@ contract metavestController is SafeTransferLib {
             return restrictedTokenAward;
         }
     
-
-
     function getMetaVestType(address _grant) public view returns (uint256) {
         return BaseAllocation(_grant).getVestingType();
     }
-
 
     /// @notice for 'authority' to withdraw tokens from this controller (i.e. which it has withdrawn from 'metavest', typically 'paymentToken')
     /// @param _tokenContract contract address of the token which is being withdrawn
@@ -411,14 +401,6 @@ contract metavestController is SafeTransferLib {
 
         safeTransfer(_tokenContract, authority, _balance);
     }
-
-    /*/// @notice convenience function for any address to initiate a 'withdrawAll' from 'metavest' on behalf of this controller, to this controller. Typically for 'paymentToken'
-    /// @dev 'withdrawAll' in MetaVesT will revert if 'controller' has an 'amountWithdrawable' of 0; for 'authority' to withdraw its own 'amountWithdrawable', it must call
-    /// 'withdrawAll' directly in 'metavest'. No 'conditionCheck' necessary since it is present in 'withdrawFromController'
-    /// @param _tokenContract contract address of the token which is being withdrawn
-    function withdrawAllFromMetavestToController(address _tokenContract) external {
-        imetavest.withdrawAll(_tokenContract);
-    }*/
 
     /// @notice for 'authority' to toggle whether '_grantee''s MetaVesT is transferable-- does not revoke previous transfers, but does cause such transferees' MetaVesTs transferability to be similarly updated
     /// @param _grant address whose MetaVesT's (and whose transferees' MetaVesTs') transferability is being updated
@@ -470,7 +452,6 @@ contract metavestController is SafeTransferLib {
 
         // send the new milestoneAward to 'metavest'
         safeTransferFrom(_tokenContract, msg.sender, _grant, _milestone.milestoneAward);
-
         BaseAllocation(_grant).addMilestone(_milestone);
     }
 
@@ -501,17 +482,13 @@ contract metavestController is SafeTransferLib {
     /// @notice for authority to update a MetaVesT's stopTime and/or shortStopTime, as applicable (including any transferees)
     /// @dev if '_shortStopTime' has already occurred, it will be ignored in MetaVest.sol. Allows stop times before block.timestamp to enable accelerated schedules.
     /// @param _grant address of grantee whose MetaVesT is being updated
-    /// @param _unlockStopTime the end of the linear unlock
-    /// @param _vestingStopTime if allocation this is the end of the linear vesting; if token option or restricted token award this is the 'long stop time'
     /// @param _shortStopTime if token option, vesting stop time and exercise deadline; if restricted token award, lapse stop time and repurchase deadline -- must be <= vestingStopTime
     function updateMetavestStopTimes(
         address _grant,
-        uint48 _unlockStopTime,
-        uint48 _vestingStopTime,
         uint48 _shortStopTime
     ) external onlyAuthority conditionCheck consentCheck(_grant, msg.data) {
         _resetAmendmentParams(_grant, msg.sig);
-        BaseAllocation(_grant).updateStopTimes(_vestingStopTime, _unlockStopTime, _shortStopTime);
+        BaseAllocation(_grant).updateStopTimes(_shortStopTime);
     }
 
     /// @notice for 'authority' to irrevocably terminate (stop) this '_grantee''s vesting (including transferees), but preserving the unlocking schedule for any already-vested tokens, so their MetaVesT is not deleted
@@ -522,32 +499,8 @@ contract metavestController is SafeTransferLib {
         BaseAllocation(_grant).terminate();
     }
 
-    function setMetaVestGovVariables(address _grant, bool _govNonwithdrawable, bool _govVested, bool _govUnlocked) external onlyAuthority consentCheck(_grant, msg.data){
-        BaseAllocation(_grant).setGovVariables(_govNonwithdrawable, _govVested, _govUnlocked);
-    }
-    /// @notice for 'authority' to repurchase tokens from a restricted token award MetaVesT
-    /// @dev does not require '_grantee' consent nor condition check; note that for transferees of transferees of this '_grantee',
-    /// 'authority' will need to initiate another repurchase (which is not subject to consent or condition checks)
-    /// @param _grant address whose MetaVesT is subject to the repurchase
-    /// @param _amount divisor corresponding to the fraction of _grantee's repurchasable tokens being repurchased by 'authority'; to repurchase the full available amount, submit '1'
-    function repurchaseMetavestTokens(address _grant, uint256 _amount, address _paymentToken) external onlyAuthority {
-        if(BaseAllocation(_grant).getVestingType()!=3) revert MetaVesTController_IncorrectMetaVesTType();
-      
-
-        RestrictedTokenAward rta = RestrictedTokenAward(_grant);
-        if(_paymentToken != rta.paymentToken()) revert MetaVesTController_ZeroAddress();
-        if (rta.getAmountRepurchasable() == 0 || _amount == 0) revert MetaVesTController_ZeroAmount();
-        if (block.timestamp >= rta.shortStopDate()) revert MetaVesTController_RepurchaseExpired();
-
-        uint256 _payment = _amount * rta.repurchasePrice();
-        if (
-            IERC20M(_paymentToken).allowance(msg.sender, _grant) < _payment ||
-            IERC20M(_paymentToken).balanceOf(msg.sender) < _payment
-        ) revert MetaVesT_AmountNotApprovedForTransferFrom();
-
-        // REVIEW: deleted duplicate transfer here. `repurchaseTokens` will transfer the tokens from the authority.
-        // REVIEW: repurchasePrice is likely to be a fraction - need to multiply by something to facilitate
-        rta.repurchaseTokens(_amount);
+    function setMetaVestGovVariables(address _grant, BaseAllocation.GovType _govType) external onlyAuthority consentCheck(_grant, msg.data){
+        BaseAllocation(_grant).setGovVariables(_govType);
     }
 
     /// @notice allows the 'authority' to propose a replacement to their address. First step in two-step address change, as '_newAuthority' will subsequently need to call 'acceptAuthorityRole()'
@@ -562,10 +515,8 @@ contract metavestController is SafeTransferLib {
     /// @dev access restricted to the address stored as '_pendingauthority' to accept the two-step change. Transfers 'authority' role to the caller (reflected in 'metavest') and deletes '_pendingauthority' to reset.
     function acceptAuthorityRole() external {
         if (msg.sender != _pendingAuthority) revert MetaVesTController_OnlyPendingAuthority();
-
         delete _pendingAuthority;
         authority = msg.sender;
-
         emit MetaVesTController_AuthorityUpdated(msg.sender);
     }
 
@@ -582,10 +533,8 @@ contract metavestController is SafeTransferLib {
     /// no 'conditionCheck' necessary as it more properly contained in 'initiateAuthorityUpdate'
     function acceptDaoRole() external {
         if (msg.sender != _pendingDao) revert MetaVesTController_OnlyPendingDao();
-
         delete _pendingDao;
         dao = msg.sender;
-
         emit MetaVesTController_DaoUpdated(msg.sender);
     }
 
@@ -597,9 +546,6 @@ contract metavestController is SafeTransferLib {
         bytes4 _msgSig,
         bytes memory _callData
     ) external onlyAuthority {
-       
-            BaseAllocation.Allocation memory _metavest = BaseAllocation(_grant).getMetavestDetails();
-
             //override existing amendment if it exists
             functionToGranteeToAmendmentPending[_msgSig][_grant] = AmendmentProposal(
                 true,
@@ -638,18 +584,15 @@ contract metavestController is SafeTransferLib {
     }
 
     /// @notice for a grantees to vote upon a metavest update for which they share a common amount of 'tokenGoverningPower'
-    /// @dev each call refreshes the total 'tokenGoverningPower' for the applicable token (by iterating through the '_tokenGrantees' array), so the tracker of votes in favor calculates the percentage in
-    /// favor ('functionToGranteeToPercentageInFavor') -- if a call causes this to surpass the 'BUFFER_FIFTY_PERCENT', the 'functionToGranteeMajorityConsent' is updated to true
-    /// so the applicable function may be called by 'authority'
     /// @param _msgSig function signature of the function in this controller which (if successfully executed) will execute the metavest detail update
     /// @param _inFavor whether msg.sender is in favor of the applicable amendment
     function voteOnMetavestAmendment(address _grant, string memory _setName, bytes4 _msgSig, bool _inFavor) external {
 
         if(BaseAllocation(_grant).grantee() != msg.sender) revert MetaVesTController_OnlyGrantee();
-        uint256 _callerPower =  BaseAllocation(_grant).getGoverningPower();
-        
+        if (!functionToSetMajorityProposal[_msgSig][_setName].isPending) revert MetaVesTController_NoPendingAmendment(_msgSig, _grant);
         if (!_checkFunctionToTokenToAmendmentTime(_msgSig, _setName))
             revert MetaVesTController_ProposedAmendmentExpired();
+        uint256 _callerPower =  BaseAllocation(_grant).getGoverningPower();
 
         metavestController.MajorityAmendmentProposal storage proposal = functionToSetMajorityProposal[_msgSig][_setName];
         
@@ -682,6 +625,7 @@ contract metavestController is SafeTransferLib {
         //check string length does not exceed 256 characters
         if (bytes(_name).length > 512) revert MetaVesTController_StringTooLong();
         setNames.push(_name);
+        emit MetaVesTController_SetCreated(_name);
     }
 
     function removeSet(string memory _name) external onlyAuthority {
@@ -689,6 +633,7 @@ contract metavestController is SafeTransferLib {
             if (keccak256(bytes(setNames[i])) == keccak256(bytes(_name))) {
                 setNames[i] = setNames[setNames.length - 1];
                 setNames.pop();
+                emit MetaVesTController_SetRemoved(_name);
                 return;
             }
         }
@@ -723,7 +668,6 @@ contract metavestController is SafeTransferLib {
         if(!doesSetExist(_name)) revert MetaVesTController_SetDoesNotExist();
         if(isMetavestInSet(_metaVest)) revert MetaVesTController_MetaVesTAlreadyExists();
         sets[_name].push(_metaVest);
-        // REVIEW: should emit an event here
     }
 
     function removeMetaVestFromSet(string memory _name, address _metaVest) external onlyAuthority {
@@ -732,7 +676,6 @@ contract metavestController is SafeTransferLib {
             if (sets[_name][i] == _metaVest) {
                 sets[_name][i] = sets[_name][sets[_name].length - 1];
                 sets[_name].pop();
-                 // REVIEW: should emit an event here
                 return;
             }
         }

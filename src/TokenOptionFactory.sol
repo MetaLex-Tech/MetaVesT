@@ -14,11 +14,10 @@ contract TokenOptionFactory is IAllocationFactory {
         TokenOptionAllocation.Milestone[] memory _milestones,
         address _paymentToken,
         uint256 _exercisePrice,
-        uint256 _shortStopDuration,
-        uint256 _longStopDate
+        uint256 _shortStopDuration
     ) external returns (address) {
          if (_allocationType == AllocationType.TokenOption) {
-            return address(new TokenOptionAllocation(_grantee, _controller, _paymentToken, _exercisePrice, _shortStopDuration, _longStopDate, _allocation, _milestones));
+            return address(new TokenOptionAllocation(_grantee, _controller, _paymentToken, _exercisePrice, _shortStopDuration, _allocation, _milestones));
         } else {
             revert("AllocationFactory: invalid allocation type");
         }

@@ -41,8 +41,7 @@ contract VestingAllocation is BaseAllocation {
     }
 
     function getGoverningPower() external view override returns (uint256 governingPower) {
-
-        if(GovNonwithdrawable)
+        if(govType==GovType.all)
         {
             uint256 totalMilestoneAward = 0;
             for(uint256 i; i < milestones.length; ++i)
@@ -51,13 +50,11 @@ contract VestingAllocation is BaseAllocation {
             }
             governingPower = (allocation.tokenStreamTotal + totalMilestoneAward) - tokensWithdrawn;
         }
+        else if(govType==GovType.vested)
+             governingPower = getVestedTokenAmount() - tokensWithdrawn;
         else 
-        {
-            if(GovVested)
-                governingPower = getVestedTokenAmount();
-            else if(GovUnlocked)
-                governingPower = _min(getVestedTokenAmount(), getUnlockedTokenAmount());
-        }
+            governingPower = _min(getVestedTokenAmount(), getUnlockedTokenAmount()) - tokensWithdrawn;
+        
         return governingPower;
     }
 
@@ -67,46 +64,54 @@ contract VestingAllocation is BaseAllocation {
     }
 
     function updateVestingRate(uint160 _newVestingRate) external override onlyController {
+        if(terminated) revert MetaVesT_AlreadyTerminated();
         allocation.vestingRate = _newVestingRate;
         emit MetaVesT_VestingRateUpdated(grantee, _newVestingRate);
     }
 
     function updateUnlockRate(uint160 _newUnlockRate) external override onlyController {
+        if(terminated) revert MetaVesT_AlreadyTerminated();
         allocation.unlockRate = _newUnlockRate;
         emit MetaVesT_UnlockRateUpdated(grantee, _newUnlockRate);
     }
 
-    function updateStopTimes(uint48 _newVestingStopTime, uint48 _newUnlockStopTime, uint48 _shortStopTime) external override onlyController {
-        emit MetaVesT_StopTimesUpdated(grantee, _newVestingStopTime, _newUnlockStopTime, 0);
+    function updateStopTimes(uint48 _shortStopTime) external override onlyController {
+        if(terminated) revert MetaVesT_AlreadyTerminated();
+        revert MetaVesT_ConditionNotSatisfied();
     }
 
     // REVIEW: Does this need onlyAuthority or some other access limitation? How is a signature condition done?
     function confirmMilestone(uint256 _milestoneIndex) external override nonReentrant {
-        // REVIEW: hold milestone in memory for gas efficiency
-        if (_milestoneIndex >= milestones.length || milestones[_milestoneIndex].complete)
+        if(terminated) revert MetaVesT_AlreadyTerminated();
+        Milestone storage milestone = milestones[_milestoneIndex];
+        if (_milestoneIndex >= milestones.length || milestone.complete)
             revert MetaVesT_MilestoneIndexCompletedOrDoesNotExist();
-
+        
+        //encode the milestone index to bytes for signature verification
+        bytes memory _data = abi.encodePacked(_milestoneIndex);
         // perform any applicable condition checks, including whether 'authority' has a signatureCondition
-        for (uint256 i; i < milestones[_milestoneIndex].conditionContracts.length; ++i) {
-            if (!IConditionM(milestones[_milestoneIndex].conditionContracts[i]).checkCondition())
+        for (uint256 i; i < milestone.conditionContracts.length; ++i) {
+            if (!IConditionM(milestone.conditionContracts[i]).checkCondition(address(this), msg.sig, _data))
                 revert MetaVesT_ConditionNotSatisfied();
         }
 
-        milestones[_milestoneIndex].complete = true;
-        milestoneAwardTotal += milestones[_milestoneIndex].milestoneAward;
-        if(milestones[_milestoneIndex].unlockOnCompletion)
-            milestoneUnlockedTotal += milestones[_milestoneIndex].milestoneAward;
+        milestone.complete = true;
+        milestoneAwardTotal += milestone.milestoneAward;
+        if(milestone.unlockOnCompletion)
+            milestoneUnlockedTotal += milestone.milestoneAward;
      
         emit MetaVesT_MilestoneCompleted(grantee, _milestoneIndex);
     }
 
     function removeMilestone(uint256 _milestoneIndex) external override onlyController {
+        if(terminated) revert MetaVesT_AlreadyTerminated();
         if (_milestoneIndex >= milestones.length) revert MetaVesT_ZeroAmount();
         delete milestones[_milestoneIndex];
         emit MetaVesT_MilestoneRemoved(grantee, _milestoneIndex);
     }
 
     function addMilestone(Milestone calldata _milestone) external override onlyController {
+        if(terminated) revert MetaVesT_AlreadyTerminated();
         milestones.push(_milestone);
         emit MetaVesT_MilestoneAdded(grantee, _milestone);
     }
@@ -114,13 +119,13 @@ contract VestingAllocation is BaseAllocation {
     function terminate() external override onlyController nonReentrant {
         if(terminated) revert MetaVesT_AlreadyTerminated();
         uint256 tokensToRecover = 0;
-        uint256 unfinishedMilestonesAllocation = 0;
+        uint256 milestonesAllocation = 0;
         for (uint256 i; i < milestones.length; ++i) {
-            if (!milestones[i].complete)
-                unfinishedMilestonesAllocation += milestones[i].milestoneAward;
+                milestonesAllocation += milestones[i].milestoneAward;
         }
-        tokensToRecover = allocation.tokenStreamTotal + unfinishedMilestonesAllocation - getVestedTokenAmount();
-        allocation.vestingRate = 0;
+        tokensToRecover = allocation.tokenStreamTotal + milestonesAllocation - getVestedTokenAmount() + tokensWithdrawn;
+        // REVIEW: must lock in the termination time rather than setting rate to 0
+        terminationTime = block.timestamp;
         safeTransfer(allocation.tokenContract, getAuthority(), tokensToRecover);
         terminated = true;
         emit MetaVesT_Terminated(grantee, tokensToRecover);
@@ -143,41 +148,29 @@ contract VestingAllocation is BaseAllocation {
     }
 
     function getVestedTokenAmount() public view returns (uint256) {
-        uint256 _tokensVested = 0;
         if(block.timestamp<allocation.vestingStartTime)
             return 0;
         uint256 _timeElapsedSinceVest = block.timestamp - allocation.vestingStartTime;
+        if(terminated)
+            _timeElapsedSinceVest = terminationTime - allocation.vestingStartTime;
 
-            _tokensVested = (_timeElapsedSinceVest * allocation.vestingRate);
-
-            if(block.timestamp>allocation.vestingStartTime)
-                _tokensVested += allocation.vestingCliffCredit;
+           uint256 _tokensVested = (_timeElapsedSinceVest * allocation.vestingRate) + allocation.vestingCliffCredit;
 
             if(_tokensVested>allocation.tokenStreamTotal) 
                 _tokensVested = allocation.tokenStreamTotal;
-
-             _tokensVested += milestoneAwardTotal;
-        
-        return _tokensVested;
+        return _tokensVested += milestoneAwardTotal;
     }
 
     function getUnlockedTokenAmount() public view returns (uint256) {
-        uint256 _tokensUnlocked = 0;
         if(block.timestamp<allocation.unlockStartTime)
             return 0;
         uint256 _timeElapsedSinceUnlock = block.timestamp - allocation.unlockStartTime;
-
-        _tokensUnlocked = (_timeElapsedSinceUnlock * allocation.unlockRate);
-
-        if(block.timestamp>allocation.unlockStartTime)
-            _tokensUnlocked += allocation.unlockingCliffCredit;
+        uint256 _tokensUnlocked = (_timeElapsedSinceUnlock * allocation.unlockRate) + allocation.unlockingCliffCredit;
 
         if(_tokensUnlocked>allocation.tokenStreamTotal) 
             _tokensUnlocked = allocation.tokenStreamTotal;
 
-        _tokensUnlocked += milestoneUnlockedTotal;
-
-        return _tokensUnlocked;
+        return _tokensUnlocked += milestoneUnlockedTotal;
     }
 
     function getAmountWithdrawable() public view override returns (uint256) {

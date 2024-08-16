@@ -8,7 +8,7 @@ interface IBaseAllocation {
     function updateTransferability(bool _transferable) external;
     function updateVestingRate(uint160 _newVestingRate) external;
     function updateUnlockRate(uint160 _newUnlockRate) external;
-    function updateStopTimes(uint48 _newVestingStopTime, uint48 _newUnlockStopTime, uint48 _shortStopTime) external;
+    function updateStopTimes(uint48 _shortStopTime) external;
     function confirmMilestone(uint256 _milestoneIndex) external;
     function removeMilestone(uint256 _milestoneIndex) external;
     function addMilestone(IBaseAllocation.Milestone calldata _milestone) external;

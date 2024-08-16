@@ -19,7 +19,6 @@ interface IAllocationFactory {
         VestingAllocation.Milestone[] memory _milestones,
         address _paymentToken,
         uint256 _exercisePrice,
-        uint256 _shortStopDuration,
-        uint256 _longStopDate
+        uint256 _shortStopDuration
     ) external returns (address);
 }

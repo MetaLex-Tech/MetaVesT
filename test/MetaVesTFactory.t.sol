@@ -40,8 +40,14 @@ contract MetaVesTFactoryTest is Test {
          _factory = new VestingAllocationFactory();
          _factory2 = new RestrictedTokenFactory();
          _factory3 = new TokenOptionFactory();
-        factory = new MetaVesTFactory(address(_factory), address(_factory2), address(_factory3), address(this));
+        factory = new MetaVesTFactory();
         factoryAddr = address(factory);
+        address _authority = address(0xa);
+
+        address _dao = address(0xB);
+        address _paymentToken = address(0xC);
+        
+        address _controller = factory.deployMetavestAndController(_authority, _dao, address(_factory), address(_factory2), address(_factory3));
     }
 
     function testDeployMetavestAndController() public {
@@ -51,7 +57,7 @@ contract MetaVesTFactoryTest is Test {
         address _paymentToken = address(0xC);
         
 
-        address _controller = factory.deployMetavestAndController(_authority, _dao);
+        address _controller = factory.deployMetavestAndController(_authority, _dao, address(_factory), address(_factory2), address(_factory3));
         metavestController controller = metavestController(_controller);
 
          BaseAllocation.Milestone[] memory emptyMilestones;
@@ -70,7 +76,7 @@ contract MetaVesTFactoryTest is Test {
         IERC20(dai_addr).approve(_controller, 2 ether);
 
         vm.prank(_authority);
-        BaseAllocation vest = BaseAllocation(controller.createMetavest(metavestController.metavestType.Vesting, address(0xDA0), _metavestDetails, emptyMilestones, 0, address(0), 0, 0));
+        BaseAllocation vest = BaseAllocation(controller.createMetavest(metavestController.metavestType.Vesting, address(0xDA0), _metavestDetails, emptyMilestones, 0, address(0), 0));
         console.log(controller.authority());
         skip(10);
         
@@ -79,4 +85,13 @@ contract MetaVesTFactoryTest is Test {
         skip(10);
         vest.withdraw(vest.getAmountWithdrawable());    
     }
+
+    function testFailControllerZeroAddress() public {
+        address _authority = address(0);
+        address _dao = address(0);
+        address _paymentToken = address(0);
+        factory.deployMetavestAndController(_authority, _dao, address(0), address(0), address(0));
+    }   
+
+
 }

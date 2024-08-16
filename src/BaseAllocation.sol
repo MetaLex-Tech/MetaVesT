@@ -4,7 +4,7 @@ pragma solidity 0.8.20;
 /// @notice interface to a MetaLeX condition contract
 /// @dev see https://github.com/MetaLex-Tech/BORG-CORE/tree/main/src/libs/conditions
 interface IConditionM {
-    function checkCondition() external returns (bool);
+    function checkCondition(address _contract, bytes4 _functionSignature, bytes memory data) external view returns (bool);
 }
 
 interface IERC20M {
@@ -107,9 +107,11 @@ abstract contract BaseAllocation is ReentrancyGuard, SafeTransferLib{
         }
         error MetaVesT_OnlyController();
         error MetaVesT_OnlyGrantee();
+        error MetaVesT_OnlyAuthority();
         error MetaVesT_ZeroAddress();
         error MetaVesT_RateTooHigh();
         error MetaVesT_ZeroAmount();
+        error MetaVesT_NotTerminated();
         error MetaVesT_MilestoneIndexCompletedOrDoesNotExist();
         error MetaVesT_ConditionNotSatisfied();
         error MetaVesT_AlreadyTerminated();
@@ -121,9 +123,7 @@ abstract contract BaseAllocation is ReentrancyGuard, SafeTransferLib{
         event MetaVesT_MilestoneAdded(address indexed grantee, Milestone milestone);
         event MetaVesT_MilestoneRemoved(address indexed grantee, uint256 indexed milestoneIndex);
         event MetaVesT_StopTimesUpdated(
-            address indexed grantee,
-            uint48 unlockingStopTime,
-            uint48 vestingStopTime,
+            address indexed grant,
             uint48 shortStopTime
         );
         event MetaVesT_TransferabilityUpdated(address indexed grantee, bool isTransferable);
@@ -134,8 +134,7 @@ abstract contract BaseAllocation is ReentrancyGuard, SafeTransferLib{
         event MetaVesT_PriceUpdated(address indexed grantee, uint256 exercisePrice);
         event MetaVesT_RepurchaseAndWithdrawal(address indexed grantee, address indexed tokenAddress, uint256 withdrawalAmount, uint256 repurchaseAmount);
         event MetaVesT_Terminated(address indexed grantee, uint256 tokensRecovered);
-        event MetaVest_GovVariablesUpdated(address indexed grantee, bool govNonwithdrawable, bool govVested, bool govUnlocked);
-
+        event MetaVest_GovVariablesUpdated(GovType _govType);
 
         struct Allocation {
             uint256 tokenStreamTotal; // total number of tokens subject to linear vesting/restriction removal (includes cliff credits but not each 'milestoneAward')
@@ -148,6 +147,8 @@ abstract contract BaseAllocation is ReentrancyGuard, SafeTransferLib{
             address tokenContract; // contract address of the ERC20 token included in the MetaVesT
         }
 
+        enum GovType {all, vested, unlocked}
+
         address public grantee; // grantee of the tokens
         bool transferable; // whether grantee can transfer their MetaVesT in whole
         Milestone[] public milestones; // array of Milestone structs
@@ -155,19 +156,17 @@ abstract contract BaseAllocation is ReentrancyGuard, SafeTransferLib{
         uint256 public milestoneAwardTotal; // total number of tokens awarded in milestones
         uint256 public milestoneUnlockedTotal; // total number of tokens unlocked in milestones
         uint256 public tokensWithdrawn; // total number of tokens withdrawn
-        bool GovNonwithdrawable = true; // whether 'nonwithdrawableAmount' counts towards 'tokenGoverningPower'
-        bool GovVested; // whether 'tokensVested' counts towards 'tokenGoverningPower'
-        bool GovUnlocked; // whether 'tokensUnlocked' counts towards 'tokenGoverningPower'
+        GovType public govType;
         bool public terminated;
+        uint256 public terminationTime;
         address[] prevOwners;
-
 
         constructor(address _grantee, address _controller) {
             // REVIEW: ever a case where no controller is wanted? Immutable vest?
             if (_controller == address(0) || _grantee == address(0)) revert MetaVesT_ZeroAddress();
             grantee = _grantee;
             controller = _controller;
-            GovVested = true;
+            govType = GovType.vested;
         }
 
         function getVestingType() external view virtual returns (uint256);
@@ -177,7 +176,7 @@ abstract contract BaseAllocation is ReentrancyGuard, SafeTransferLib{
         function updateTransferability(bool _transferable) external virtual;// onlyController;
         function updateVestingRate(uint160 _newVestingRate) external virtual;// onlyController;
         function updateUnlockRate(uint160 _newUnlockRate) external virtual;// onlyController;
-        function updateStopTimes(uint48 _newVestingStopTime, uint48 _newUnlockStopTime, uint48 _shortStopTime) external virtual;// onlyController;
+        function updateStopTimes(uint48 _shortStopTime) external virtual;// onlyController;
         function confirmMilestone(uint256 _milestoneIndex) external virtual;// nonReentrant;
         function removeMilestone(uint256 _milestoneIndex) external virtual;// onlyController;
         function addMilestone(Milestone calldata _milestone) external virtual;// onlyController;
@@ -187,11 +186,10 @@ abstract contract BaseAllocation is ReentrancyGuard, SafeTransferLib{
         function getMetavestDetails() public view virtual returns (Allocation memory);
         function getAmountWithdrawable() external view virtual returns (uint256);
 
-        function setGovVariables(bool _govNonwithdrawable, bool _govVested, bool _govUnlocked) external onlyController {
-            GovNonwithdrawable = _govNonwithdrawable;
-            GovVested = _govVested;
-            GovUnlocked = _govUnlocked;
-            emit MetaVest_GovVariablesUpdated(grantee, _govNonwithdrawable, _govVested, _govUnlocked);
+        function setGovVariables(GovType _govType) external onlyController {
+            if(terminated) revert MetaVesT_AlreadyTerminated();
+            govType = _govType;
+            emit MetaVest_GovVariablesUpdated(govType);
         }
 
         function getAuthority() public view returns (address){
@@ -205,6 +203,11 @@ abstract contract BaseAllocation is ReentrancyGuard, SafeTransferLib{
 
         modifier onlyGrantee() {
             if (msg.sender != grantee) revert MetaVesT_OnlyGrantee();
+            _;
+        }
+
+        modifier onlyAuthority() {
+            if (msg.sender != getAuthority()) revert MetaVesT_OnlyAuthority();
             _;
         }
 
