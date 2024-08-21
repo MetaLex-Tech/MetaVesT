@@ -804,6 +804,7 @@ contract MetaVestControllerTest is Test {
             milestones,
             0,
             address(0),
+            0,
             0
             
         );
@@ -838,7 +839,8 @@ contract MetaVestControllerTest is Test {
             milestones,
             1e18,
             address(paymentToken),
-            365 days
+            365 days,
+            0
         );
     }
 
@@ -871,7 +873,8 @@ contract MetaVestControllerTest is Test {
             milestones,
             1e18,
             address(paymentToken),
-            365 days
+            365 days,
+            0
             
         );
     }

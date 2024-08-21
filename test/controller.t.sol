@@ -1232,6 +1232,7 @@ contract MetaVestControllerTest is Test {
             milestones,
             0,
             address(0),
+            0,
             0
             
         );
@@ -1269,7 +1270,8 @@ contract MetaVestControllerTest is Test {
             milestones,
             1e18,
             address(paymentToken),
-            365 days
+            365 days,
+            0
         );
 
         assertEq(token.balanceOf(tokenOptionAllocation), 1100e18);
@@ -1305,7 +1307,8 @@ contract MetaVestControllerTest is Test {
             milestones,
             1e18,
             address(paymentToken),
-            365 days
+            365 days,
+            0
             
         );
 
@@ -1543,6 +1546,7 @@ contract MetaVestControllerTest is Test {
             milestones,
             0,
             address(0),
+            0,
             0
             
         );
@@ -1578,6 +1582,7 @@ contract MetaVestControllerTest is Test {
             milestones,
             0,
             address(0),
+            0,
             0
             
         );
@@ -1612,7 +1617,8 @@ contract MetaVestControllerTest is Test {
             milestones,
             1e18,
             address(paymentToken),
-            1 days
+            1 days,
+            0
         );
     }
 
@@ -1645,7 +1651,8 @@ contract MetaVestControllerTest is Test {
             milestones,
             1e18,
             address(paymentToken),
-            1 days
+            1 days,
+            0
             
         );
     }
@@ -1698,6 +1705,7 @@ contract MetaVestControllerTest is Test {
             milestones,
             0,
             address(0),
+            0,
             0
             
         );
@@ -1725,6 +1733,7 @@ contract MetaVestControllerTest is Test {
             milestones,
             0,
             address(0),
+            0,
             0
             
         );
@@ -1919,7 +1928,7 @@ contract MetaVestControllerTest is Test {
     }
 
     function testFailCheckFunctionCondition() public {
-        bytes4 functionSig = bytes4(keccak256("createMetavest(uint8,address,(uint256,uint128,uint128,uint160,uint48,uint160,uint48,address),(uint256,bool,bool,address[])[],uint256,address,uint256)"));
+        bytes4 functionSig = bytes4(keccak256("createMetavest(uint8,address,(uint256,uint128,uint128,uint160,uint48,uint160,uint48,address),(uint256,bool,bool,address[])[],uint256,address,uint256,uint256)"));
       /*      constructor(
         address[] memory _signers,
         uint256 _threshold,
