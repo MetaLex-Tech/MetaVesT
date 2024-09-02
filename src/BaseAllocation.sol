@@ -147,6 +147,7 @@ abstract contract BaseAllocation is ReentrancyGuard, SafeTransferLib{
             address tokenContract; // contract address of the ERC20 token included in the MetaVesT
         }
 
+        // enum to determine which tokens in the vesting contract will be counted towards governing power
         enum GovType {all, vested, unlocked}
 
         address public grantee; // grantee of the tokens
@@ -161,37 +162,130 @@ abstract contract BaseAllocation is ReentrancyGuard, SafeTransferLib{
         uint256 public terminationTime;
         address[] prevOwners;
 
+        /// @notice BaseAllocation constructor
+        /// @param _grantee: address of the grantee, cannot be a zero address
+        /// @param _controller: address of the MetaVesTController contract
         constructor(address _grantee, address _controller) {
             // Controller can be 0 for an immuatable version, but grantee cannot
-            if ( _grantee == address(0)) revert MetaVesT_ZeroAddress();
+            if (_grantee == address(0)) revert MetaVesT_ZeroAddress();
             grantee = _grantee;
             controller = _controller;
             govType = GovType.vested;
         }
 
         function getVestingType() external view virtual returns (uint256);
-        function getGoverningPower() external virtual returns (uint256);
-        
-        // REVIEW: implement here? Same for all variants? Possibly some of the other update functions, too?
-        function updateTransferability(bool _transferable) external virtual;// onlyController;
-        function updateVestingRate(uint160 _newVestingRate) external virtual;// onlyController;
-        function updateUnlockRate(uint160 _newUnlockRate) external virtual;// onlyController;
+        function getGoverningPower() external virtual returns (uint256);  
         function updateStopTimes(uint48 _shortStopTime) external virtual;// onlyController;
-        function confirmMilestone(uint256 _milestoneIndex) external virtual;// nonReentrant;
-        function removeMilestone(uint256 _milestoneIndex) external virtual;// onlyController;
-        function addMilestone(Milestone calldata _milestone) external virtual;// onlyController;
         function terminate() external virtual;// onlyController;
-        function transferRights(address _newOwner) external virtual;
-        function withdraw(uint256 _amount) external virtual;// nonReentrant;
-        function getMetavestDetails() public view virtual returns (Allocation memory);
-        function getAmountWithdrawable() external view virtual returns (uint256);
+        function getAmountWithdrawable() public view virtual returns (uint256);
 
+        /// @notice updates the transferability of the vesting contract
+        /// @dev onlyController -- must be called from the metavest controller
+        /// @param _transferable - bool to set the transferability of the vesting contract
+        function updateTransferability(bool _transferable) external onlyController {
+            transferable = _transferable;
+            emit MetaVesT_TransferabilityUpdated(grantee, _transferable);
+        }
+
+        /// @notice updates the vesting rate of the VestingAllocation
+        /// @dev onlyController -- must be called from the metavest controller
+        /// @param _newVestingRate - the updated vesting rate in tokens per second in the vesting token decimal
+        function updateVestingRate(uint160 _newVestingRate) external onlyController {
+            if(terminated) revert MetaVesT_AlreadyTerminated();
+            allocation.vestingRate = _newVestingRate;
+            emit MetaVesT_VestingRateUpdated(grantee, _newVestingRate);
+        }
+
+        /// @notice updates the unlock rate of the VestingAllocation
+        /// @dev onlyController -- must be called from the metavest controller
+        /// @param _newUnlockRate - the updated unlock rate in tokens per second in the vesting token decimal
+        function updateUnlockRate(uint160 _newUnlockRate) external onlyController {
+            if(terminated) revert MetaVesT_AlreadyTerminated();
+            allocation.unlockRate = _newUnlockRate;
+            emit MetaVesT_UnlockRateUpdated(grantee, _newUnlockRate);
+        }
+
+        /// @notice Sets the governing power type for the MetaVesT
+        /// @param _govType: the type of governing power to be used
         function setGovVariables(GovType _govType) external onlyController {
             if(terminated) revert MetaVesT_AlreadyTerminated();
             govType = _govType;
             emit MetaVest_GovVariablesUpdated(govType);
         }
 
+        /// @notice allows a milestone to be 'unlocked'. callable by anyone but the conditions for the milestone must be met
+        /// @param _milestoneIndex - the index of the milestone to confirm
+        function confirmMilestone(uint256 _milestoneIndex) external nonReentrant {
+            if(terminated) revert MetaVesT_AlreadyTerminated();
+            Milestone storage milestone = milestones[_milestoneIndex];
+            if (_milestoneIndex >= milestones.length || milestone.complete)
+                revert MetaVesT_MilestoneIndexCompletedOrDoesNotExist();
+            
+            //encode the milestone index to bytes for signature verification
+            bytes memory _data = abi.encodePacked(_milestoneIndex);
+            // perform any applicable condition checks, including whether 'authority' has a signatureCondition
+            for (uint256 i; i < milestone.conditionContracts.length; ++i) {
+                if (!IConditionM(milestone.conditionContracts[i]).checkCondition(address(this), msg.sig, _data))
+                    revert MetaVesT_ConditionNotSatisfied();
+            }
+
+            milestone.complete = true;
+            milestoneAwardTotal += milestone.milestoneAward;
+            if(milestone.unlockOnCompletion)
+                milestoneUnlockedTotal += milestone.milestoneAward;
+        
+            emit MetaVesT_MilestoneCompleted(grantee, _milestoneIndex);
+        }
+
+        /// @notice removes a milestone from the VestingAllocation
+        /// @dev onlyController -- must be called from the metavest controller
+        /// @param _milestoneIndex - the index of the milestone to remove
+        function removeMilestone(uint256 _milestoneIndex) external onlyController {
+            if(terminated) revert MetaVesT_AlreadyTerminated();
+            if (_milestoneIndex >= milestones.length) revert MetaVesT_ZeroAmount();
+            delete milestones[_milestoneIndex];
+            emit MetaVesT_MilestoneRemoved(grantee, _milestoneIndex);
+        }
+
+        /// @notice adds a milestone to the VestingAllocation
+        /// @dev onlyController -- must be called from the metavest controller
+        /// @param _milestone - the milestone to add
+        function addMilestone(Milestone calldata _milestone) external onlyController {
+            if(terminated) revert MetaVesT_AlreadyTerminated();
+            milestones.push(_milestone);
+            emit MetaVesT_MilestoneAdded(grantee, _milestone);
+        }
+
+        /// @notice transfers the rights of the VestingAllocation to a new owner
+        /// @dev onlyGrantee -- must be called by the grantee
+        /// @param _newOwner - the address of the new owner
+        function transferRights(address _newOwner) external onlyGrantee {
+            if(_newOwner == address(0)) revert MetaVesT_ZeroAddress();
+            if(!transferable) revert MetaVesT_VestNotTransferable();
+            emit MetaVesT_TransferredRights(grantee, _newOwner);
+            prevOwners.push(grantee);
+            grantee = _newOwner;
+        }
+
+        /// @notice withdraws tokens from the VestingAllocation
+        /// @dev onlyGrantee -- must be called by the grantee
+        /// @param _amount - the amount of tokens to withdraw
+        function withdraw(uint256 _amount) external nonReentrant onlyGrantee {
+            if (_amount == 0) revert MetaVesT_ZeroAmount();
+            if (_amount > getAmountWithdrawable() || _amount > IERC20M(allocation.tokenContract).balanceOf(address(this))) revert MetaVesT_MoreThanAvailable();
+            tokensWithdrawn += _amount;
+            safeTransfer(allocation.tokenContract, msg.sender, _amount);
+            emit MetaVesT_Withdrawn(msg.sender, allocation.tokenContract, _amount);
+        }
+
+        /// @notice gets the details of the vest
+        /// @return Allocation - the allocation details
+        function getMetavestDetails() external view returns (Allocation memory) {
+            return allocation;
+        }
+
+        /// @notice returns the authority address
+        /// @return address of the authority
         function getAuthority() public view returns (address){
             return IController(controller).authority();
         }

@@ -15,9 +15,16 @@ contract TokenOptionAllocation is BaseAllocation {
     uint256 public longStoptDate;
 
     error MetaVesT_InsufficientPaymentTokenBalance();
-    //emit MetaVesT_TokenOptionExercised(msg.sender, _tokensToExercise, _tokensToExercise * tokenOption.exercisePrice);
     event MetaVesT_TokenOptionExercised(address indexed _grantee, uint256 _tokensToExercise, uint256 _paymentAmount);
 
+    /// @notice Constructor to create a TokenOptionAllocation
+    /// @param _grantee - address of the grantee
+    /// @param _controller - address of the controller
+    /// @param _paymentToken - address of the payment token
+    /// @param _exercisePrice - price of the token option exercise
+    /// @param _shortStopDuration - duration of the short stop
+    /// @param _allocation - allocation details as an Allocation struct
+    /// @param _milestones - milestones with conditions and awards
     constructor (
         address _grantee,
         address _controller,
@@ -58,10 +65,14 @@ contract TokenOptionAllocation is BaseAllocation {
         }
     }
 
+    /// @notice returns the contract vesting type 2 for TokenOptionAllocation
+    /// @return 2
     function getVestingType() external pure override returns (uint256) {
         return 2;
     }
 
+    /// @notice returns the governing power of the TokenOptionAllocation
+    /// @return governingPower - the governing power of the TokenOptionAllocation based on the governance setting
     function getGoverningPower() external view override returns (uint256) {
         uint256 governingPower;
         if(govType==GovType.all)
@@ -81,69 +92,27 @@ contract TokenOptionAllocation is BaseAllocation {
         return governingPower;
     }
 
-
-    function updateTransferability(bool _transferable) external override onlyController {
-        transferable = _transferable;
-        emit MetaVesT_TransferabilityUpdated(grantee, _transferable);
-    }
-
-    function updateVestingRate(uint160 _newVestingRate) external override onlyController {
-        if(terminated) revert MetaVesT_AlreadyTerminated();
-        allocation.vestingRate = _newVestingRate;
-          emit MetaVesT_VestingRateUpdated(grantee, _newVestingRate);
-    }
-
-    function updateUnlockRate(uint160 _newUnlockRate) external override onlyController {
-        if(terminated) revert MetaVesT_AlreadyTerminated();
-        allocation.unlockRate = _newUnlockRate;
-        emit MetaVesT_UnlockRateUpdated(grantee, _newUnlockRate);
-    }
-
+    /// @notice updates the short stop time of the TokenOptionAllocation
+    /// @dev onlyController -- must be called from the metavest controller
+    /// @param _shortStopTime - the new short stop time
     function updateStopTimes(uint48 _shortStopTime) external override onlyController {
         if(terminated) revert MetaVesT_AlreadyTerminated();
         shortStopDuration = _shortStopTime;
         emit MetaVesT_StopTimesUpdated(grantee, _shortStopTime);
     }
 
+    /// @notice updates the exercise price
+    /// @dev onlyController -- must be called from the metavest controller
+    /// @param _newPrice - the new exercise price in decimals of the payment token
     function updatePrice(uint256 _newPrice) external onlyController {
         if(terminated) revert MetaVesT_AlreadyTerminated();
         exercisePrice = _newPrice;
         emit MetaVesT_PriceUpdated(grantee, _newPrice);
     }
 
-    function confirmMilestone(uint256 _milestoneIndex) external override nonReentrant {
-        if(terminated) revert MetaVesT_AlreadyTerminated();
-        if (_milestoneIndex >= milestones.length || milestones[_milestoneIndex].complete)
-            revert MetaVesT_MilestoneIndexCompletedOrDoesNotExist();
-
-        //encode the milestone index to bytes for signature verification
-        bytes memory _data = abi.encodePacked(_milestoneIndex);
-        // perform any applicable condition checks, including whether 'authority' has a signatureCondition
-        for (uint256 i; i < milestones[_milestoneIndex].conditionContracts.length; ++i) {
-            if (!IConditionM(milestones[_milestoneIndex].conditionContracts[i]).checkCondition(address(this), msg.sig, _data))
-                revert MetaVesT_ConditionNotSatisfied();
-        }
-
-        milestones[_milestoneIndex].complete = true;
-        milestoneAwardTotal += milestones[_milestoneIndex].milestoneAward;
-          if(milestones[_milestoneIndex].unlockOnCompletion)
-            milestoneUnlockedTotal += milestones[_milestoneIndex].milestoneAward;
-
-        emit MetaVesT_MilestoneCompleted(grantee, _milestoneIndex);
-    }
-
-    function removeMilestone(uint256 _milestoneIndex) external override onlyController {
-        if(terminated) revert MetaVesT_AlreadyTerminated();
-        if (_milestoneIndex >= milestones.length) revert MetaVesT_ZeroAmount();
-        delete milestones[_milestoneIndex];
-    }
-
-    function addMilestone(Milestone calldata _milestone) external override onlyController {
-        if(terminated) revert MetaVesT_AlreadyTerminated();
-        milestones.push(_milestone);
-        emit MetaVesT_MilestoneAdded(grantee, _milestone);
-    }
-
+    /// @notice gets the payment amount for a given amount of tokens
+    /// @param _amount - the amount of tokens to calculate the payment amount  in the vesting token decimals
+    /// @return paymentAmount - the payment amount for the given token amount in the payment token decimals
     function getPaymentAmount(uint256 _amount) public view returns (uint256) {
         uint8 paymentDecimals = IERC20M(paymentToken).decimals();
         uint8 exerciseTokenDecimals = IERC20M(allocation.tokenContract).decimals();
@@ -159,6 +128,9 @@ contract TokenOptionAllocation is BaseAllocation {
         return paymentAmount;
     }
 
+    /// @notice exercises the token option
+    /// @dev onlyGrantee -- must be called from the grantee
+    /// @param _tokensToExercise - the number of tokens to exercise
     function exerciseTokenOption(uint256 _tokensToExercise) external nonReentrant onlyGrantee {
         if(block.timestamp>shortStopTime && terminated) revert MetaVesT_ShortStopTimeNotReached();
         if (_tokensToExercise == 0) revert MetaVesT_ZeroAmount();
@@ -172,6 +144,8 @@ contract TokenOptionAllocation is BaseAllocation {
         emit MetaVesT_TokenOptionExercised(msg.sender, _tokensToExercise, paymentAmount);
     }
 
+    /// @notice Allows the controller to terminate the TokenOptionAllocation
+    /// @dev onlyController -- must be called from the metavest controller
     function terminate() external override onlyController nonReentrant {
         if(terminated) revert MetaVesT_AlreadyTerminated();
         
@@ -187,28 +161,16 @@ contract TokenOptionAllocation is BaseAllocation {
         emit MetaVesT_Terminated(grantee, tokensToRecover);
     }
 
-    function recoverForfeitTokens() external onlyController nonReentrant {
+    /// @notice recovers any forfeited tokens after the short stop time
+    /// @dev onlyAuthority -- must be called from the authority
+    function recoverForfeitTokens() external onlyAuthority nonReentrant {
         if(block.timestamp<shortStopTime || shortStopTime==0 || terminated != true) revert MetaVesT_ShortStopTimeNotReached();
         uint256 tokensToRecover = IERC20M(allocation.tokenContract).balanceOf(address(this)) - getAmountWithdrawable();
         safeTransfer(allocation.tokenContract, getAuthority(), tokensToRecover);
     }
 
-    function transferRights(address _newOwner) external override onlyGrantee {
-        if(_newOwner == address(0)) revert MetaVesT_ZeroAddress();
-        if(!transferable) revert MetaVesT_VestNotTransferable();
-        emit MetaVesT_TransferredRights(grantee, _newOwner);
-        prevOwners.push(grantee);
-        grantee = _newOwner;
-    }
-
-    function withdraw(uint256 _amount) external override nonReentrant onlyGrantee {
-        if (_amount == 0) revert MetaVesT_ZeroAmount();
-        if (_amount > getAmountWithdrawable() || _amount > IERC20M(allocation.tokenContract).balanceOf(address(this))) revert MetaVesT_MoreThanAvailable();
-        tokensWithdrawn += _amount;
-        safeTransfer(allocation.tokenContract, msg.sender, _amount);
-        emit MetaVesT_Withdrawn(msg.sender, allocation.tokenContract, _amount);
-    }
-
+    /// @notice gets the amount of tokens available for a grantee to exercise
+    /// @return uint256 amount of tokens available for the grantee to exercise
     function getAmountExercisable() public view returns (uint256) {
         if(block.timestamp<allocation.vestingStartTime || (block.timestamp>shortStopTime && shortStopTime>0))
             return 0;
@@ -225,6 +187,8 @@ contract TokenOptionAllocation is BaseAllocation {
         return _tokensVested + milestoneAwardTotal - tokensExercised;
     }
 
+    /// @notice gets the amount of tokens unlocked for a grantee 
+    /// @return uint256 amount of tokens unlocked for the grantee
     function getUnlockedTokenAmount() public view returns (uint256) {
         if(block.timestamp<allocation.unlockStartTime)
             return 0;
@@ -237,13 +201,11 @@ contract TokenOptionAllocation is BaseAllocation {
         return _tokensUnlocked + milestoneUnlockedTotal;
     }
 
+    /// @notice gets the amount of tokens available for a grantee to withdraw
+    /// @return uint256 amount of tokens available for the grantee to withdraw
     function getAmountWithdrawable() public view override returns (uint256) {
         uint256 _tokensUnlocked = getUnlockedTokenAmount();
         return _min(tokensExercised, _tokensUnlocked) - tokensWithdrawn;
-    }
-
-    function getMetavestDetails() public view override returns (Allocation memory) {
-        return allocation;
     }
 
 }

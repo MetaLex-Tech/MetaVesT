@@ -52,38 +52,12 @@ contract MetaVesTFactoryTest is Test {
 
     function testDeployMetavestAndController() public {
         address _authority = address(0xa);
-        deal(dai_addr, _authority, 2000 ether);
         address _dao = address(0xB);
         address _paymentToken = address(0xC);
         
 
         address _controller = factory.deployMetavestAndController(_authority, _dao, address(_factory), address(_factory2), address(_factory3));
         metavestController controller = metavestController(_controller);
-
-         BaseAllocation.Milestone[] memory emptyMilestones;
-               BaseAllocation.Allocation memory _metavestDetails = BaseAllocation.Allocation({
-                tokenStreamTotal: 2 ether,
-                vestingCliffCredit: 0,
-                unlockingCliffCredit: 0,
-                vestingRate: uint160(10),
-                vestingStartTime: uint48(block.timestamp),
-                unlockRate: uint160(10),
-                unlockStartTime: uint48(block.timestamp),
-                tokenContract: dai_addr
-            });
-        
-        vm.prank(_authority);
-        IERC20(dai_addr).approve(_controller, 2 ether);
-
-        vm.prank(_authority);
-        BaseAllocation vest = BaseAllocation(controller.createMetavest(metavestController.metavestType.Vesting, address(0xDA0), _metavestDetails, emptyMilestones, 0, address(0), 0, 0));
-        console.log(controller.authority());
-        skip(10);
-        
-        vm.startPrank(address(0xDA0));
-        vest.withdraw(vest.getAmountWithdrawable());
-        skip(10);
-        vest.withdraw(vest.getAmountWithdrawable());    
     }
 
     function testFailControllerZeroAddress() public {

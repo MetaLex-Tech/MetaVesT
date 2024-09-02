@@ -13,9 +13,7 @@ import "../src/RestrictedTokenFactory.sol";
 import "./mocks/MockCondition.sol";
 
 abstract contract ERC20 {
-    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
-    /*                       CUSTOM ERRORS                        */
-    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
 
     /// @dev The total supply has overflowed.
     error TotalSupplyOverflow();
@@ -38,9 +36,6 @@ abstract contract ERC20 {
     /// @dev The permit has expired.
     error PermitExpired();
 
-    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
-    /*                           EVENTS                           */
-    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
     /// @dev Emitted when `amount` tokens is transferred from `from` to `to`.
     event Transfer(address indexed from, address indexed to, uint256 amount);
@@ -56,9 +51,6 @@ abstract contract ERC20 {
     uint256 private constant _APPROVAL_EVENT_SIGNATURE =
         0x8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925;
 
-    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
-    /*                          STORAGE                           */
-    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
     /// @dev The storage slot for the total supply.
     uint256 private constant _TOTAL_SUPPLY_SLOT = 0x05345cdf77eb68f44c;
@@ -88,9 +80,6 @@ abstract contract ERC20 {
     /// ```
     uint256 private constant _NONCES_SLOT_SEED = 0x38377508;
 
-    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
-    /*                       ERC20 METADATA                       */
-    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
     /// @dev Returns the name of the token.
     function name() public view virtual returns (string memory);
@@ -103,9 +92,6 @@ abstract contract ERC20 {
         return 18;
     }
 
-    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
-    /*                           ERC20                            */
-    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
     /// @dev Returns the amount of tokens in existence.
     function totalSupply() public view virtual returns (uint256 result) {
@@ -306,9 +292,6 @@ abstract contract ERC20 {
         return true;
     }
 
-    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
-    /*                          EIP-2612                          */
-    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
     /// @dev Returns the current nonce for `owner`.
     /// This value is used to compute the signature for EIP-2612 permit.
@@ -418,9 +401,6 @@ abstract contract ERC20 {
         }
     }
 
-    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
-    /*                  INTERNAL MINT FUNCTIONS                   */
-    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
     /// @dev Mints `amount` tokens to `to`, increasing the total supply.
     ///
@@ -451,10 +431,6 @@ abstract contract ERC20 {
         _afterTokenTransfer(address(0), to, amount);
     }
 
-    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
-    /*                  INTERNAL BURN FUNCTIONS                   */
-    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
-
     /// @dev Burns `amount` tokens from `from`, reducing the total supply.
     ///
     /// Emits a {Transfer} event.
@@ -482,10 +458,6 @@ abstract contract ERC20 {
         }
         _afterTokenTransfer(from, address(0), amount);
     }
-
-    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
-    /*                INTERNAL TRANSFER FUNCTIONS                 */
-    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
     /// @dev Moves `amount` of tokens from `from` to `to`.
     function _transfer(address from, address to, uint256 amount) internal virtual {
@@ -518,9 +490,6 @@ abstract contract ERC20 {
         _afterTokenTransfer(from, to, amount);
     }
 
-    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
-    /*                INTERNAL ALLOWANCE FUNCTIONS                */
-    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
     /// @dev Updates the allowance of `owner` for `spender` based on spent `amount`.
     function _spendAllowance(address owner, address spender, uint256 amount) internal virtual {
@@ -562,9 +531,6 @@ abstract contract ERC20 {
         }
     }
 
-    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
-    /*                     HOOKS TO OVERRIDE                      */
-    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
     /// @dev Hook that is called before any transfer of tokens.
     /// This includes minting and burning.
@@ -576,9 +542,6 @@ abstract contract ERC20 {
 }
 
 abstract contract ERC20Stable {
-    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
-    /*                       CUSTOM ERRORS                        */
-    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
     /// @dev The total supply has overflowed.
     error TotalSupplyOverflow();
@@ -601,9 +564,6 @@ abstract contract ERC20Stable {
     /// @dev The permit has expired.
     error PermitExpired();
 
-    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
-    /*                           EVENTS                           */
-    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
     /// @dev Emitted when `amount` tokens is transferred from `from` to `to`.
     event Transfer(address indexed from, address indexed to, uint256 amount);
@@ -618,10 +578,6 @@ abstract contract ERC20Stable {
     /// @dev `keccak256(bytes("Approval(address,address,uint256)"))`.
     uint256 private constant _APPROVAL_EVENT_SIGNATURE =
         0x8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925;
-
-    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
-    /*                          STORAGE                           */
-    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
     /// @dev The storage slot for the total supply.
     uint256 private constant _TOTAL_SUPPLY_SLOT = 0x05345cdf77eb68f44c;
@@ -651,10 +607,6 @@ abstract contract ERC20Stable {
     /// ```
     uint256 private constant _NONCES_SLOT_SEED = 0x38377508;
 
-    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
-    /*                       ERC20 METADATA                       */
-    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
-
     /// @dev Returns the name of the token.
     function name() public view virtual returns (string memory);
 
@@ -665,10 +617,6 @@ abstract contract ERC20Stable {
     function decimals() public view virtual returns (uint8) {
         return 6;
     }
-
-    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
-    /*                           ERC20                            */
-    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
     /// @dev Returns the amount of tokens in existence.
     function totalSupply() public view virtual returns (uint256 result) {
@@ -869,9 +817,6 @@ abstract contract ERC20Stable {
         return true;
     }
 
-    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
-    /*                          EIP-2612                          */
-    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
     /// @dev Returns the current nonce for `owner`.
     /// This value is used to compute the signature for EIP-2612 permit.
@@ -981,10 +926,6 @@ abstract contract ERC20Stable {
         }
     }
 
-    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
-    /*                  INTERNAL MINT FUNCTIONS                   */
-    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
-
     /// @dev Mints `amount` tokens to `to`, increasing the total supply.
     ///
     /// Emits a {Transfer} event.
@@ -1014,10 +955,6 @@ abstract contract ERC20Stable {
         _afterTokenTransfer(address(0), to, amount);
     }
 
-    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
-    /*                  INTERNAL BURN FUNCTIONS                   */
-    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
-
     /// @dev Burns `amount` tokens from `from`, reducing the total supply.
     ///
     /// Emits a {Transfer} event.
@@ -1046,9 +983,6 @@ abstract contract ERC20Stable {
         _afterTokenTransfer(from, address(0), amount);
     }
 
-    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
-    /*                INTERNAL TRANSFER FUNCTIONS                 */
-    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
     /// @dev Moves `amount` of tokens from `from` to `to`.
     function _transfer(address from, address to, uint256 amount) internal virtual {
@@ -1081,9 +1015,6 @@ abstract contract ERC20Stable {
         _afterTokenTransfer(from, to, amount);
     }
 
-    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
-    /*                INTERNAL ALLOWANCE FUNCTIONS                */
-    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
     /// @dev Updates the allowance of `owner` for `spender` based on spent `amount`.
     function _spendAllowance(address owner, address spender, uint256 amount) internal virtual {
@@ -1124,10 +1055,6 @@ abstract contract ERC20Stable {
             log3(0x00, 0x20, _APPROVAL_EVENT_SIGNATURE, shr(96, owner_), shr(96, mload(0x2c)))
         }
     }
-
-    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
-    /*                     HOOKS TO OVERRIDE                      */
-    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
     /// @dev Hook that is called before any transfer of tokens.
     /// This includes minting and burning.
@@ -1765,6 +1692,29 @@ contract MetaVestControllerTest is Test {
         assertEq(token.balanceOf(vestingAllocation), 0);
     }
 
+    function testConfirmingMilestoneRestrictedTokenAllocation() public {
+        address vestingAllocation = createDummyRestrictedTokenAward();
+        uint256 snapshot = token.balanceOf(authority);
+        RestrictedTokenAward(vestingAllocation).confirmMilestone(0);
+        vm.warp(block.timestamp + 50 seconds);
+        vm.startPrank(grantee);
+        RestrictedTokenAward(vestingAllocation).withdraw(VestingAllocation(vestingAllocation).getAmountWithdrawable());
+        vm.stopPrank();
+    }
+
+        function testConfirmingMilestoneTokenOption() public {
+        address vestingAllocation = createDummyTokenOptionAllocation();
+        uint256 snapshot = token.balanceOf(authority);
+        TokenOptionAllocation(vestingAllocation).confirmMilestone(0);
+        vm.warp(block.timestamp + 50 seconds);
+        vm.startPrank(grantee);
+        //exercise max available
+        ERC20Stable(paymentToken).approve(vestingAllocation, TokenOptionAllocation(vestingAllocation).getPaymentAmount(TokenOptionAllocation(vestingAllocation).getAmountExercisable()));
+        TokenOptionAllocation(vestingAllocation).exerciseTokenOption(TokenOptionAllocation(vestingAllocation).getAmountExercisable());
+        TokenOptionAllocation(vestingAllocation).withdraw(VestingAllocation(vestingAllocation).getAmountWithdrawable());
+        vm.stopPrank();
+    }
+
     function testTerminateTokenOptionAndRecover() public {
         address tokenOptionAllocation = createDummyTokenOptionAllocation();
         uint256 snapshot = token.balanceOf(authority);
@@ -1780,7 +1730,25 @@ contract MetaVestControllerTest is Test {
         TokenOptionAllocation(tokenOptionAllocation).withdraw(TokenOptionAllocation(tokenOptionAllocation).getAmountWithdrawable());
         vm.stopPrank();
         assertEq(token.balanceOf(tokenOptionAllocation), 0);
+        vm.warp(block.timestamp + 365 days);
+        vm.prank(authority);
+        TokenOptionAllocation(tokenOptionAllocation).recoverForfeitTokens();
     }
+
+    function testTerminateEarlyTokenOptionAndRecover() public {
+        address tokenOptionAllocation = createDummyTokenOptionAllocation();
+        uint256 snapshot = token.balanceOf(authority);
+        vm.warp(block.timestamp + 5 seconds);
+       // vm.prank(grantee);
+       /* ERC20Stable(paymentToken).approve(tokenOptionAllocation, 350e18);
+        vm.prank(grantee);
+        TokenOptionAllocation(tokenOptionAllocation).exerciseTokenOption(350e18);*/
+        controller.terminateMetavestVesting(tokenOptionAllocation);
+        vm.warp(block.timestamp + 365 days);
+        vm.prank(authority);
+        TokenOptionAllocation(tokenOptionAllocation).recoverForfeitTokens();
+    }
+
 
     function testTerminateRestrictedTokenAwardAndRecover() public {
         address restrictedTokenAward = createDummyRestrictedTokenAward();
@@ -1907,6 +1875,7 @@ contract MetaVestControllerTest is Test {
         
         controller.updateFunctionCondition(condition, functionSig);
     }
+
 
     function testRemoveFunctionCondition() public {
         bytes4 functionSig = bytes4(keccak256("updateMetavestStopTimes(address,uint48)"));

@@ -14,10 +14,17 @@ contract RestrictedTokenAward is BaseAllocation {
     uint256 public tokensRepurchased;
     uint256 public tokensRepurchasedWithdrawn;
 
-
     error MetaVesT_InsufficientPaymentTokenBalance();
     event MetaVesT_TokenOptionExercised(address indexed _grantee, uint256 _tokensToExercise, uint256 _paymentAmount);
 
+    /// @notice Constructor to deploy a new RestrictedTokenAward
+    /// @param _grantee - address of the grantee
+    /// @param _controller - address of the controller
+    /// @param _paymentToken - address of the payment token
+    /// @param _repurchasePrice - price at which the restricted tokens can be repurchased
+    /// @param _shortStopDuration - duration after termination during which restricted tokens can be repurchased
+    /// @param _allocation - allocation details as an Allocation struct
+    /// @param _milestones - milestones with their conditions and awards
     constructor (
         address _grantee,
         address _controller,
@@ -58,10 +65,14 @@ contract RestrictedTokenAward is BaseAllocation {
         }
     }
 
+    /// @notice returns the vesting type for RestrictedTokenAward
+    /// @return uint256 type 3
     function getVestingType() external pure override returns (uint256) {
         return 3;
     }
 
+    /// @notice returns the governing power for RestrictedTokenAward based on the govType
+    /// @return uint256 governingPower for this RestrictedTokenAward contract
     function getGoverningPower() external view override returns (uint256) {
         uint256 governingPower;
       if(govType==GovType.all)
@@ -81,69 +92,27 @@ contract RestrictedTokenAward is BaseAllocation {
         return governingPower;
     }
 
-    function updateTransferability(bool _transferable) external override onlyController {
-        transferable = _transferable;
-        emit MetaVesT_TransferabilityUpdated(grantee, _transferable);
-    }
-
-    function updateVestingRate(uint160 _newVestingRate) external override onlyController {
-        if(terminated) revert MetaVesT_AlreadyTerminated();
-        allocation.vestingRate = _newVestingRate;
-          emit MetaVesT_VestingRateUpdated(grantee, _newVestingRate);
-    }
-
-    function updateUnlockRate(uint160 _newUnlockRate) external override onlyController {
-        if(terminated) revert MetaVesT_AlreadyTerminated();
-        allocation.unlockRate = _newUnlockRate;
-        emit MetaVesT_UnlockRateUpdated(grantee, _newUnlockRate);
-    }
-
+    /// @notice updates the short stop time of the vesting contract
+    /// @dev onlyController -- must be called from the metavest controller
+    /// @param _shortStopTime - new short stop time to be set in seconds
     function updateStopTimes(uint48 _shortStopTime) external override onlyController {
         if(terminated) revert MetaVesT_AlreadyTerminated();
         shortStopDuration = _shortStopTime;
         emit MetaVesT_StopTimesUpdated(grantee, _shortStopTime);
     }
 
+    /// @notice updates the exercise price
+    /// @dev onlyController -- must be called from the metavest controller
+    /// @param _newPrice - the new exercise price in decimals of the payment token
     function updatePrice(uint256 _newPrice) external onlyController {
         if(terminated) revert MetaVesT_AlreadyTerminated();
         repurchasePrice = _newPrice;
         emit MetaVesT_PriceUpdated(grantee, _newPrice);
     }
 
-    function confirmMilestone(uint256 _milestoneIndex) external override nonReentrant {
-        if(terminated) revert MetaVesT_AlreadyTerminated();
-        if (_milestoneIndex >= milestones.length || milestones[_milestoneIndex].complete)
-            revert MetaVesT_MilestoneIndexCompletedOrDoesNotExist();
-
-        //encode the milestone index to bytes for signature verification
-        bytes memory _data = abi.encodePacked(_milestoneIndex);
-
-        // perform any applicable condition checks, including whether 'authority' has a signatureCondition
-        for (uint256 i; i < milestones[_milestoneIndex].conditionContracts.length; ++i) {
-            if (!IConditionM(milestones[_milestoneIndex].conditionContracts[i]).checkCondition(address(this), msg.sig, _data))
-                revert MetaVesT_ConditionNotSatisfied();
-        }
-
-        milestones[_milestoneIndex].complete = true;
-        milestoneAwardTotal += milestones[_milestoneIndex].milestoneAward;
-          if(milestones[_milestoneIndex].unlockOnCompletion)
-            milestoneUnlockedTotal += milestones[_milestoneIndex].milestoneAward;
-
-        emit MetaVesT_MilestoneCompleted(grantee, _milestoneIndex);
-    }
-
-    function removeMilestone(uint256 _milestoneIndex) external override onlyController {
-        if(terminated) revert MetaVesT_AlreadyTerminated();
-        if (_milestoneIndex >= milestones.length) revert MetaVesT_ZeroAmount();
-        delete milestones[_milestoneIndex];
-    }
-
-    function addMilestone(Milestone calldata _milestone) external override onlyController {
-        if(terminated) revert MetaVesT_AlreadyTerminated();
-        milestones.push(_milestone);
-        emit MetaVesT_MilestoneAdded(grantee, _milestone);
-    }
-
+    /// @notice gets the payment amount for a given amount of tokens
+    /// @param _amount - the amount of tokens to calculate the payment amount  in the vesting token decimals
+    /// @return paymentAmount - the payment amount for the given token amount in the payment token decimals
     function getPaymentAmount(uint256 _amount) public view returns (uint256) {
         uint8 paymentDecimals = IERC20M(paymentToken).decimals();
         uint8 repurchaseTokenDecimals = IERC20M(allocation.tokenContract).decimals();
@@ -159,6 +128,9 @@ contract RestrictedTokenAward is BaseAllocation {
         return paymentAmount;
     }
 
+    /// @notice allows the authority to repurchase tokens after termination
+    /// @dev onlyAuthority -- must be called by the authority
+    /// @param _amount - the amount of tokens to repurchase in the vesting token decimals
     function repurchaseTokens(uint256 _amount) external onlyAuthority nonReentrant {
         if(!terminated) revert MetaVesT_NotTerminated();
         if (_amount == 0) revert MetaVesT_ZeroAmount();
@@ -174,6 +146,8 @@ contract RestrictedTokenAward is BaseAllocation {
         emit MetaVesT_RepurchaseAndWithdrawal(grantee, allocation.tokenContract, _amount, repurchaseAmount);
     }
 
+    /// @notice allows the grantee to claim the amount paid for repurchased tokens
+    /// @dev onlyGrantee -- must be called by the grantee
     function claimRepurchasedTokens() external onlyGrantee nonReentrant {
         if(IERC20M(paymentToken).balanceOf(address(this)) == 0) revert MetaVesT_MoreThanAvailable();
         uint256 _amount = IERC20M(paymentToken).balanceOf(address(this));
@@ -182,6 +156,8 @@ contract RestrictedTokenAward is BaseAllocation {
         emit MetaVesT_Withdrawn(msg.sender, paymentToken, _amount);
     }
 
+    /// @notice Allows the controller to terminate the RestrictedTokenAward
+    /// @dev onlyController -- must be called from the metavest controller
     function terminate() external override onlyController nonReentrant {
          if(terminated) revert MetaVesT_AlreadyTerminated();
         uint256 tokensToRecover = 0;
@@ -191,28 +167,13 @@ contract RestrictedTokenAward is BaseAllocation {
         }
         terminationTime = block.timestamp;
         // remaining tokens must be repruchased by 'authority'
-        // REVIEW: unused.
         shortStopDate = block.timestamp + shortStopDuration;
         terminated = true;
         emit MetaVesT_Terminated(grantee, tokensToRecover);
     }
 
-    function transferRights(address _newOwner) external override onlyGrantee {
-        if(_newOwner == address(0)) revert MetaVesT_ZeroAddress();
-        if(!transferable) revert MetaVesT_VestNotTransferable();
-        emit MetaVesT_TransferredRights(grantee, _newOwner);
-        prevOwners.push(grantee);
-        grantee = _newOwner;
-    }
-
-    function withdraw(uint256 _amount) external override nonReentrant onlyGrantee {
-        if (_amount == 0) revert MetaVesT_ZeroAmount();
-        if (_amount > getAmountWithdrawable() || _amount > IERC20M(allocation.tokenContract).balanceOf(address(this))) revert MetaVesT_MoreThanAvailable();
-        tokensWithdrawn += _amount;
-        safeTransfer(allocation.tokenContract, msg.sender, _amount);
-        emit MetaVesT_Withdrawn(msg.sender, allocation.tokenContract, _amount);
-    }
-
+    /// @notice returns the amount of tokens that can be repurchased
+    /// @return uint256 amount of tokens that can be repurchased
     function getAmountRepurchasable() public view returns (uint256) {
         if(!terminated) return 0;
        
@@ -223,6 +184,8 @@ contract RestrictedTokenAward is BaseAllocation {
         return allocation.tokenStreamTotal + milestonesAllocation - getVestedTokenAmount();
     }
 
+    /// @notice returns the amount of tokens that are vested
+    /// @return uint256 amount of tokens that are vested
      function getVestedTokenAmount() public view returns (uint256) {
         if(block.timestamp<allocation.vestingStartTime)
             return 0;
@@ -238,6 +201,8 @@ contract RestrictedTokenAward is BaseAllocation {
         return _tokensVested += milestoneAwardTotal;
     }
 
+    /// @notice returns the amount of tokens that are unlocked
+    /// @return uint256 amount of tokens that are unlocked
     function getUnlockedTokenAmount() public view returns (uint256) {
         if(block.timestamp<allocation.unlockStartTime)
             return 0;
@@ -251,15 +216,12 @@ contract RestrictedTokenAward is BaseAllocation {
         return _tokensUnlocked += milestoneUnlockedTotal;
     }
 
-
+    /// @notice returns the amount of tokens that can be withdrawn
+    /// @return uint256 amount of tokens that can be withdrawn
     function getAmountWithdrawable() public view override returns (uint256) {
         uint256 _tokensVested = getVestedTokenAmount();
         uint256 _tokensUnlocked = getUnlockedTokenAmount();
         return _min(_tokensVested, _tokensUnlocked) - tokensWithdrawn;
-    }
-
-    function getMetavestDetails() public view override returns (Allocation memory) {
-        return allocation;
     }
 
 }
