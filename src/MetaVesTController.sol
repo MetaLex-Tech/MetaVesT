@@ -435,6 +435,8 @@ contract metavestController is SafeTransferLib {
         uint256 _milestoneIndex
     ) external onlyAuthority conditionCheck consentCheck(_grant, msg.data) {
         _resetAmendmentParams(_grant, msg.sig);
+        (uint256 milestoneAward, , bool completed) = BaseAllocation(_grant).milestones(_milestoneIndex);
+        if(completed || milestoneAward == 0) revert MetaVesTController_MilestoneIndexCompletedOrDoesNotExist();
         BaseAllocation(_grant).removeMilestone(_milestoneIndex);
     }
 
