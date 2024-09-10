@@ -633,6 +633,7 @@ contract metavestController is SafeTransferLib {
             if (keccak256(bytes(setNames[i])) == keccak256(bytes(_name))) {
                 setNames[i] = setNames[setNames.length - 1];
                 setNames.pop();
+                delete sets[_name];
                 emit MetaVesTController_SetRemoved(_name);
                 return;
             }
