@@ -135,7 +135,8 @@ contract RestrictedTokenAward is BaseAllocation {
         if(!terminated) revert MetaVesT_NotTerminated();
         if (_amount == 0) revert MetaVesT_ZeroAmount();
         if (_amount > getAmountRepurchasable()) revert MetaVesT_MoreThanAvailable();
-        
+        if(block.timestamp<shortStopDate) revert MetaVesT_ShortStopTimeNotReached();
+
         // Calculate repurchaseAmount
         uint256 repurchaseAmount = getPaymentAmount(_amount);
 
@@ -166,7 +167,7 @@ contract RestrictedTokenAward is BaseAllocation {
                 milestonesAllocation += milestones[i].milestoneAward;
         }
         terminationTime = block.timestamp;
-        // remaining tokens must be repruchased by 'authority'
+        // remaining tokens must be repurchased by 'authority'
         shortStopDate = block.timestamp + shortStopDuration;
         terminated = true;
         emit MetaVesT_Terminated(grantee, tokensToRecover);
