@@ -97,6 +97,7 @@ abstract contract BaseAllocation is ReentrancyGuard, SafeTransferLib{
 
         /// @notice MetaVesTController contract address, immutably tied to this MetaVesT
         address public immutable controller;
+        uint256 constant public MAX_MILESTONES = 20;
         /// @notice authority address, may replace itself in 'controller'
         address public authority; // REVIEW: probably just have `getAuthority` which calls thru to `controller`? Saves having to worry about updating if it changes?
         struct Milestone {
@@ -119,6 +120,7 @@ abstract contract BaseAllocation is ReentrancyGuard, SafeTransferLib{
         error MetaVesT_VestNotTransferable();
         error MetaVesT_ShortStopTimeNotReached();
         error MetaVest_ShortStopDatePassed();
+        error MetaVesT_MaxMilestonesReached();
 
         event MetaVesT_MilestoneCompleted(address indexed grantee, uint256 indexed milestoneIndex);
         event MetaVesT_MilestoneAdded(address indexed grantee, Milestone milestone);
@@ -253,6 +255,7 @@ abstract contract BaseAllocation is ReentrancyGuard, SafeTransferLib{
         /// @param _milestone - the milestone to add
         function addMilestone(Milestone calldata _milestone) external onlyController {
             if(terminated) revert MetaVesT_AlreadyTerminated();
+            if(milestones.length >= MAX_MILESTONES) revert MetaVesT_MaxMilestonesReached();
             milestones.push(_milestone);
             emit MetaVesT_MilestoneAdded(grantee, _milestone);
         }
