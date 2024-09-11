@@ -132,7 +132,7 @@ contract TokenOptionAllocation is BaseAllocation {
     /// @dev onlyGrantee -- must be called from the grantee
     /// @param _tokensToExercise - the number of tokens to exercise
     function exerciseTokenOption(uint256 _tokensToExercise) external nonReentrant onlyGrantee {
-        if(block.timestamp>shortStopTime && terminated) revert MetaVesT_ShortStopTimeNotReached();
+        if(block.timestamp>shortStopTime && terminated) revert MetaVest_ShortStopDatePassed();
         if (_tokensToExercise == 0) revert MetaVesT_ZeroAmount();
         if (_tokensToExercise > getAmountExercisable()) revert MetaVesT_MoreThanAvailable();
         // Calculate paymentAmount
