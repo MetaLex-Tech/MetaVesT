@@ -1543,7 +1543,7 @@ contract MetaVestControllerTest is Test {
             grantee,
             allocation,
             milestones,
-            1e18,
+            5e17,
             address(paymentToken),
             1 days,
             0

@@ -64,7 +64,13 @@ contract Audit is MetaVestControllerTest {
         
         console.log('before amount of payment token:', ERC20Stable(paymentToken).balanceOf(grantee));
         console.log('before tokensExercised: ', TokenOptionAllocation(vestingAllocation).tokensExercised());
-
+        console.log('small amount payment: ', TokenOptionAllocation(vestingAllocation).getPaymentAmount(1e6));
+        console.log('small amount payment: ', TokenOptionAllocation(vestingAllocation).getPaymentAmount(1e11));
+        console.log('small amount payment: ', TokenOptionAllocation(vestingAllocation).getPaymentAmount(9.99e11));
+        console.log('small amount payment: ', TokenOptionAllocation(vestingAllocation).getPaymentAmount(1e12));
+        console.log('small amount payment: ', TokenOptionAllocation(vestingAllocation).getPaymentAmount(1.1e12));
+        console.log('small amount payment: ', TokenOptionAllocation(vestingAllocation).getPaymentAmount(1e13));
+        TokenOptionAllocation(vestingAllocation).exerciseTokenOption(1.1e12);
         TokenOptionAllocation(vestingAllocation).exerciseTokenOption(1e6);
         TokenOptionAllocation(vestingAllocation).exerciseTokenOption(1e6);
         TokenOptionAllocation(vestingAllocation).exerciseTokenOption(1e6);

@@ -121,6 +121,7 @@ abstract contract BaseAllocation is ReentrancyGuard, SafeTransferLib{
         error MetaVesT_ShortStopTimeNotReached();
         error MetaVest_ShortStopDatePassed();
         error MetaVesT_MaxMilestonesReached();
+        error MetaVesT_TooSmallAmount();
 
         event MetaVesT_MilestoneCompleted(address indexed grantee, uint256 indexed milestoneIndex);
         event MetaVesT_MilestoneAdded(address indexed grantee, Milestone milestone);

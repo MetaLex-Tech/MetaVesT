@@ -21,7 +21,7 @@ contract RestrictedTokenAward is BaseAllocation {
     /// @param _grantee - address of the grantee
     /// @param _controller - address of the controller
     /// @param _paymentToken - address of the payment token
-    /// @param _repurchasePrice - price at which the restricted tokens can be repurchased
+    /// @param _repurchasePrice - price at which the restricted tokens can be repurchased in vesting token decimals but only up to payment decimal precision
     /// @param _shortStopDuration - duration after termination during which restricted tokens can be repurchased
     /// @param _allocation - allocation details as an Allocation struct
     /// @param _milestones - milestones with their conditions and awards
@@ -103,7 +103,7 @@ contract RestrictedTokenAward is BaseAllocation {
 
     /// @notice updates the exercise price
     /// @dev onlyController -- must be called from the metavest controller
-    /// @param _newPrice - the new exercise price in decimals of the payment token
+    /// @param _newPrice - the new exercise price in vesting token decimals but only up to payment decimal precision
     function updatePrice(uint256 _newPrice) external onlyController {
         if(terminated) revert MetaVesT_AlreadyTerminated();
         repurchasePrice = _newPrice;
@@ -115,16 +115,20 @@ contract RestrictedTokenAward is BaseAllocation {
     /// @return paymentAmount - the payment amount for the given token amount in the payment token decimals
     function getPaymentAmount(uint256 _amount) public view returns (uint256) {
         uint8 paymentDecimals = IERC20M(paymentToken).decimals();
-        uint8 repurchaseTokenDecimals = IERC20M(allocation.tokenContract).decimals();
+        uint8 exerciseTokenDecimals = IERC20M(allocation.tokenContract).decimals();
         
         // Calculate paymentAmount
         uint256 paymentAmount;
-        if (paymentDecimals >= repurchaseTokenDecimals) {
-            paymentAmount = _amount * repurchasePrice / (10**repurchaseTokenDecimals);
-        } else {
-            paymentAmount = _amount * repurchasePrice / (10**repurchaseTokenDecimals);
-            paymentAmount = paymentAmount / (10**(repurchaseTokenDecimals - paymentDecimals));
+        paymentAmount = _amount * repurchasePrice / (10**exerciseTokenDecimals);
+        
+        //scale paymentAmount to payment token decimals
+        if(paymentDecimals<exerciseTokenDecimals) {
+            paymentAmount = paymentAmount / (10**(exerciseTokenDecimals-paymentDecimals));
         }
+        else {
+            paymentAmount = paymentAmount * (10**(paymentDecimals-exerciseTokenDecimals));
+        }
+        
         return paymentAmount;
     }
 
@@ -139,6 +143,7 @@ contract RestrictedTokenAward is BaseAllocation {
 
         // Calculate repurchaseAmount
         uint256 repurchaseAmount = getPaymentAmount(_amount);
+        if(repurchaseAmount == 0) revert MetaVesT_TooSmallAmount();
 
         safeTransferFrom(paymentToken, getAuthority(), address(this), repurchaseAmount);
         // transfer all repurchased tokens to 'authority'
