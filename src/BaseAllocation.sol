@@ -247,7 +247,12 @@ abstract contract BaseAllocation is ReentrancyGuard, SafeTransferLib{
         function removeMilestone(uint256 _milestoneIndex) external onlyController {
             if(terminated) revert MetaVesT_AlreadyTerminated();
             if (_milestoneIndex >= milestones.length) revert MetaVesT_ZeroAmount();
+            uint256 _milestoneAward = milestones[_milestoneIndex].milestoneAward;
+            //transfer the milestone award back to the authority, we check in the controller to ensure only uncompleted milestones can be removed
+            safeTransfer(allocation.tokenContract, getAuthority(), _milestoneAward);
             delete milestones[_milestoneIndex];
+            milestones[_milestoneIndex] = milestones[milestones.length - 1];
+            milestones.pop();
             emit MetaVesT_MilestoneRemoved(grantee, _milestoneIndex);
         }
 
