@@ -139,6 +139,8 @@ contract Audit is MetaVestControllerTest {
         console.log("expected inFavor: false");
         (,,bool inFavor) = controller.functionToGranteeToAmendmentPending(selector, vestingAllocation);
         console.log("output: ", inFavor);
+        assertEq(inFavor, false);
+
     }
 
     function testAuditProposeMajorityMetavestAmendmentNewGranteeDuringProposal() public {
@@ -197,4 +199,5 @@ contract Audit is MetaVestControllerTest {
         vm.stopPrank();
 
     }
+
 }

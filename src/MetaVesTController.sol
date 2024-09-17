@@ -141,7 +141,7 @@ contract metavestController is SafeTransferLib {
         if (isMetavestInSet(_grant)) {
             string memory set = getSetOfMetavest(_grant);
             MajorityAmendmentProposal memory proposal = functionToSetMajorityProposal[msg.sig][set];
-            if (_data.length>32)
+            if (_data.length>32 && _data.length<69)
             {
                 if (!proposal.isPending || proposal.totalVotingPower>proposal.currentVotingPower*2 || keccak256(_data[_data.length - 32:]) != proposal.dataHash ) {
                     revert MetaVesTController_AmendmentNeitherMutualNorMajorityConsented();
@@ -188,7 +188,7 @@ contract metavestController is SafeTransferLib {
         address grantee =BaseAllocation(_grant).grantee();
         if(msg.sender!= grantee) revert MetaVesTController_OnlyGrantee();
 
-        functionToGranteeToAmendmentPending[_msgSig][_grant].inFavor = true;
+        functionToGranteeToAmendmentPending[_msgSig][_grant].inFavor = _inFavor;
         emit MetaVesTController_AmendmentConsentUpdated(_msgSig, msg.sender, _inFavor);
     }
 
@@ -435,6 +435,8 @@ contract metavestController is SafeTransferLib {
         uint256 _milestoneIndex
     ) external onlyAuthority conditionCheck consentCheck(_grant, msg.data) {
         _resetAmendmentParams(_grant, msg.sig);
+        (uint256 milestoneAward, , bool completed) = BaseAllocation(_grant).milestones(_milestoneIndex);
+        if(completed || milestoneAward == 0) revert MetaVesTController_MilestoneIndexCompletedOrDoesNotExist();
         BaseAllocation(_grant).removeMilestone(_milestoneIndex);
     }
 
@@ -564,8 +566,8 @@ contract metavestController is SafeTransferLib {
         bytes4 _msgSig,
         bytes calldata _callData
     ) external onlyAuthority {
-        //if the majority proposal is already pending and not expired, revert
-        if (functionToSetMajorityProposal[_msgSig][setName].isPending && block.timestamp > functionToSetMajorityProposal[_msgSig][setName].time)
+
+        if (functionToSetMajorityProposal[_msgSig][setName].isPending && block.timestamp < functionToSetMajorityProposal[_msgSig][setName].time + AMENDMENT_TIME_LIMIT)
             revert MetaVesTController_AmendmentAlreadyPending();
 
         uint256 totalVotingPower;
@@ -589,6 +591,7 @@ contract metavestController is SafeTransferLib {
     function voteOnMetavestAmendment(address _grant, string memory _setName, bytes4 _msgSig, bool _inFavor) external {
 
         if(BaseAllocation(_grant).grantee() != msg.sender) revert MetaVesTController_OnlyGrantee();
+        if (!isMetavestInSet(_grant, _setName)) revert MetaVesTController_SetDoesNotExist();
         if (!functionToSetMajorityProposal[_msgSig][_setName].isPending) revert MetaVesTController_NoPendingAmendment(_msgSig, _grant);
         if (!_checkFunctionToTokenToAmendmentTime(_msgSig, _setName))
             revert MetaVesTController_ProposedAmendmentExpired();
@@ -652,6 +655,13 @@ contract metavestController is SafeTransferLib {
             for (uint256 j; j < sets[setNames[i]].length; ++j) {
                 if (sets[setNames[i]][j] == _metavest) return true;
             }
+        }
+        return false;
+    }
+
+    function isMetavestInSet(address _metavest, string memory _setName) internal view returns (bool) {
+        for (uint256 i; i < sets[_setName].length; ++i) {
+            if (sets[_setName][i] == _metavest) return true;
         }
         return false;
     }
