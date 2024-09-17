@@ -1410,9 +1410,10 @@ contract MetaVestControllerTest is Test {
         uint256 payment = RestrictedTokenAward(restrictedTokenAward).getPaymentAmount(repurchaseAmount);
         controller.terminateMetavestVesting(restrictedTokenAward);
         paymentToken.approve(address(restrictedTokenAward), payment);
+        vm.warp(block.timestamp + 20 days);
         vm.prank(authority);
         RestrictedTokenAward(restrictedTokenAward).repurchaseTokens(repurchaseAmount);
-        
+
         assertEq(token.balanceOf(authority), snapshot+repurchaseAmount);
 
         vm.prank(grantee);
@@ -1542,7 +1543,7 @@ contract MetaVestControllerTest is Test {
             grantee,
             allocation,
             milestones,
-            1e18,
+            5e17,
             address(paymentToken),
             1 days,
             0
@@ -1760,6 +1761,7 @@ contract MetaVestControllerTest is Test {
         vm.stopPrank();
         uint256 amt = RestrictedTokenAward(restrictedTokenAward).getAmountRepurchasable();
         uint256 payamt = RestrictedTokenAward(restrictedTokenAward).getPaymentAmount(amt);
+        vm.warp(block.timestamp + 20 days);
         paymentToken.approve(address(restrictedTokenAward), payamt);
         RestrictedTokenAward(restrictedTokenAward).repurchaseTokens(amt);
 

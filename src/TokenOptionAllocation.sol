@@ -21,7 +21,7 @@ contract TokenOptionAllocation is BaseAllocation {
     /// @param _grantee - address of the grantee
     /// @param _controller - address of the controller
     /// @param _paymentToken - address of the payment token
-    /// @param _exercisePrice - price of the token option exercise
+    /// @param _exercisePrice - price of the token option exercise in vesting token decimals but only up to payment decimal precision
     /// @param _shortStopDuration - duration of the short stop
     /// @param _allocation - allocation details as an Allocation struct
     /// @param _milestones - milestones with conditions and awards
@@ -103,7 +103,7 @@ contract TokenOptionAllocation is BaseAllocation {
 
     /// @notice updates the exercise price
     /// @dev onlyController -- must be called from the metavest controller
-    /// @param _newPrice - the new exercise price in decimals of the payment token
+    /// @param _newPrice - the new exercise price in vesting token decimals but only up to payment decimal precision
     function updatePrice(uint256 _newPrice) external onlyController {
         if(terminated) revert MetaVesT_AlreadyTerminated();
         exercisePrice = _newPrice;
@@ -119,12 +119,16 @@ contract TokenOptionAllocation is BaseAllocation {
         
         // Calculate paymentAmount
         uint256 paymentAmount;
-        if (paymentDecimals >= exerciseTokenDecimals) {
-            paymentAmount = _amount * exercisePrice / (10**exerciseTokenDecimals);
-        } else {
-            paymentAmount = _amount * exercisePrice / (10**exerciseTokenDecimals);
-            paymentAmount = paymentAmount / (10**(exerciseTokenDecimals - paymentDecimals));
+        paymentAmount = _amount * exercisePrice / (10**exerciseTokenDecimals);
+        
+        //scale paymentAmount to payment token decimals
+        if(paymentDecimals<exerciseTokenDecimals) {
+            paymentAmount = paymentAmount / (10**(exerciseTokenDecimals-paymentDecimals));
         }
+        else {
+            paymentAmount = paymentAmount * (10**(paymentDecimals-exerciseTokenDecimals));
+        }
+        
         return paymentAmount;
     }
 
@@ -132,11 +136,13 @@ contract TokenOptionAllocation is BaseAllocation {
     /// @dev onlyGrantee -- must be called from the grantee
     /// @param _tokensToExercise - the number of tokens to exercise
     function exerciseTokenOption(uint256 _tokensToExercise) external nonReentrant onlyGrantee {
-        if(block.timestamp>shortStopTime && terminated) revert MetaVesT_ShortStopTimeNotReached();
+        if(block.timestamp>shortStopTime && terminated) revert MetaVest_ShortStopDatePassed();
         if (_tokensToExercise == 0) revert MetaVesT_ZeroAmount();
         if (_tokensToExercise > getAmountExercisable()) revert MetaVesT_MoreThanAvailable();
+
         // Calculate paymentAmount
         uint256 paymentAmount = getPaymentAmount(_tokensToExercise);
+        if(paymentAmount == 0) revert MetaVesT_TooSmallAmount();
         
         if (IERC20M(paymentToken).balanceOf(msg.sender) < paymentAmount) revert MetaVesT_InsufficientPaymentTokenBalance();
         safeTransferFrom(paymentToken, msg.sender, getAuthority(), paymentAmount);

@@ -417,7 +417,7 @@ contract metavestController is SafeTransferLib {
 
     /// @notice for the controller to update either exercisePrice or repurchasePrice for a '_grantee' and their transferees, as applicable depending on the '_grantee''s MetaVesTType
     /// @param _grant address of grantee whose applicable price is being updated
-    /// @param _newPrice new exercisePrice (if token option) or (repurchase price if restricted token award) in 'paymentToken' per metavested token
+    /// @param _newPrice new exercisePrice (if token option) or (repurchase price if restricted token award) as 'paymentToken' per 1 metavested token in vesting token decimals but only up to payment decimal precision
     function updateExerciseOrRepurchasePrice(
         address _grant,
         uint256 _newPrice

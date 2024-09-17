@@ -97,6 +97,7 @@ abstract contract BaseAllocation is ReentrancyGuard, SafeTransferLib{
 
         /// @notice MetaVesTController contract address, immutably tied to this MetaVesT
         address public immutable controller;
+        uint256 constant public MAX_MILESTONES = 20;
         /// @notice authority address, may replace itself in 'controller'
         address public authority; // REVIEW: probably just have `getAuthority` which calls thru to `controller`? Saves having to worry about updating if it changes?
         struct Milestone {
@@ -118,6 +119,9 @@ abstract contract BaseAllocation is ReentrancyGuard, SafeTransferLib{
         error MetaVesT_MoreThanAvailable();
         error MetaVesT_VestNotTransferable();
         error MetaVesT_ShortStopTimeNotReached();
+        error MetaVest_ShortStopDatePassed();
+        error MetaVesT_MaxMilestonesReached();
+        error MetaVesT_TooSmallAmount();
 
         event MetaVesT_MilestoneCompleted(address indexed grantee, uint256 indexed milestoneIndex);
         event MetaVesT_MilestoneAdded(address indexed grantee, Milestone milestone);
@@ -243,7 +247,12 @@ abstract contract BaseAllocation is ReentrancyGuard, SafeTransferLib{
         function removeMilestone(uint256 _milestoneIndex) external onlyController {
             if(terminated) revert MetaVesT_AlreadyTerminated();
             if (_milestoneIndex >= milestones.length) revert MetaVesT_ZeroAmount();
+            uint256 _milestoneAward = milestones[_milestoneIndex].milestoneAward;
+            //transfer the milestone award back to the authority, we check in the controller to ensure only uncompleted milestones can be removed
+            safeTransfer(allocation.tokenContract, getAuthority(), _milestoneAward);
             delete milestones[_milestoneIndex];
+            milestones[_milestoneIndex] = milestones[milestones.length - 1];
+            milestones.pop();
             emit MetaVesT_MilestoneRemoved(grantee, _milestoneIndex);
         }
 
@@ -252,6 +261,7 @@ abstract contract BaseAllocation is ReentrancyGuard, SafeTransferLib{
         /// @param _milestone - the milestone to add
         function addMilestone(Milestone calldata _milestone) external onlyController {
             if(terminated) revert MetaVesT_AlreadyTerminated();
+            if(milestones.length >= MAX_MILESTONES) revert MetaVesT_MaxMilestonesReached();
             milestones.push(_milestone);
             emit MetaVesT_MilestoneAdded(grantee, _milestone);
         }
