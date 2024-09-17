@@ -188,7 +188,7 @@ contract metavestController is SafeTransferLib {
         address grantee =BaseAllocation(_grant).grantee();
         if(msg.sender!= grantee) revert MetaVesTController_OnlyGrantee();
 
-        functionToGranteeToAmendmentPending[_msgSig][_grant].inFavor = true;
+        functionToGranteeToAmendmentPending[_msgSig][_grant].inFavor = _inFavor;
         emit MetaVesTController_AmendmentConsentUpdated(_msgSig, msg.sender, _inFavor);
     }
 
