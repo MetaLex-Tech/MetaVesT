@@ -141,7 +141,7 @@ contract metavestController is SafeTransferLib {
         if (isMetavestInSet(_grant)) {
             string memory set = getSetOfMetavest(_grant);
             MajorityAmendmentProposal memory proposal = functionToSetMajorityProposal[msg.sig][set];
-            if (_data.length>32)
+            if (_data.length>32 && _data.length<69)
             {
                 if (!proposal.isPending || proposal.totalVotingPower>proposal.currentVotingPower*2 || keccak256(_data[_data.length - 32:]) != proposal.dataHash ) {
                     revert MetaVesTController_AmendmentNeitherMutualNorMajorityConsented();
