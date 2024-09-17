@@ -139,6 +139,8 @@ contract Audit is MetaVestControllerTest {
         console.log("expected inFavor: false");
         (,,bool inFavor) = controller.functionToGranteeToAmendmentPending(selector, vestingAllocation);
         console.log("output: ", inFavor);
+        assertEq(inFavor, false);
+
     }
 
     function testAuditProposeMajorityMetavestAmendmentNewGranteeDuringProposal() public {
@@ -179,4 +181,23 @@ contract Audit is MetaVestControllerTest {
         console.log("totalVotingPower: ", totalVotingPower);
         console.log("currentVotingPower: ", currentVotingPower);
     }
+
+    function testCreateSetAddVestingThenRemoveSet() public {
+        
+        // template from testCreateSetAddVestingThenRemoveSet
+        address allocation1 = createDummyVestingAllocation();
+        address allocation2 = createDummyVestingAllocation();
+        address allocation3 = createDummyVestingAllocation();
+
+        vm.startPrank(authority);
+        controller.createSet("testSetB");
+        controller.addMetaVestToSet("testSetB", allocation1);
+        controller.addMetaVestToSet("testSetB", allocation2);
+        controller.addMetaVestToSet("testSetB", allocation3);
+        controller.removeSet("testSetB");
+        controller.createSet("testSetB");
+        vm.stopPrank();
+
+    }
+
 }
