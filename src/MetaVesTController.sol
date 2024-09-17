@@ -566,8 +566,8 @@ contract metavestController is SafeTransferLib {
         bytes4 _msgSig,
         bytes calldata _callData
     ) external onlyAuthority {
-        //if the majority proposal is already pending and not expired, revert
-        if (functionToSetMajorityProposal[_msgSig][setName].isPending && block.timestamp > functionToSetMajorityProposal[_msgSig][setName].time)
+
+        if (functionToSetMajorityProposal[_msgSig][setName].isPending && block.timestamp < functionToSetMajorityProposal[_msgSig][setName].time + AMENDMENT_TIME_LIMIT)
             revert MetaVesTController_AmendmentAlreadyPending();
 
         uint256 totalVotingPower;
