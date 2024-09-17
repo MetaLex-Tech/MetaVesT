@@ -72,6 +72,8 @@ contract metavestController is SafeTransferLib {
     /// @notice tracks if an address has voted for an amendment by mapping a hash of the pertinent details to time they last voted for these details (voter, function and affected grantee)
     mapping(bytes32 => uint256) internal _lastVoted;
 
+    mapping(string => bool) public setMajorityVoteActive;
+
     ///
     /// EVENTS
     ///
@@ -566,8 +568,8 @@ contract metavestController is SafeTransferLib {
         bytes4 _msgSig,
         bytes calldata _callData
     ) external onlyAuthority {
-
-        if (functionToSetMajorityProposal[_msgSig][setName].isPending && block.timestamp < functionToSetMajorityProposal[_msgSig][setName].time + AMENDMENT_TIME_LIMIT)
+        //if the majority proposal is already pending and not expired, revert
+        if ((functionToSetMajorityProposal[_msgSig][setName].isPending && block.timestamp < functionToSetMajorityProposal[_msgSig][setName].time + AMENDMENT_TIME_LIMIT) || setMajorityVoteActive[setName])
             revert MetaVesTController_AmendmentAlreadyPending();
 
         uint256 totalVotingPower;
@@ -582,6 +584,7 @@ contract metavestController is SafeTransferLib {
         keccak256(_callData[_callData.length - 32:]),
         new address[](0)    
         );
+        setMajorityVoteActive[setName] = true;
         emit MetaVesTController_MajorityAmendmentProposed(setName, _msgSig, _callData);
     }
 
@@ -611,8 +614,13 @@ contract metavestController is SafeTransferLib {
     }
 
     /// @notice resets applicable amendment variables because either the applicable amending function has been successfully called or a pending amendment is being overridden with a new one
-    function _resetAmendmentParams(address _grantee, bytes4 _msgSig) internal {
-        delete functionToGranteeToAmendmentPending[_msgSig][_grantee];
+    function _resetAmendmentParams(address _grant, bytes4 _msgSig) internal {
+        if(isMetavestInSet(_grant))
+        {
+            string memory set = getSetOfMetavest(_grant);
+            setMajorityVoteActive[set] = false;
+        }
+        delete functionToGranteeToAmendmentPending[_msgSig][_grant];
     }
 
     /// @notice check whether the applicable proposed amendment has expired
@@ -632,6 +640,7 @@ contract metavestController is SafeTransferLib {
     }
 
     function removeSet(string memory _name) external onlyAuthority {
+        if(setMajorityVoteActive[_name]) revert MetaVesTController_AmendmentAlreadyPending();
         for (uint256 i; i < setNames.length; ++i) {
             if (keccak256(bytes(setNames[i])) == keccak256(bytes(_name))) {
                 setNames[i] = setNames[setNames.length - 1];
@@ -678,11 +687,13 @@ contract metavestController is SafeTransferLib {
     function addMetaVestToSet(string memory _name, address _metaVest) external onlyAuthority {
         if(!doesSetExist(_name)) revert MetaVesTController_SetDoesNotExist();
         if(isMetavestInSet(_metaVest)) revert MetaVesTController_MetaVesTAlreadyExists();
+        if(setMajorityVoteActive[_name]) revert MetaVesTController_AmendmentAlreadyPending();
         sets[_name].push(_metaVest);
     }
 
     function removeMetaVestFromSet(string memory _name, address _metaVest) external onlyAuthority {
         if(!doesSetExist(_name)) revert MetaVesTController_SetDoesNotExist();
+        if(setMajorityVoteActive[_name]) revert MetaVesTController_AmendmentAlreadyPending();
         for (uint256 i; i < sets[_name].length; ++i) {
             if (sets[_name][i] == _metaVest) {
                 sets[_name][i] = sets[_name][sets[_name].length - 1];
