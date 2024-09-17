@@ -153,7 +153,7 @@ contract TokenOptionAllocation is BaseAllocation {
         for (uint256 i; i < milestones.length; ++i) {
                 milestonesAllocation += milestones[i].milestoneAward;
         }
-        uint256 tokensToRecover = allocation.tokenStreamTotal + milestonesAllocation - getAmountExercisable() - tokensExercised + tokensWithdrawn;
+        uint256 tokensToRecover = allocation.tokenStreamTotal + milestonesAllocation - getAmountExercisable() - tokensExercised;
         terminationTime = block.timestamp;
         shortStopTime = block.timestamp + shortStopDuration;
         safeTransfer(allocation.tokenContract, getAuthority(), tokensToRecover);
