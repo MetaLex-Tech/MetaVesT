@@ -589,6 +589,7 @@ contract metavestController is SafeTransferLib {
     function voteOnMetavestAmendment(address _grant, string memory _setName, bytes4 _msgSig, bool _inFavor) external {
 
         if(BaseAllocation(_grant).grantee() != msg.sender) revert MetaVesTController_OnlyGrantee();
+        if (!isMetavestInSet(_grant, _setName)) revert MetaVesTController_SetDoesNotExist();
         if (!functionToSetMajorityProposal[_msgSig][_setName].isPending) revert MetaVesTController_NoPendingAmendment(_msgSig, _grant);
         if (!_checkFunctionToTokenToAmendmentTime(_msgSig, _setName))
             revert MetaVesTController_ProposedAmendmentExpired();
@@ -651,6 +652,13 @@ contract metavestController is SafeTransferLib {
             for (uint256 j; j < sets[setNames[i]].length; ++j) {
                 if (sets[setNames[i]][j] == _metavest) return true;
             }
+        }
+        return false;
+    }
+
+    function isMetavestInSet(address _metavest, string memory _setName) internal view returns (bool) {
+        for (uint256 i; i < sets[_setName].length; ++i) {
+            if (sets[_setName][i] == _metavest) return true;
         }
         return false;
     }
