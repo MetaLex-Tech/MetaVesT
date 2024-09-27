@@ -112,6 +112,7 @@ abstract contract BaseAllocation is ReentrancyGuard, SafeTransferLib{
         error MetaVesT_ZeroAddress();
         error MetaVesT_RateTooHigh();
         error MetaVesT_ZeroAmount();
+        error MetaVesT_MilestoneIndexOutOfRange();
         error MetaVesT_NotTerminated();
         error MetaVesT_MilestoneIndexCompletedOrDoesNotExist();
         error MetaVesT_ConditionNotSatisfied();
@@ -246,7 +247,7 @@ abstract contract BaseAllocation is ReentrancyGuard, SafeTransferLib{
         /// @param _milestoneIndex - the index of the milestone to remove
         function removeMilestone(uint256 _milestoneIndex) external onlyController {
             if(terminated) revert MetaVesT_AlreadyTerminated();
-            if (_milestoneIndex >= milestones.length) revert MetaVesT_ZeroAmount();
+            if (_milestoneIndex >= milestones.length) revert MetaVesT_MilestoneIndexOutOfRange();
             uint256 _milestoneAward = milestones[_milestoneIndex].milestoneAward;
             //transfer the milestone award back to the authority, we check in the controller to ensure only uncompleted milestones can be removed
             safeTransfer(allocation.tokenContract, getAuthority(), _milestoneAward);

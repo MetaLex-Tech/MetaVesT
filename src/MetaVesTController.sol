@@ -97,7 +97,7 @@ contract metavestController is SafeTransferLib {
     ///
 
     error MetaVesTController_AlreadyVoted();
-    error MetaVesTController_OnlyGrantee();
+    error MetaVesTController_OnlyGranteeMayCall();
     error MetaVesTController_AmendmentNeitherMutualNorMajorityConsented();
     error MetaVesTController_AmendmentAlreadyPending();
     error MetaVesTController_AmountNotApprovedForTransferFrom();
@@ -188,7 +188,7 @@ contract metavestController is SafeTransferLib {
        if (!functionToGranteeToAmendmentPending[_msgSig][_grant].isPending)
             revert MetaVesTController_NoPendingAmendment(_msgSig, _grant);
         address grantee =BaseAllocation(_grant).grantee();
-        if(msg.sender!= grantee) revert MetaVesTController_OnlyGrantee();
+        if(msg.sender!= grantee) revert MetaVesTController_OnlyGranteeMayCall();
 
         functionToGranteeToAmendmentPending[_msgSig][_grant].inFavor = _inFavor;
         emit MetaVesTController_AmendmentConsentUpdated(_msgSig, msg.sender, _inFavor);
@@ -593,7 +593,7 @@ contract metavestController is SafeTransferLib {
     /// @param _inFavor whether msg.sender is in favor of the applicable amendment
     function voteOnMetavestAmendment(address _grant, string memory _setName, bytes4 _msgSig, bool _inFavor) external {
 
-        if(BaseAllocation(_grant).grantee() != msg.sender) revert MetaVesTController_OnlyGrantee();
+        if(BaseAllocation(_grant).grantee() != msg.sender) revert MetaVesTController_OnlyGranteeMayCall();
         if (!isMetavestInSet(_grant, _setName)) revert MetaVesTController_SetDoesNotExist();
         if (!functionToSetMajorityProposal[_msgSig][_setName].isPending) revert MetaVesTController_NoPendingAmendment(_msgSig, _grant);
         if (!_checkFunctionToTokenToAmendmentTime(_msgSig, _setName))
