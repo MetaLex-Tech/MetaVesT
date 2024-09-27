@@ -1481,6 +1481,42 @@ contract MetaVestControllerTest is Test {
     }
 
         // Helper functions to create dummy allocations for testing
+    function createDummyVestingAllocationNoUnlock() internal returns (address) {
+        BaseAllocation.Allocation memory allocation = BaseAllocation.Allocation({
+            tokenContract: address(token),
+            tokenStreamTotal: 1000e18,
+            vestingCliffCredit: 100e18,
+            unlockingCliffCredit: 100e18,
+            vestingRate: 10e18,
+            vestingStartTime: uint48(block.timestamp),
+            unlockRate: 10e18,
+            unlockStartTime: uint48(block.timestamp)
+        });
+
+        BaseAllocation.Milestone[] memory milestones = new BaseAllocation.Milestone[](1);
+        milestones[0] = BaseAllocation.Milestone({
+            milestoneAward: 1000e18,
+            unlockOnCompletion: false,
+            complete: false,
+            conditionContracts: new address[](0)
+        });
+
+        token.approve(address(controller), 2100e18);
+
+        return controller.createMetavest(
+            metavestController.metavestType.Vesting,
+            grantee,
+            allocation,
+            milestones,
+            0,
+            address(0),
+            0,
+            0
+            
+        );
+    }
+
+        // Helper functions to create dummy allocations for testing
     function createDummyVestingAllocationSlowUnlock() internal returns (address) {
         BaseAllocation.Allocation memory allocation = BaseAllocation.Allocation({
             tokenContract: address(token),
@@ -1500,6 +1536,37 @@ contract MetaVestControllerTest is Test {
             complete: false,
             conditionContracts: new address[](0)
         });
+
+        token.approve(address(controller), 2100e18);
+
+        return controller.createMetavest(
+            metavestController.metavestType.Vesting,
+            grantee,
+            allocation,
+            milestones,
+            0,
+            address(0),
+            0,
+            0
+            
+        );
+    }
+
+        // Helper functions to create dummy allocations for testing
+    function createDummyVestingAllocationLarge() internal returns (address) {
+        BaseAllocation.Allocation memory allocation = BaseAllocation.Allocation({
+            tokenContract: address(token),
+            tokenStreamTotal: 1000e18,
+            vestingCliffCredit: 0,
+            unlockingCliffCredit: 0,
+            vestingRate: 10e18,
+            vestingStartTime: uint48(block.timestamp),
+            unlockRate: 10e18,
+            unlockStartTime: uint48(block.timestamp)
+        });
+
+        BaseAllocation.Milestone[] memory milestones = new BaseAllocation.Milestone[](0);
+
 
         token.approve(address(controller), 2100e18);
 
@@ -1549,6 +1616,7 @@ contract MetaVestControllerTest is Test {
             0
         );
     }
+
 
    function createDummyRestrictedTokenAward() internal returns (address) {
         BaseAllocation.Allocation memory allocation = BaseAllocation.Allocation({
@@ -1693,6 +1761,33 @@ contract MetaVestControllerTest is Test {
         assertEq(token.balanceOf(vestingAllocation), 0);
     }
 
+    function testTerminateRecoverAll() public {
+        address vestingAllocation = createDummyVestingAllocationLarge();
+        uint256 snapshot = token.balanceOf(authority);
+         vm.warp(block.timestamp + 25 seconds);
+        controller.terminateMetavestVesting(vestingAllocation);
+        vm.startPrank(grantee);
+        VestingAllocation(vestingAllocation).withdraw(VestingAllocation(vestingAllocation).getAmountWithdrawable());
+        vm.stopPrank();
+        assertEq(token.balanceOf(vestingAllocation), 0);
+    }
+
+        function testTerminateRecoverChunksBefore() public {
+        address vestingAllocation = createDummyVestingAllocationLarge();
+        uint256 snapshot = token.balanceOf(authority);
+         vm.warp(block.timestamp + 25 seconds);
+        vm.startPrank(grantee);
+        VestingAllocation(vestingAllocation).withdraw(VestingAllocation(vestingAllocation).getAmountWithdrawable());
+        vm.stopPrank();
+         vm.warp(block.timestamp + 25 seconds);
+
+        controller.terminateMetavestVesting(vestingAllocation);
+        vm.startPrank(grantee);
+        VestingAllocation(vestingAllocation).withdraw(VestingAllocation(vestingAllocation).getAmountWithdrawable());
+        vm.stopPrank();
+        assertEq(token.balanceOf(vestingAllocation), 0);
+    }
+
     function testConfirmingMilestoneRestrictedTokenAllocation() public {
         address vestingAllocation = createDummyRestrictedTokenAward();
         uint256 snapshot = token.balanceOf(authority);
@@ -1713,6 +1808,20 @@ contract MetaVestControllerTest is Test {
         ERC20Stable(paymentToken).approve(vestingAllocation, TokenOptionAllocation(vestingAllocation).getPaymentAmount(TokenOptionAllocation(vestingAllocation).getAmountExercisable()));
         TokenOptionAllocation(vestingAllocation).exerciseTokenOption(TokenOptionAllocation(vestingAllocation).getAmountExercisable());
         TokenOptionAllocation(vestingAllocation).withdraw(VestingAllocation(vestingAllocation).getAmountWithdrawable());
+        vm.stopPrank();
+    }
+
+    function testUnlockMilestoneNotUnlocked() public {
+        address vestingAllocation = createDummyVestingAllocationNoUnlock();
+        uint256 snapshot = token.balanceOf(authority);
+        VestingAllocation(vestingAllocation).confirmMilestone(0);
+        vm.warp(block.timestamp + 50 seconds);
+        vm.startPrank(grantee);
+        VestingAllocation(vestingAllocation).withdraw(VestingAllocation(vestingAllocation).getAmountWithdrawable());
+        console.log(token.balanceOf(vestingAllocation));
+        vm.warp(block.timestamp + 1050 seconds);
+        VestingAllocation(vestingAllocation).withdraw(VestingAllocation(vestingAllocation).getAmountWithdrawable());
+        console.log(token.balanceOf(vestingAllocation));
         vm.stopPrank();
     }
 

@@ -114,8 +114,8 @@ contract VestingAllocation is BaseAllocation {
         uint256 _timeElapsedSinceUnlock = block.timestamp - allocation.unlockStartTime;
         uint256 _tokensUnlocked = (_timeElapsedSinceUnlock * allocation.unlockRate) + allocation.unlockingCliffCredit;
 
-        if(_tokensUnlocked>allocation.tokenStreamTotal) 
-            _tokensUnlocked = allocation.tokenStreamTotal;
+        if(_tokensUnlocked>allocation.tokenStreamTotal + milestoneAwardTotal) 
+            _tokensUnlocked = allocation.tokenStreamTotal + milestoneAwardTotal;
 
         return _tokensUnlocked += milestoneUnlockedTotal;
     }
