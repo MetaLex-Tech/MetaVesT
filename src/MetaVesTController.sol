@@ -56,6 +56,7 @@ contract metavestController is SafeTransferLib {
         bool isPending;
         bytes32 dataHash;
         address[] voters;
+        mapping(address => uint256) voterPower;
     }
 
     enum metavestType { Vesting, TokenOption, RestrictedTokenAward }
@@ -142,7 +143,7 @@ contract metavestController is SafeTransferLib {
     modifier consentCheck(address _grant, bytes calldata _data) {
         if (isMetavestInSet(_grant)) {
             string memory set = getSetOfMetavest(_grant);
-            MajorityAmendmentProposal memory proposal = functionToSetMajorityProposal[msg.sig][set];
+            MajorityAmendmentProposal storage proposal = functionToSetMajorityProposal[msg.sig][set];
             if (_data.length>32 && _data.length<69)
             {
                 if (!proposal.isPending || proposal.totalVotingPower>proposal.currentVotingPower*2 || keccak256(_data[_data.length - 32:]) != proposal.dataHash ) {
@@ -151,7 +152,7 @@ contract metavestController is SafeTransferLib {
             }
             else revert MetaVesTController_AmendmentNeitherMutualNorMajorityConsented();
         } else {
-            AmendmentProposal memory proposal = functionToGranteeToAmendmentPending[msg.sig][_grant];
+            AmendmentProposal storage proposal = functionToGranteeToAmendmentPending[msg.sig][_grant];
             if (!proposal.inFavor || proposal.dataHash != keccak256(_data)) {
                 revert MetaVesTController_AmendmentNeitherMutualNorMajorityConsented();
             }
@@ -572,18 +573,21 @@ contract metavestController is SafeTransferLib {
         if ((functionToSetMajorityProposal[_msgSig][setName].isPending && block.timestamp < functionToSetMajorityProposal[_msgSig][setName].time + AMENDMENT_TIME_LIMIT) || setMajorityVoteActive[setName])
             revert MetaVesTController_AmendmentAlreadyPending();
 
+        MajorityAmendmentProposal storage proposal = functionToSetMajorityProposal[_msgSig][setName];
+        proposal.isPending = true;
+        proposal.dataHash = keccak256(_callData[_callData.length - 32:]);
+        proposal.time = block.timestamp;
+        proposal.voters = new address[](0);
+        proposal.currentVotingPower = 0;
+        
         uint256 totalVotingPower;
         for (uint256 i; i < sets[setName].length; ++i) {
-            totalVotingPower += BaseAllocation(sets[setName][i]).getGoverningPower();
+            uint256 _votingPower = BaseAllocation(sets[setName][i]).getGoverningPower();
+            totalVotingPower += _votingPower;
+            proposal.voterPower[sets[setName][i]] = _votingPower;
         }
-        functionToSetMajorityProposal[_msgSig][setName] = MajorityAmendmentProposal(
-        totalVotingPower,
-        0,
-        block.timestamp,
-        true,
-        keccak256(_callData[_callData.length - 32:]),
-        new address[](0)    
-        );
+        proposal.totalVotingPower = totalVotingPower;
+
         setMajorityVoteActive[setName] = true;
         emit MetaVesTController_MajorityAmendmentProposed(setName, _msgSig, _callData);
     }
@@ -598,9 +602,9 @@ contract metavestController is SafeTransferLib {
         if (!functionToSetMajorityProposal[_msgSig][_setName].isPending) revert MetaVesTController_NoPendingAmendment(_msgSig, _grant);
         if (!_checkFunctionToTokenToAmendmentTime(_msgSig, _setName))
             revert MetaVesTController_ProposedAmendmentExpired();
-        uint256 _callerPower =  BaseAllocation(_grant).getGoverningPower();
 
         metavestController.MajorityAmendmentProposal storage proposal = functionToSetMajorityProposal[_msgSig][_setName];
+        uint256 _callerPower = proposal.voterPower[_grant];
         
         //check if the grant has already voted.
         for (uint256 i; i < proposal.voters.length; ++i) {
