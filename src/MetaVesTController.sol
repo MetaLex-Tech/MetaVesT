@@ -86,8 +86,8 @@ contract metavestController is SafeTransferLib {
     event MetaVesTController_DaoUpdated(address newDao);
     event MetaVesTController_MetaVesTDeployed(address indexed metavest);
     event MetaVesTController_MetaVesTCreated(address indexed grantee, address allocationAddress, uint256 totalAmount);
-    event MetaVesTController_MajorityAmendmentProposed(string indexed set, bytes4 msgSig, bytes callData);
-    event MetaVesTController_MajorityAmendmentConsentUpdated(string indexed set, bytes4 msgSig, address grantee, bool inFavor);
+    event MetaVesTController_MajorityAmendmentProposed(string indexed set, bytes4 msgSig, bytes callData, uint256 totalVotingPower);
+    event MetaVesTController_MajorityAmendmentVoted(string indexed set, bytes4 msgSig, address grantee, bool inFavor, uint256 votingPower, uint256 currentVotingPower, uint256 totalVotingPower);
     event MetaVesTController_SetCreated(string indexed set);
     event MetaVesTController_SetRemoved(string indexed set);
     event MetaVesTController_AddressAddedToSet(string set, address indexed grantee);
@@ -582,14 +582,14 @@ contract metavestController is SafeTransferLib {
         
         uint256 totalVotingPower;
         for (uint256 i; i < sets[setName].length; ++i) {
-            uint256 _votingPower = BaseAllocation(sets[setName][i]).getGoverningPower();
+            uint256 _votingPower = BaseAllocation(sets[setName][i]).getMajorityVotingPower();
             totalVotingPower += _votingPower;
             proposal.voterPower[sets[setName][i]] = _votingPower;
         }
         proposal.totalVotingPower = totalVotingPower;
 
         setMajorityVoteActive[setName] = true;
-        emit MetaVesTController_MajorityAmendmentProposed(setName, _msgSig, _callData);
+        emit MetaVesTController_MajorityAmendmentProposed(setName, _msgSig, _callData, totalVotingPower);
     }
 
     /// @notice for a grantees to vote upon a metavest update for which they share a common amount of 'tokenGoverningPower'
@@ -615,6 +615,7 @@ contract metavestController is SafeTransferLib {
             proposal.voters.push(_grant);
             proposal.currentVotingPower += _callerPower;
         } 
+        emit MetaVesTController_MajorityAmendmentVoted(_setName, _msgSig, _grant, _inFavor, _callerPower, proposal.currentVotingPower, proposal.totalVotingPower);
     }
 
     /// @notice resets applicable amendment variables because either the applicable amending function has been successfully called or a pending amendment is being overridden with a new one

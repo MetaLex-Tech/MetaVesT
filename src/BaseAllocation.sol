@@ -184,6 +184,19 @@ abstract contract BaseAllocation is ReentrancyGuard, SafeTransferLib{
         function terminate() external virtual;// onlyController;
         function getAmountWithdrawable() public view virtual returns (uint256);
 
+        /// @notice returns the amount of voting power that may be affected by amendment proposals
+        /// @return majorityVotingPower - the amount of tokens that are vested, locked, and unexercised
+        function getMajorityVotingPower() external view returns (uint256 majorityVotingPower) {
+            //add up the total tokens that are unvested or locked
+            uint256 totalMilestoneAward = 0;
+            for(uint256 i; i < milestones.length; ++i)
+            { 
+                    totalMilestoneAward += milestones[i].milestoneAward;
+            }
+            uint256 tokensNotAffected = tokensWithdrawn + getAmountWithdrawable();
+            majorityVotingPower = allocation.tokenStreamTotal + totalMilestoneAward - tokensNotAffected;
+        }
+
         /// @notice updates the transferability of the vesting contract
         /// @dev onlyController -- must be called from the metavest controller
         /// @param _transferable - bool to set the transferability of the vesting contract

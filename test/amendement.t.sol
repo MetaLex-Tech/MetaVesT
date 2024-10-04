@@ -616,9 +616,68 @@ contract MetaVestControllerTest is Test {
         vm.warp(block.timestamp + 1 days);
         vm.prank(authority);
         controller.proposeMajorityMetavestAmendment("testSet", msgSig, callData);
+        
+        vm.prank(grantee);
+        //log the current withdrawable
+        console.log(TokenOptionAllocation(mockAllocation2).getAmountWithdrawable());
+
+        controller.voteOnMetavestAmendment(mockAllocation2, "testSet", msgSig, true);
+
+        vm.prank(authority);
+        controller.updateMetavestTransferability(mockAllocation2, true);
+    }
+
+    function testQuickProposeMajorityMetavestAmendment() public {
+        address mockAllocation2 = createDummyVestingAllocation();
+        address mockAllocation3 = createDummyVestingAllocation();
+        address mockAllocation4 = createDummyVestingAllocation();
+        bytes4 msgSig = bytes4(keccak256("updateMetavestTransferability(address,bool)"));
+        bytes memory callData = abi.encodeWithSelector(msgSig, mockAllocation2, true);
+
+        vm.prank(authority);
+        controller.addMetaVestToSet("testSet", mockAllocation2);
+        controller.addMetaVestToSet("testSet", mockAllocation3);
+        controller.addMetaVestToSet("testSet", mockAllocation4);
+        vm.warp(block.timestamp + 15 seconds);
+        vm.prank(authority);
+        controller.proposeMajorityMetavestAmendment("testSet", msgSig, callData);
+        
+        vm.startPrank(grantee);
+        //log the current withdrawable
+        console.log(TokenOptionAllocation(mockAllocation2).getAmountWithdrawable());
+
+        controller.voteOnMetavestAmendment(mockAllocation2, "testSet", msgSig, true);
+        
+        controller.voteOnMetavestAmendment(mockAllocation3, "testSet", msgSig, true);
+        vm.stopPrank();
+        vm.prank(authority);
+        controller.updateMetavestTransferability(mockAllocation2, true);
+    }
+
+
+    function testMajorityPowerMetavestAmendment() public {
+        address mockAllocation2 = createDummyTokenOptionAllocation();
+        address mockAllocation3 = createDummyTokenOptionAllocation();
+        address mockAllocation4 = createDummyTokenOptionAllocation();
+        bytes4 msgSig = bytes4(keccak256("updateMetavestTransferability(address,bool)"));
+        bytes memory callData = abi.encodeWithSelector(msgSig, mockAllocation2, true);
+
+        vm.prank(authority);
+        controller.addMetaVestToSet("testSet", mockAllocation2);
+        controller.addMetaVestToSet("testSet", mockAllocation3);
+        controller.addMetaVestToSet("testSet", mockAllocation4);
+        vm.warp(block.timestamp + 1 days);
+        vm.startPrank(grantee);
+         ERC20(paymentToken).approve(address(mockAllocation2), 2000e18);
+         TokenOptionAllocation(mockAllocation2).exerciseTokenOption(TokenOptionAllocation(mockAllocation2).getAmountExercisable());
+        vm.stopPrank();
+        vm.prank(authority);
+        controller.proposeMajorityMetavestAmendment("testSet", msgSig, callData);
 
         vm.prank(grantee);
-        controller.voteOnMetavestAmendment(mockAllocation2, "testSet", msgSig, true);
+        controller.voteOnMetavestAmendment(mockAllocation3, "testSet", msgSig, true);
+        vm.prank(grantee);
+        controller.voteOnMetavestAmendment(mockAllocation4, "testSet", msgSig, true);
 
         vm.prank(authority);
         controller.updateMetavestTransferability(mockAllocation2, true);
