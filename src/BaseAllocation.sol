@@ -165,7 +165,6 @@ abstract contract BaseAllocation is ReentrancyGuard, SafeTransferLib{
         GovType public govType;
         bool public terminated;
         uint256 public terminationTime;
-        address[] prevOwners;
 
         /// @notice BaseAllocation constructor
         /// @param _grantee: address of the grantee, cannot be a zero address
@@ -287,7 +286,6 @@ abstract contract BaseAllocation is ReentrancyGuard, SafeTransferLib{
             if(_newOwner == address(0)) revert MetaVesT_ZeroAddress();
             if(!transferable) revert MetaVesT_VestNotTransferable();
             emit MetaVesT_TransferredRights(grantee, _newOwner);
-            prevOwners.push(grantee);
             grantee = _newOwner;
         }
 
