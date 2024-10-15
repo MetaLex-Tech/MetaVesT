@@ -505,6 +505,7 @@ contract metavestController is SafeTransferLib {
     }
 
     function setMetaVestGovVariables(address _grant, BaseAllocation.GovType _govType) external onlyAuthority consentCheck(_grant, msg.data){
+         _resetAmendmentParams(_grant, _msgSig);
         BaseAllocation(_grant).setGovVariables(_govType);
     }
 
