@@ -187,7 +187,7 @@ contract RestrictedTokenAward is BaseAllocation {
         for (uint256 i; i < milestones.length; ++i) {
                 milestonesAllocation += milestones[i].milestoneAward;
         }
-        return allocation.tokenStreamTotal + milestonesAllocation - getVestedTokenAmount();
+        return allocation.tokenStreamTotal + milestonesAllocation - getVestedTokenAmount() - tokensRepurchased;
     }
 
     /// @notice returns the amount of tokens that are vested
