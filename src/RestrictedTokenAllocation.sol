@@ -113,18 +113,18 @@ contract RestrictedTokenAward is BaseAllocation {
     /// @return paymentAmount - the payment amount for the given token amount in the payment token decimals
     function getPaymentAmount(uint256 _amount) public view returns (uint256) {
         uint8 paymentDecimals = IERC20M(paymentToken).decimals();
-        uint8 exerciseTokenDecimals = IERC20M(allocation.tokenContract).decimals();
+        uint8 repurchaseTokenDecimals = IERC20M(allocation.tokenContract).decimals();
         
         // Calculate paymentAmount
         uint256 paymentAmount;
-        paymentAmount = _amount * repurchasePrice / (10**exerciseTokenDecimals);
+        paymentAmount = _amount * repurchasePrice / (10**repurchaseTokenDecimals);
         
         //scale paymentAmount to payment token decimals
-        if(paymentDecimals<exerciseTokenDecimals) {
-            paymentAmount = paymentAmount / (10**(exerciseTokenDecimals-paymentDecimals));
+        if(paymentDecimals<repurchaseTokenDecimals) {
+            paymentAmount = paymentAmount / (10**(repurchaseTokenDecimals-paymentDecimals));
         }
         else {
-            paymentAmount = paymentAmount * (10**(paymentDecimals-exerciseTokenDecimals));
+            paymentAmount = paymentAmount * (10**(paymentDecimals-repurchaseTokenDecimals));
         }
         
         return paymentAmount;
