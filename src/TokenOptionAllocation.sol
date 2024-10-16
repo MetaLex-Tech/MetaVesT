@@ -5,7 +5,6 @@ pragma solidity 0.8.20;
 
 contract TokenOptionAllocation is BaseAllocation {
 
-    IERC20M internal immutable ipaymentToken;
     /// @notice address of payment token used for token option exercises or restricted token repurchases
     address public immutable paymentToken;
     uint256 public tokensExercised;
@@ -57,7 +56,6 @@ contract TokenOptionAllocation is BaseAllocation {
         shortStopDuration = _shortStopDuration;
 
         paymentToken = _paymentToken;
-        ipaymentToken = IERC20M(_paymentToken);
 
         // manually copy milestones
         for (uint256 i; i < _milestones.length; ++i) {
