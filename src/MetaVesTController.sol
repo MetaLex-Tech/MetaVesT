@@ -27,7 +27,6 @@ contract metavestController is SafeTransferLib {
     /// @dev opinionated time limit for a MetaVesT amendment, one calendar week in seconds
     uint256 internal constant AMENDMENT_TIME_LIMIT = 604800;
     uint256 internal constant ARRAY_LENGTH_LIMIT = 20;
-    uint256 internal constant BUFFER = 1e18;
 
     mapping(address => address[]) public vestingAllocations;
     mapping(address => address[]) public restrictedTokenAllocations;
@@ -84,8 +83,6 @@ contract metavestController is SafeTransferLib {
     event MetaVesTController_AuthorityUpdated(address indexed newAuthority);
     event MetaVesTController_ConditionUpdated(address indexed condition, bytes4 functionSig);
     event MetaVesTController_DaoUpdated(address newDao);
-    event MetaVesTController_MetaVesTDeployed(address indexed metavest);
-    event MetaVesTController_MetaVesTCreated(address indexed grantee, address allocationAddress, uint256 totalAmount);
     event MetaVesTController_MajorityAmendmentProposed(string indexed set, bytes4 msgSig, bytes callData, uint256 totalVotingPower);
     event MetaVesTController_MajorityAmendmentVoted(string indexed set, bytes4 msgSig, address grantee, bool inFavor, uint256 votingPower, uint256 currentVotingPower, uint256 totalVotingPower);
     event MetaVesTController_SetCreated(string indexed set);
@@ -104,11 +101,9 @@ contract metavestController is SafeTransferLib {
     error MetaVesTController_AmountNotApprovedForTransferFrom();
     error MetaVesTController_CliffGreaterThanTotal();
     error MetaVesTController_ConditionNotSatisfied(address condition);
-    error MetaVesTController_IncorrectMetaVesTToken(address grantee);
     error MetaVesTController_IncorrectMetaVesTType();
     error MetaVesTController_LengthMismatch();
     error MetaVesTController_MetaVesTAlreadyExists();
-    error MetaVesTController_MetaVesTDoesNotExistForThisGrantee();
     error MetaVesTController_MilestoneIndexCompletedOrDoesNotExist();
     error MetaVesTController_NoPendingAmendment(bytes4 msgSig, address affectedGrantee);
     error MetaVesTController_OnlyAuthority();
@@ -116,8 +111,6 @@ contract metavestController is SafeTransferLib {
     error MetaVesTController_OnlyPendingAuthority();
     error MetaVesTController_OnlyPendingDao();
     error MetaVesTController_ProposedAmendmentExpired();
-    error MetaVesTController_RepurchaseExpired();
-    error MetaVesTController_TimeVariableError();
     error MetaVesTController_ZeroAddress();
     error MetaVesTController_ZeroAmount();
     error MetaVesTController_ZeroPrice();
@@ -697,6 +690,7 @@ contract metavestController is SafeTransferLib {
         if(isMetavestInSet(_metaVest)) revert MetaVesTController_MetaVesTAlreadyExists();
         if(setMajorityVoteActive[_name]) revert MetaVesTController_AmendmentAlreadyPending();
         sets[_name].push(_metaVest);
+        emit MetaVesTController_AddressAddedToSet(_name, _metaVest);
     }
 
     function removeMetaVestFromSet(string memory _name, address _metaVest) external onlyAuthority {
@@ -706,6 +700,7 @@ contract metavestController is SafeTransferLib {
             if (sets[_name][i] == _metaVest) {
                 sets[_name][i] = sets[_name][sets[_name].length - 1];
                 sets[_name].pop();
+                emit MetaVesTController_AddressRemovedFromSet(_name, _metaVest);
                 return;
             }
         }

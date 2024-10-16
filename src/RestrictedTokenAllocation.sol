@@ -13,9 +13,6 @@ contract RestrictedTokenAward is BaseAllocation {
     uint256 public tokensRepurchased;
     uint256 public tokensRepurchasedWithdrawn;
 
-    error MetaVesT_InsufficientPaymentTokenBalance();
-    event MetaVesT_TokenOptionExercised(address indexed _grantee, uint256 _tokensToExercise, uint256 _paymentAmount);
-
     /// @notice Constructor to deploy a new RestrictedTokenAward
     /// @param _grantee - address of the grantee
     /// @param _controller - address of the controller

@@ -11,9 +11,7 @@ contract TokenOptionAllocation is BaseAllocation {
     uint256 public exercisePrice; 
     uint256 public shortStopDuration;
     uint256 public shortStopTime;
-    uint256 public longStoptDate;
 
-    error MetaVesT_InsufficientPaymentTokenBalance();
     event MetaVesT_TokenOptionExercised(address indexed _grantee, uint256 _tokensToExercise, uint256 _paymentAmount);
 
     /// @notice Constructor to create a TokenOptionAllocation
