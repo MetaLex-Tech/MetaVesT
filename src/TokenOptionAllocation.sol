@@ -142,7 +142,6 @@ contract TokenOptionAllocation is BaseAllocation {
         uint256 paymentAmount = getPaymentAmount(_tokensToExercise);
         if(paymentAmount == 0) revert MetaVesT_TooSmallAmount();
         
-        if (IERC20M(paymentToken).balanceOf(msg.sender) < paymentAmount) revert MetaVesT_InsufficientPaymentTokenBalance();
         safeTransferFrom(paymentToken, msg.sender, getAuthority(), paymentAmount);
         tokensExercised += _tokensToExercise;
         emit MetaVesT_TokenOptionExercised(msg.sender, _tokensToExercise, paymentAmount);
