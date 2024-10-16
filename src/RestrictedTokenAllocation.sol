@@ -5,7 +5,6 @@ pragma solidity 0.8.20;
 
 contract RestrictedTokenAward is BaseAllocation {
 
-    IERC20M internal immutable ipaymentToken;
     /// @notice address of payment token used for token option exercises or restricted token repurchases
     address public immutable paymentToken;
     uint256 public shortStopDuration;
@@ -57,7 +56,6 @@ contract RestrictedTokenAward is BaseAllocation {
         shortStopDuration = _shortStopDuration;
 
         paymentToken = _paymentToken;
-        ipaymentToken = IERC20M(_paymentToken);
 
         // manually copy milestones
         for (uint256 i; i < _milestones.length; ++i) {
@@ -166,16 +164,12 @@ contract RestrictedTokenAward is BaseAllocation {
     /// @dev onlyController -- must be called from the metavest controller
     function terminate() external override onlyController nonReentrant {
          if(terminated) revert MetaVesT_AlreadyTerminated();
-        uint256 tokensToRecover = 0;
-        uint256 milestonesAllocation = 0;
-        for (uint256 i; i < milestones.length; ++i) {
-                milestonesAllocation += milestones[i].milestoneAward;
-        }
+
         terminationTime = block.timestamp;
         // remaining tokens must be repurchased by 'authority'
         shortStopDate = block.timestamp + shortStopDuration;
         terminated = true;
-        emit MetaVesT_Terminated(grantee, tokensToRecover);
+        emit MetaVesT_Terminated(grantee, 0);
     }
 
     /// @notice returns the amount of tokens that can be repurchased
