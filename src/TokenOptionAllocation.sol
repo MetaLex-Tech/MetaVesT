@@ -171,7 +171,9 @@ contract TokenOptionAllocation is BaseAllocation {
     /// @dev onlyAuthority -- must be called from the authority
     function recoverForfeitTokens() external onlyAuthority nonReentrant {
         if(block.timestamp<shortStopTime || shortStopTime==0 || terminated != true) revert MetaVesT_ShortStopTimeNotReached();
-        uint256 tokensToRecover = IERC20M(allocation.tokenContract).balanceOf(address(this)) - tokensExercised;
+        uint256 tokensToRecover = 0;
+        if(IERC20M(allocation.tokenContract).balanceOf(address(this)) > tokensExercised)
+            tokensToRecover = IERC20M(allocation.tokenContract).balanceOf(address(this)) - tokensExercised;
         safeTransfer(allocation.tokenContract, getAuthority(), tokensToRecover);
     }
 

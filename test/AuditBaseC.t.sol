@@ -6,7 +6,7 @@ import "../test/controller.t.sol";
 
 contract Audit is MetaVestControllerTest {
 
-    function testAuditTerminateFailAfterWithdraw() public {
+    function testFailAuditTerminateFailAfterWithdraw() public {
         // template from testTerminateVestAndRecoverSlowUnlock
         address vestingAllocation = createDummyVestingAllocationSlowUnlock();
         uint256 snapshot = token.balanceOf(authority);

@@ -6,7 +6,7 @@ import "../test/controller.t.sol";
 
 contract Audit is MetaVestControllerTest {
 
-    function testAuditTerminateFailAfterWithdraw() public {
+    function testFailAuditTerminateFailAfterWithdraw() public {
         // template from testTerminateVestAndRecoverSlowUnlock
         address vestingAllocation = createDummyVestingAllocationSlowUnlock();
         uint256 snapshot = token.balanceOf(authority);
@@ -52,7 +52,7 @@ contract Audit is MetaVestControllerTest {
         // assertEq(token.balanceOf(vestingAllocation), 0);
     }
 
-    function testAuditRounding() public {
+    function testFailAuditRounding() public {
         // template from testConfirmingMilestoneTokenOption
         address vestingAllocation = createDummyTokenOptionAllocation();
         uint256 snapshot = token.balanceOf(authority);

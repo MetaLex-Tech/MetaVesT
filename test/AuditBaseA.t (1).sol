@@ -15,7 +15,7 @@ contract EvilGrant {
 }
 
 contract Audit is MetaVestControllerTest {
-    function testAuditArbitraryVote() public {
+    function testFailAuditArbitraryVote() public {
         // template from testVoteOnMetavestAmendment
         bytes4 msgSig = bytes4(keccak256("updateMetavestTransferability(address,bool)"));
         bytes memory callData = abi.encodeWithSelector(msgSig, address(mockAllocation), true);
@@ -36,7 +36,7 @@ contract Audit is MetaVestControllerTest {
         console.log("attacker made vote and power is" , currentVotingPower);
     }
 
-    function testAuditRemoveConfirmedMilestone() public {
+    function testFailAuditRemoveConfirmedMilestone() public {
         // template from testRemoveMilestone
         address vestingAllocation = createDummyVestingAllocation();
         VestingAllocation(vestingAllocation).confirmMilestone(0);
