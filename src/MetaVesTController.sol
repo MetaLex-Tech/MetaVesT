@@ -259,6 +259,7 @@ contract metavestController is SafeTransferLib {
             for (uint256 i; i < _milestones.length; ++i) {
                 if (_milestones[i].conditionContracts.length > ARRAY_LENGTH_LIMIT)
                     revert MetaVesTController_LengthMismatch();
+                if (_milestones[i].milestoneAward == 0) revert MetaVesTController_ZeroAmount();
                 _milestoneTotal += _milestones[i].milestoneAward;
             }
         }
