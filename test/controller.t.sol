@@ -1421,6 +1421,29 @@ contract MetaVestControllerTest is Test {
         assertEq(paymentToken.balanceOf(grantee), startingBalance + payment);
     }
 
+    function testRepurchaseTokensFuture() public {
+        uint256 startingBalance = paymentToken.balanceOf(grantee);
+        address restrictedTokenAward = createDummyRestrictedTokenAwardFuture();
+
+        uint256 snapshot = token.balanceOf(authority);
+
+        controller.terminateMetavestVesting(restrictedTokenAward);
+        uint256 repurchaseAmount = RestrictedTokenAward(restrictedTokenAward).getAmountRepurchasable();
+        uint256 payment = RestrictedTokenAward(restrictedTokenAward).getPaymentAmount(repurchaseAmount);
+        paymentToken.approve(address(restrictedTokenAward), payment);
+        vm.warp(block.timestamp + 20 days);
+        vm.prank(authority);
+        RestrictedTokenAward(restrictedTokenAward).repurchaseTokens(repurchaseAmount);
+
+        assertEq(token.balanceOf(authority), snapshot+repurchaseAmount);
+
+        vm.prank(grantee);
+        RestrictedTokenAward(restrictedTokenAward).claimRepurchasedTokens();
+        console.log(token.balanceOf(restrictedTokenAward));
+        assertEq(paymentToken.balanceOf(grantee), startingBalance + payment);
+        
+    }
+
     function testUpdateAuthority() public {
         address newAuthority = address(0x4);
         
@@ -1652,6 +1675,42 @@ contract MetaVestControllerTest is Test {
             
         );
     }
+
+    function createDummyRestrictedTokenAwardFuture() internal returns (address) {
+        BaseAllocation.Allocation memory allocation = BaseAllocation.Allocation({
+            tokenContract: address(token),
+            tokenStreamTotal: 1000e18,
+            vestingCliffCredit: 100e18,
+            unlockingCliffCredit: 100e18,
+            vestingRate: 10e18,
+            vestingStartTime: uint48(block.timestamp+1000),
+            unlockRate: 10e18,
+            unlockStartTime: uint48(block.timestamp+1000)
+        });
+
+        BaseAllocation.Milestone[] memory milestones = new BaseAllocation.Milestone[](1);
+        milestones[0] = BaseAllocation.Milestone({
+            milestoneAward: 1000e18,
+            unlockOnCompletion: true,
+            complete: false,
+            conditionContracts: new address[](0)
+        });
+
+        token.approve(address(controller), 2100e18);
+
+        return controller.createMetavest(
+            metavestController.metavestType.RestrictedTokenAward,
+            grantee,
+            allocation,
+            milestones,
+            1e18,
+            address(paymentToken),
+            1 days,
+            0
+            
+        );
+    }
+
 
     function testGetMetaVestType() public {
         address vestingAllocation = createDummyVestingAllocation();

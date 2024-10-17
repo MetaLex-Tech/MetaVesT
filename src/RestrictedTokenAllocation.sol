@@ -187,7 +187,7 @@ contract RestrictedTokenAward is BaseAllocation {
     /// @notice returns the amount of tokens that are vested
     /// @return uint256 amount of tokens that are vested
      function getVestedTokenAmount() public view returns (uint256) {
-        if(block.timestamp<allocation.vestingStartTime)
+        if(block.timestamp<allocation.vestingStartTime || (terminated && terminationTime<allocation.vestingStartTime))
             return 0;
         uint256 _timeElapsedSinceVest = block.timestamp - allocation.vestingStartTime;
 
