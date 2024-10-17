@@ -178,7 +178,10 @@ contract RestrictedTokenAward is BaseAllocation {
         for (uint256 i; i < milestones.length; ++i) {
                 milestonesAllocation += milestones[i].milestoneAward;
         }
-        return allocation.tokenStreamTotal + milestonesAllocation - getVestedTokenAmount() - tokensRepurchased;
+        uint256 repurchaseAmount = allocation.tokenStreamTotal + milestonesAllocation - getVestedTokenAmount() - tokensRepurchased;
+        if(repurchaseAmount>IERC20M(allocation.tokenContract).balanceOf(address(this)))
+           repurchaseAmount = IERC20M(allocation.tokenContract).balanceOf(address(this));
+        return repurchaseAmount;
     }
 
     /// @notice returns the amount of tokens that are vested
@@ -218,7 +221,11 @@ contract RestrictedTokenAward is BaseAllocation {
     function getAmountWithdrawable() public view override returns (uint256) {
         uint256 _tokensVested = getVestedTokenAmount();
         uint256 _tokensUnlocked = getUnlockedTokenAmount();
-        return _min(_tokensVested, _tokensUnlocked) - tokensWithdrawn;
+        uint256 withdrawableAmount = _min(_tokensVested, _tokensUnlocked);
+        if(withdrawableAmount>tokensWithdrawn)
+            return withdrawableAmount - tokensWithdrawn;
+        else
+            return 0;
     }
 
 }

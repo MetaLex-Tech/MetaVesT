@@ -84,6 +84,8 @@ contract VestingAllocation is BaseAllocation {
                 milestonesAllocation += milestones[i].milestoneAward;
         }
         tokensToRecover = allocation.tokenStreamTotal + milestonesAllocation - getVestedTokenAmount();
+        if(tokensToRecover>IERC20M(allocation.tokenContract).balanceOf(address(this)))
+            tokensToRecover = IERC20M(allocation.tokenContract).balanceOf(address(this));
         terminationTime = block.timestamp;
         safeTransfer(allocation.tokenContract, getAuthority(), tokensToRecover);
         terminated = true;
@@ -125,7 +127,12 @@ contract VestingAllocation is BaseAllocation {
     function getAmountWithdrawable() public view override returns (uint256) {
         uint256 _tokensVested = getVestedTokenAmount();
         uint256 _tokensUnlocked = getUnlockedTokenAmount();
-        return _min(_tokensVested, _tokensUnlocked) - tokensWithdrawn;
+        uint256 withdrawableAmount = _min(_tokensVested, _tokensUnlocked);
+        if(withdrawableAmount>tokensWithdrawn)
+            return withdrawableAmount - tokensWithdrawn;
+        else
+            return 0;
+        
     }
 
 }

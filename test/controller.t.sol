@@ -1915,6 +1915,178 @@ contract MetaVestControllerTest is Test {
        
     }
 
+    function testZeroReclaim() public {
+        address restrictedTokenAward = createDummyRestrictedTokenAward();
+        vm.warp(block.timestamp + 15 seconds);
+        vm.startPrank(grantee);
+        RestrictedTokenAward(restrictedTokenAward).withdraw(RestrictedTokenAward(restrictedTokenAward).getAmountWithdrawable());
+        vm.stopPrank();
+        //create call data to propose setting vesting to 0
+        bytes4 msgSig = bytes4(keccak256("updateMetavestVestingRate(address,uint160)"));
+        bytes memory callData = abi.encodeWithSelector(msgSig, restrictedTokenAward, 0);
+
+        vm.prank(authority);
+        controller.proposeMetavestAmendment(restrictedTokenAward, msgSig, callData);
+
+        vm.prank(grantee);
+        controller.consentToMetavestAmendment(restrictedTokenAward, msgSig, true);
+
+        vm.prank(authority);
+        controller.updateMetavestVestingRate(restrictedTokenAward, 0);
+
+        vm.startPrank(authority);
+        controller.terminateMetavestVesting(restrictedTokenAward);
+        vm.warp(block.timestamp + 155 days);
+        uint256 amt = RestrictedTokenAward(restrictedTokenAward).getAmountRepurchasable();
+        uint256 payamt = RestrictedTokenAward(restrictedTokenAward).getPaymentAmount(amt);
+        paymentToken.approve(address(restrictedTokenAward), payamt);
+        RestrictedTokenAward(restrictedTokenAward).repurchaseTokens(amt);
+                 vm.stopPrank();
+        vm.prank(grantee);
+        RestrictedTokenAward(restrictedTokenAward).claimRepurchasedTokens();
+        console.log(token.balanceOf(restrictedTokenAward));
+    }
+
+    function testZeroReclaimVesting() public {
+        address restrictedTokenAward = createDummyVestingAllocation();
+        vm.warp(block.timestamp + 15 seconds);
+        vm.startPrank(grantee);
+        RestrictedTokenAward(restrictedTokenAward).withdraw(RestrictedTokenAward(restrictedTokenAward).getAmountWithdrawable());
+        vm.stopPrank();
+        //create call data to propose setting vesting to 0
+        bytes4 msgSig = bytes4(keccak256("updateMetavestVestingRate(address,uint160)"));
+        bytes memory callData = abi.encodeWithSelector(msgSig, restrictedTokenAward, 0);
+
+        vm.prank(authority);
+        controller.proposeMetavestAmendment(restrictedTokenAward, msgSig, callData);
+
+        vm.prank(grantee);
+        controller.consentToMetavestAmendment(restrictedTokenAward, msgSig, true);
+
+        vm.prank(authority);
+        controller.updateMetavestVestingRate(restrictedTokenAward, 0);
+
+        vm.startPrank(authority);
+        controller.terminateMetavestVesting(restrictedTokenAward);
+        vm.stopPrank();
+        console.log(token.balanceOf(restrictedTokenAward));
+    }
+
+    function testSlightReduc() public {
+        address restrictedTokenAward = createDummyVestingAllocation();
+        vm.warp(block.timestamp + 5 seconds);
+        vm.startPrank(grantee);
+        RestrictedTokenAward(restrictedTokenAward).withdraw(RestrictedTokenAward(restrictedTokenAward).getAmountWithdrawable());
+        vm.stopPrank();
+        //create call data to propose setting vesting to 0
+        bytes4 msgSig = bytes4(keccak256("updateMetavestVestingRate(address,uint160)"));
+        bytes memory callData = abi.encodeWithSelector(msgSig, restrictedTokenAward, 80e18);
+
+        vm.prank(authority);
+        controller.proposeMetavestAmendment(restrictedTokenAward, msgSig, callData);
+
+        vm.prank(grantee);
+        controller.consentToMetavestAmendment(restrictedTokenAward, msgSig, true);
+
+        vm.prank(authority);
+        controller.updateMetavestVestingRate(restrictedTokenAward, 80e18);
+        vm.warp(block.timestamp + 5 seconds);
+        vm.startPrank(authority);
+        controller.terminateMetavestVesting(restrictedTokenAward);
+        vm.stopPrank();
+        vm.warp(block.timestamp + 155 seconds);
+        vm.startPrank(grantee);
+        RestrictedTokenAward(restrictedTokenAward).withdraw(RestrictedTokenAward(restrictedTokenAward).getAmountWithdrawable());
+        vm.stopPrank();
+        console.log(token.balanceOf(restrictedTokenAward));
+    }
+
+    function testLargeReduc() public {
+        address restrictedTokenAward = createDummyVestingAllocation();
+        vm.warp(block.timestamp + 5 seconds);
+        vm.startPrank(grantee);
+        RestrictedTokenAward(restrictedTokenAward).withdraw(RestrictedTokenAward(restrictedTokenAward).getAmountWithdrawable());
+        vm.stopPrank();
+        //create call data to propose setting vesting to 0
+        bytes4 msgSig = bytes4(keccak256("updateMetavestVestingRate(address,uint160)"));
+        bytes memory callData = abi.encodeWithSelector(msgSig, restrictedTokenAward, 10e18);
+
+        vm.prank(authority);
+        controller.proposeMetavestAmendment(restrictedTokenAward, msgSig, callData);
+
+        vm.prank(grantee);
+        controller.consentToMetavestAmendment(restrictedTokenAward, msgSig, true);
+
+        vm.prank(authority);
+        controller.updateMetavestVestingRate(restrictedTokenAward, 10e18);
+        vm.warp(block.timestamp + 5 seconds);
+        vm.startPrank(authority);
+        controller.terminateMetavestVesting(restrictedTokenAward);
+        vm.stopPrank();
+        vm.warp(block.timestamp + 155 seconds);
+        vm.startPrank(grantee);
+        RestrictedTokenAward(restrictedTokenAward).withdraw(RestrictedTokenAward(restrictedTokenAward).getAmountWithdrawable());
+        vm.stopPrank();
+        console.log(token.balanceOf(restrictedTokenAward));
+    }
+
+    function testLargeReducOption() public {
+        address restrictedTokenAward = createDummyTokenOptionAllocation();
+        vm.warp(block.timestamp + 5 seconds);
+        vm.startPrank(grantee);
+        //approve amount to exercise by getting amount to exercise and price
+        ERC20Stable(paymentToken).approve(restrictedTokenAward, TokenOptionAllocation(restrictedTokenAward).getPaymentAmount(TokenOptionAllocation(restrictedTokenAward).getAmountExercisable()));
+        TokenOptionAllocation(restrictedTokenAward).exerciseTokenOption(TokenOptionAllocation(restrictedTokenAward).getAmountExercisable());
+        RestrictedTokenAward(restrictedTokenAward).withdraw(RestrictedTokenAward(restrictedTokenAward).getAmountWithdrawable());
+        vm.stopPrank();
+        //create call data to propose setting vesting to 0
+        bytes4 msgSig = bytes4(keccak256("updateMetavestVestingRate(address,uint160)"));
+        bytes memory callData = abi.encodeWithSelector(msgSig, restrictedTokenAward, 10e18);
+
+        vm.prank(authority);
+        controller.proposeMetavestAmendment(restrictedTokenAward, msgSig, callData);
+
+        vm.prank(grantee);
+        controller.consentToMetavestAmendment(restrictedTokenAward, msgSig, true);
+
+        vm.prank(authority);
+        controller.updateMetavestVestingRate(restrictedTokenAward, 10e18);
+        vm.warp(block.timestamp + 5 seconds);
+        vm.startPrank(authority);
+        controller.terminateMetavestVesting(restrictedTokenAward);
+        vm.stopPrank();
+        vm.warp(block.timestamp + 155 seconds);
+        vm.startPrank(grantee);
+         ERC20Stable(paymentToken).approve(restrictedTokenAward, TokenOptionAllocation(restrictedTokenAward).getPaymentAmount(TokenOptionAllocation(restrictedTokenAward).getAmountExercisable()));
+        TokenOptionAllocation(restrictedTokenAward).exerciseTokenOption(TokenOptionAllocation(restrictedTokenAward).getAmountExercisable());
+        RestrictedTokenAward(restrictedTokenAward).withdraw(RestrictedTokenAward(restrictedTokenAward).getAmountWithdrawable());
+        vm.stopPrank();
+        console.log(token.balanceOf(restrictedTokenAward));
+    }
+
+
+
+    function testReclaim() public {
+        address restrictedTokenAward = createDummyRestrictedTokenAward();
+        vm.warp(block.timestamp + 15 seconds);
+        vm.startPrank(grantee);
+        RestrictedTokenAward(restrictedTokenAward).withdraw(RestrictedTokenAward(restrictedTokenAward).getAmountWithdrawable());
+        vm.stopPrank();
+
+        vm.startPrank(authority);
+        controller.terminateMetavestVesting(restrictedTokenAward);
+        vm.warp(block.timestamp + 155 days);
+        uint256 amt = RestrictedTokenAward(restrictedTokenAward).getAmountRepurchasable();
+        uint256 payamt = RestrictedTokenAward(restrictedTokenAward).getPaymentAmount(amt);
+        paymentToken.approve(address(restrictedTokenAward), payamt);
+        RestrictedTokenAward(restrictedTokenAward).repurchaseTokens(amt);
+         vm.stopPrank();
+        vm.prank(grantee);
+        RestrictedTokenAward(restrictedTokenAward).claimRepurchasedTokens();
+        console.log(token.balanceOf(restrictedTokenAward));
+    }
+
+
 
     function testFailUpdateExercisePriceForVesting() public {
         address vestingAllocation = createDummyVestingAllocation();

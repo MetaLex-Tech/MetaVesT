@@ -186,8 +186,11 @@ contract TokenOptionAllocation is BaseAllocation {
 
         if(_tokensVested>allocation.tokenStreamTotal) 
             _tokensVested = allocation.tokenStreamTotal;
-    
-        return _tokensVested + milestoneAwardTotal - tokensExercised;
+        uint256 _tokensExercisable = _tokensVested + milestoneAwardTotal;
+        if(_tokensExercisable>tokensExercised)
+            return _tokensExercisable - tokensExercised;
+        else
+            return 0;
     }
 
     /// @notice gets the amount of tokens unlocked for a grantee 
@@ -209,6 +212,11 @@ contract TokenOptionAllocation is BaseAllocation {
     function getAmountWithdrawable() public view override returns (uint256) {
         uint256 _tokensUnlocked = getUnlockedTokenAmount();
         return _min(tokensExercised, _tokensUnlocked) - tokensWithdrawn;
+         uint256 withdrawableAmount = _min(tokensExercised, _tokensUnlocked);
+        if(withdrawableAmount>tokensWithdrawn)
+            return withdrawableAmount - tokensWithdrawn;
+        else
+            return 0;
     }
 
 }
