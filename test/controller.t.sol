@@ -1444,6 +1444,15 @@ contract MetaVestControllerTest is Test {
         
     }
 
+    function testTerminateTokensFuture() public {
+        uint256 startingBalance = paymentToken.balanceOf(grantee);
+        address restrictedTokenAward = createDummyVestingAllocationLargeFuture();
+
+        controller.terminateMetavestVesting(restrictedTokenAward);
+       
+        console.log(token.balanceOf(restrictedTokenAward));
+    }
+
     function testUpdateAuthority() public {
         address newAuthority = address(0x4);
         
@@ -1586,6 +1595,37 @@ contract MetaVestControllerTest is Test {
             vestingStartTime: uint48(block.timestamp),
             unlockRate: 10e18,
             unlockStartTime: uint48(block.timestamp)
+        });
+
+        BaseAllocation.Milestone[] memory milestones = new BaseAllocation.Milestone[](0);
+
+
+        token.approve(address(controller), 2100e18);
+
+        return controller.createMetavest(
+            metavestController.metavestType.Vesting,
+            grantee,
+            allocation,
+            milestones,
+            0,
+            address(0),
+            0,
+            0
+            
+        );
+    }
+
+            // Helper functions to create dummy allocations for testing
+    function createDummyVestingAllocationLargeFuture() internal returns (address) {
+        BaseAllocation.Allocation memory allocation = BaseAllocation.Allocation({
+            tokenContract: address(token),
+            tokenStreamTotal: 1000e18,
+            vestingCliffCredit: 0,
+            unlockingCliffCredit: 0,
+            vestingRate: 10e18,
+            vestingStartTime: uint48(block.timestamp+2000),
+            unlockRate: 10e18,
+            unlockStartTime: uint48(block.timestamp+2000)
         });
 
         BaseAllocation.Milestone[] memory milestones = new BaseAllocation.Milestone[](0);

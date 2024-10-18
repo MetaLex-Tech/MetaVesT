@@ -13,6 +13,7 @@ import "./interfaces/IAllocationFactory.sol";
 import "./BaseAllocation.sol";
 import "./RestrictedTokenAllocation.sol";
 import "./interfaces/IPriceAllocation.sol";
+import "./lib/EnumberableSet.sol";
 
 //interface deleted
 
@@ -24,6 +25,8 @@ import "./interfaces/IPriceAllocation.sol";
  *             by an applicable affected grantee or a majority-in-governing power of similar token grantees
  **/
 contract metavestController is SafeTransferLib {
+    using EnumerableSet for EnumerableSet.AddressSet;
+    using EnumerableSet for EnumerableSet.Bytes32Set;
     /// @dev opinionated time limit for a MetaVesT amendment, one calendar week in seconds
     uint256 internal constant AMENDMENT_TIME_LIMIT = 604800;
     uint256 internal constant ARRAY_LENGTH_LIMIT = 20;
@@ -31,8 +34,8 @@ contract metavestController is SafeTransferLib {
     mapping(address => address[]) public vestingAllocations;
     mapping(address => address[]) public restrictedTokenAllocations;
     mapping(address => address[]) public tokenOptionAllocations;
-    mapping(string => address[]) public sets;
-    string[] public setNames;
+    mapping(bytes32 => EnumerableSet.AddressSet) private sets;
+    EnumerableSet.Bytes32Set private setNames;
 
     address public authority;
     address public dao;
@@ -64,7 +67,7 @@ contract metavestController is SafeTransferLib {
     mapping(bytes4 => address[]) public functionToConditions;
 
     /// @notice maps a metavest-parameter-updating function's signature to token contract to whether a majority amendment is pending
-    mapping(bytes4 => mapping(string => MajorityAmendmentProposal)) public functionToSetMajorityProposal;
+    mapping(bytes4 => mapping(bytes32 => MajorityAmendmentProposal)) public functionToSetMajorityProposal;
 
     /// @notice maps a metavest-parameter-updating function's signature to affected grantee address to whether an amendment is pending
     mapping(bytes4 => mapping(address => AmendmentProposal)) public functionToGranteeToAmendmentPending;
@@ -72,7 +75,7 @@ contract metavestController is SafeTransferLib {
     /// @notice tracks if an address has voted for an amendment by mapping a hash of the pertinent details to time they last voted for these details (voter, function and affected grantee)
     mapping(bytes32 => uint256) internal _lastVoted;
 
-    mapping(string => bool) public setMajorityVoteActive;
+    mapping(bytes32 => bool) public setMajorityVoteActive;
 
     ///
     /// EVENTS
@@ -135,7 +138,7 @@ contract metavestController is SafeTransferLib {
 
     modifier consentCheck(address _grant, bytes calldata _data) {
         if (isMetavestInSet(_grant)) {
-            string memory set = getSetOfMetavest(_grant);
+            bytes32 set = getSetOfMetavest(_grant);
             MajorityAmendmentProposal storage proposal = functionToSetMajorityProposal[msg.sig][set];
             if (_data.length>32 && _data.length<69)
             {
@@ -566,11 +569,12 @@ contract metavestController is SafeTransferLib {
         bytes calldata _callData
     ) external onlyAuthority {
         if(!doesSetExist(setName)) revert MetaVesTController_SetDoesNotExist();
+        bytes32 nameHash = keccak256(bytes(setName));
         //if the majority proposal is already pending and not expired, revert
-        if ((functionToSetMajorityProposal[_msgSig][setName].isPending && block.timestamp < functionToSetMajorityProposal[_msgSig][setName].time + AMENDMENT_TIME_LIMIT) || setMajorityVoteActive[setName])
+        if ((functionToSetMajorityProposal[_msgSig][nameHash].isPending && block.timestamp < functionToSetMajorityProposal[_msgSig][nameHash].time + AMENDMENT_TIME_LIMIT) || setMajorityVoteActive[nameHash])
             revert MetaVesTController_AmendmentAlreadyPending();
 
-        MajorityAmendmentProposal storage proposal = functionToSetMajorityProposal[_msgSig][setName];
+        MajorityAmendmentProposal storage proposal = functionToSetMajorityProposal[_msgSig][nameHash];
         proposal.isPending = true;
         proposal.dataHash = keccak256(_callData[_callData.length - 32:]);
         proposal.time = block.timestamp;
@@ -578,14 +582,14 @@ contract metavestController is SafeTransferLib {
         proposal.currentVotingPower = 0;
         
         uint256 totalVotingPower;
-        for (uint256 i; i < sets[setName].length; ++i) {
-            uint256 _votingPower = BaseAllocation(sets[setName][i]).getMajorityVotingPower();
+        for (uint256 i; i < sets[nameHash].length(); ++i) {
+            uint256 _votingPower = BaseAllocation(sets[nameHash].at(i)).getMajorityVotingPower();
             totalVotingPower += _votingPower;
-            proposal.voterPower[sets[setName][i]] = _votingPower;
+            proposal.voterPower[sets[nameHash].at(i)] = _votingPower;
         }
         proposal.totalVotingPower = totalVotingPower;
 
-        setMajorityVoteActive[setName] = true;
+        setMajorityVoteActive[nameHash] = true;
         emit MetaVesTController_MajorityAmendmentProposed(setName, _msgSig, _callData, totalVotingPower);
     }
 
@@ -594,13 +598,16 @@ contract metavestController is SafeTransferLib {
     /// @param _inFavor whether msg.sender is in favor of the applicable amendment
     function voteOnMetavestAmendment(address _grant, string memory _setName, bytes4 _msgSig, bool _inFavor) external {
 
+        bytes32 nameHash = keccak256(bytes(_setName));
         if(BaseAllocation(_grant).grantee() != msg.sender) revert MetaVesTController_OnlyGranteeMayCall();
         if (!isMetavestInSet(_grant, _setName)) revert MetaVesTController_SetDoesNotExist();
-        if (!functionToSetMajorityProposal[_msgSig][_setName].isPending) revert MetaVesTController_NoPendingAmendment(_msgSig, _grant);
+        if (!functionToSetMajorityProposal[_msgSig][nameHash].isPending) revert MetaVesTController_NoPendingAmendment(_msgSig, _grant);
         if (!_checkFunctionToTokenToAmendmentTime(_msgSig, _setName))
             revert MetaVesTController_ProposedAmendmentExpired();
 
-        metavestController.MajorityAmendmentProposal storage proposal = functionToSetMajorityProposal[_msgSig][_setName];
+      
+
+        metavestController.MajorityAmendmentProposal storage proposal = functionToSetMajorityProposal[_msgSig][nameHash];
         uint256 _callerPower = proposal.voterPower[_grant];
         
         //check if the grant has already voted.
@@ -619,7 +626,7 @@ contract metavestController is SafeTransferLib {
     function _resetAmendmentParams(address _grant, bytes4 _msgSig) internal {
         if(isMetavestInSet(_grant))
         {
-            string memory set = getSetOfMetavest(_grant);
+            bytes32 set = getSetOfMetavest(_grant);
             setMajorityVoteActive[set] = false;
         }
         delete functionToGranteeToAmendmentPending[_msgSig][_grant];
@@ -628,82 +635,85 @@ contract metavestController is SafeTransferLib {
     /// @notice check whether the applicable proposed amendment has expired
     function _checkFunctionToTokenToAmendmentTime(bytes4 _msgSig, string memory _setName) internal view returns (bool) {
         //check the majority proposal time
-        return (block.timestamp < functionToSetMajorityProposal[_msgSig][_setName].time + AMENDMENT_TIME_LIMIT);
+        bytes32 nameHash = keccak256(bytes(_setName));
+        return (block.timestamp < functionToSetMajorityProposal[_msgSig][nameHash].time + AMENDMENT_TIME_LIMIT);
     }
 
     function createSet(string memory _name) external onlyAuthority {
-        //check if name does not already exist
-        if (sets[_name].length != 0) revert MetaVesTController_SetAlreadyExists();
-        if(doesSetExist(_name)) revert MetaVesTController_SetAlreadyExists();
-        //check string length does not exceed 256 characters
+        bytes32 nameHash = keccak256(bytes(_name));
+        if (setNames.contains(nameHash)) revert MetaVesTController_SetAlreadyExists();
         if (bytes(_name).length > 512) revert MetaVesTController_StringTooLong();
-        setNames.push(_name);
+        
+        setNames.add(nameHash);
         emit MetaVesTController_SetCreated(_name);
     }
 
     function removeSet(string memory _name) external onlyAuthority {
-        if(setMajorityVoteActive[_name]) revert MetaVesTController_AmendmentAlreadyPending();
-        for (uint256 i; i < setNames.length; ++i) {
-            if (keccak256(bytes(setNames[i])) == keccak256(bytes(_name))) {
-                setNames[i] = setNames[setNames.length - 1];
-                setNames.pop();
-                delete sets[_name];
-                emit MetaVesTController_SetRemoved(_name);
-                return;
-            }
+        bytes32 nameHash = keccak256(bytes(_name));
+        if (setMajorityVoteActive[nameHash]) revert MetaVesTController_AmendmentAlreadyPending();
+        if (!setNames.contains(nameHash)) revert MetaVesTController_SetDoesNotExist();
+        
+        // Remove all addresses from the set
+        uint256 length = sets[nameHash].length();
+        for (uint256 i = 0; i < length; i++) {
+            sets[nameHash].remove(sets[nameHash].at(0));
         }
+        
+        setNames.remove(nameHash);
+        emit MetaVesTController_SetRemoved(_name);
     }
 
     function doesSetExist(string memory _name) internal view returns (bool) {
-        for (uint256 i; i < setNames.length; ++i) {
-            if (keccak256(bytes(setNames[i])) == keccak256(bytes(_name))) return true;
-        }
-        return false;
+        return setNames.contains(keccak256(bytes(_name)));
     }
 
     function isMetavestInSet(address _metavest) internal view returns (bool) {
-        for (uint256 i; i < setNames.length; ++i) {
-            for (uint256 j; j < sets[setNames[i]].length; ++j) {
-                if (sets[setNames[i]][j] == _metavest) return true;
+        uint256 length = setNames.length();
+        for (uint256 i = 0; i < length; i++) {
+            bytes32 nameHash = setNames.at(i);
+            if (sets[nameHash].contains(_metavest)) {
+                return true;
             }
         }
         return false;
     }
 
     function isMetavestInSet(address _metavest, string memory _setName) internal view returns (bool) {
-        for (uint256 i; i < sets[_setName].length; ++i) {
-            if (sets[_setName][i] == _metavest) return true;
-        }
-        return false;
+        bytes32 nameHash = keccak256(bytes(_setName));
+        return sets[nameHash].contains(_metavest);
     }
 
-    function getSetOfMetavest(address _metavest) internal view returns (string memory) {
-        for (uint256 i; i < setNames.length; ++i) {
-            for (uint256 j; j < sets[setNames[i]].length; ++j) {
-                if (sets[setNames[i]][j] == _metavest) return setNames[i];
+    function getSetOfMetavest(address _metavest) internal view returns (bytes32) {
+        uint256 length = setNames.length();
+        for (uint256 i = 0; i < length; i++) {
+            bytes32 nameHash = setNames.at(i);
+            if (sets[nameHash].contains(_metavest)) {
+                // Note: You'll need to maintain a separate mapping of hash to name
+                // if you need to return the actual name string
+                return nameHash;
             }
         }
         return "";
     }
 
     function addMetaVestToSet(string memory _name, address _metaVest) external onlyAuthority {
-        if(!doesSetExist(_name)) revert MetaVesTController_SetDoesNotExist();
-        if(isMetavestInSet(_metaVest)) revert MetaVesTController_MetaVesTAlreadyExists();
-        if(setMajorityVoteActive[_name]) revert MetaVesTController_AmendmentAlreadyPending();
-        sets[_name].push(_metaVest);
+        bytes32 nameHash = keccak256(bytes(_name));
+        if (!setNames.contains(nameHash)) revert MetaVesTController_SetDoesNotExist();
+        if (isMetavestInSet(_metaVest)) revert MetaVesTController_MetaVesTAlreadyExists();
+        if (setMajorityVoteActive[nameHash]) revert MetaVesTController_AmendmentAlreadyPending();
+        
+        sets[nameHash].add(_metaVest);
         emit MetaVesTController_AddressAddedToSet(_name, _metaVest);
     }
 
     function removeMetaVestFromSet(string memory _name, address _metaVest) external onlyAuthority {
-        if(!doesSetExist(_name)) revert MetaVesTController_SetDoesNotExist();
-        if(setMajorityVoteActive[_name]) revert MetaVesTController_AmendmentAlreadyPending();
-        for (uint256 i; i < sets[_name].length; ++i) {
-            if (sets[_name][i] == _metaVest) {
-                sets[_name][i] = sets[_name][sets[_name].length - 1];
-                sets[_name].pop();
-                emit MetaVesTController_AddressRemovedFromSet(_name, _metaVest);
-                return;
-            }
-        }
+        bytes32 nameHash = keccak256(bytes(_name));
+        if (!setNames.contains(nameHash)) revert MetaVesTController_SetDoesNotExist();
+        if (setMajorityVoteActive[nameHash]) revert MetaVesTController_AmendmentAlreadyPending();
+        if (!sets[nameHash].contains(_metaVest)) revert MetaVesTController_SetDoesNotExist();
+        
+        sets[nameHash].remove(_metaVest);
+        emit MetaVesTController_AddressRemovedFromSet(_name, _metaVest);
     }
+
 }
