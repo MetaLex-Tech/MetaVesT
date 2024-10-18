@@ -1296,6 +1296,49 @@ contract MetaVestControllerTest is Test {
         controller.updateMetavestTransferability(mockAllocation2, true);
     }
 
+    
+     function testFailReProposeMajorityMetavestAmendment() public {
+        address mockAllocation2 = createDummyVestingAllocation();
+        bytes4 msgSig = bytes4(keccak256("updateMetavestTransferability(address,bool)"));
+        bytes memory callData = abi.encodeWithSelector(msgSig, mockAllocation2, true);
+
+        vm.prank(authority);
+        controller.addMetaVestToSet("testSet", mockAllocation2);
+        vm.warp(block.timestamp + 1 days);
+        vm.prank(authority);
+        controller.proposeMajorityMetavestAmendment("testSet", msgSig, callData);
+        vm.warp(block.timestamp + 30 days);
+        /*
+        vm.prank(grantee);
+        controller.voteOnMetavestAmendment(mockAllocation2, "testSet", msgSig, true);
+
+        vm.prank(authority);
+        controller.updateMetavestTransferability(mockAllocation2, true);*/
+        controller.proposeMajorityMetavestAmendment("testSet", msgSig, callData);
+        
+    }
+
+    function testReProposeMajorityMetavestAmendment() public {
+        address mockAllocation2 = createDummyVestingAllocation();
+        bytes4 msgSig = bytes4(keccak256("updateMetavestTransferability(address,bool)"));
+        bytes memory callData = abi.encodeWithSelector(msgSig, mockAllocation2, true);
+
+        vm.prank(authority);
+        controller.addMetaVestToSet("testSet", mockAllocation2);
+        vm.warp(block.timestamp + 1 days);
+        vm.prank(authority);
+        controller.proposeMajorityMetavestAmendment("testSet", msgSig, callData);
+        vm.warp(block.timestamp + 30 days);
+
+        vm.prank(authority);
+        controller.cancelExpiredMajorityMetavestAmendment("testSet", msgSig);
+
+        vm.prank(authority);
+        controller.proposeMajorityMetavestAmendment("testSet", msgSig, callData);
+        
+    }
+
+
     function testUpdateExercisePrice() public {
         address tokenOptionAllocation = createDummyTokenOptionAllocation();
 

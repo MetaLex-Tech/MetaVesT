@@ -101,6 +101,7 @@ contract metavestController is SafeTransferLib {
     error MetaVesTController_OnlyGranteeMayCall();
     error MetaVesTController_AmendmentNeitherMutualNorMajorityConsented();
     error MetaVesTController_AmendmentAlreadyPending();
+    error MetaVesTController_AmendmentCannotBeCanceled();
     error MetaVesTController_AmountNotApprovedForTransferFrom();
     error MetaVesTController_CliffGreaterThanTotal();
     error MetaVesTController_ConditionNotSatisfied(address condition);
@@ -591,6 +592,16 @@ contract metavestController is SafeTransferLib {
 
         setMajorityVoteActive[nameHash] = true;
         emit MetaVesTController_MajorityAmendmentProposed(setName, _msgSig, _callData, totalVotingPower);
+    }
+
+    /// @notice for 'authority' to cancel a metavest majority amendment
+    /// @param _setName name of the set for majority set amendment proposal
+    /// @param _msgSig function signature of the function in this controller which (if successfully executed) will execute the metavest detail update
+    function cancelExpiredMajorityMetavestAmendment(string memory _setName, bytes4 _msgSig) external onlyAuthority {
+        if(!doesSetExist(_setName)) revert MetaVesTController_SetDoesNotExist();
+        bytes32 nameHash = keccak256(bytes(_setName));
+        if (!setMajorityVoteActive[nameHash] || block.timestamp < functionToSetMajorityProposal[_msgSig][nameHash].time + AMENDMENT_TIME_LIMIT) revert MetaVesTController_AmendmentCannotBeCanceled();
+        setMajorityVoteActive[nameHash] = false;
     }
 
     /// @notice for a grantees to vote upon a metavest update for which they share a common amount of 'tokenGoverningPower'
