@@ -132,6 +132,7 @@ abstract contract BaseAllocation is ReentrancyGuard, SafeTransferLib{
             uint48 shortStopTime
         );
         event MetaVesT_TransferabilityUpdated(address indexed grantee, bool isTransferable);
+        event MetaVest_TransferRightsPending(address indexed grantee, address indexed pendingGrantee);
         event MetaVesT_TransferredRights(address indexed grantee, address transferee);
         event MetaVesT_UnlockRateUpdated(address indexed grantee, uint208 unlockRate);
         event MetaVesT_VestingRateUpdated(address indexed grantee, uint208 vestingRate);
@@ -156,6 +157,7 @@ abstract contract BaseAllocation is ReentrancyGuard, SafeTransferLib{
         enum GovType {all, vested, unlocked}
 
         address public grantee; // grantee of the tokens
+        address public pendingGrantee; // address of the pending grantee
         bool transferable; // whether grantee can transfer their MetaVesT in whole
         Milestone[] public milestones; // array of Milestone structs
         Allocation public allocation; // struct containing vesting and unlocking details
@@ -286,8 +288,16 @@ abstract contract BaseAllocation is ReentrancyGuard, SafeTransferLib{
         function transferRights(address _newOwner) external onlyGrantee {
             if(_newOwner == address(0)) revert MetaVesT_ZeroAddress();
             if(!transferable) revert MetaVesT_VestNotTransferable();
-            emit MetaVesT_TransferredRights(grantee, _newOwner);
-            grantee = _newOwner;
+            emit MetaVest_TransferRightsPending(grantee, _newOwner);
+            pendingGrantee = _newOwner;
+        }
+
+        /// @notice confirms the transfer of the rights of the VestingAllocation to a new owner
+        function confirmTransfer() external {
+            if(msg.sender != pendingGrantee) revert MetaVesT_OnlyGrantee();
+            grantee = pendingGrantee;
+            emit MetaVesT_TransferredRights(grantee, pendingGrantee);
+            pendingGrantee = address(0);
         }
 
         /// @notice withdraws tokens from the VestingAllocation

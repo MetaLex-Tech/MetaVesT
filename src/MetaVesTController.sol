@@ -31,9 +31,6 @@ contract metavestController is SafeTransferLib {
     uint256 internal constant AMENDMENT_TIME_LIMIT = 604800;
     uint256 internal constant ARRAY_LENGTH_LIMIT = 20;
 
-    mapping(address => address[]) public vestingAllocations;
-    mapping(address => address[]) public restrictedTokenAllocations;
-    mapping(address => address[]) public tokenOptionAllocations;
     mapping(bytes32 => EnumerableSet.AddressSet) private sets;
     EnumerableSet.Bytes32Set private setNames;
 
@@ -343,7 +340,6 @@ contract metavestController is SafeTransferLib {
         );
         safeTransferFrom(_allocation.tokenContract, authority, vestingAllocation, _total);
 
-        vestingAllocations[_grantee].push(vestingAllocation);
         return vestingAllocation;
     }
 
@@ -367,7 +363,6 @@ contract metavestController is SafeTransferLib {
             );
 
             safeTransferFrom(_allocation.tokenContract, authority, tokenOptionAllocation, _total);
-            tokenOptionAllocations[_grantee].push(tokenOptionAllocation);
             return tokenOptionAllocation;
         }
 
@@ -390,7 +385,6 @@ contract metavestController is SafeTransferLib {
             );
 
             safeTransferFrom(_allocation.tokenContract, authority, restrictedTokenAward, _total);
-            restrictedTokenAllocations[_grantee].push(restrictedTokenAward);
             return restrictedTokenAward;
         }
     
