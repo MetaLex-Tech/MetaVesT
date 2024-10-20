@@ -58,6 +58,7 @@ contract metavestController is SafeTransferLib {
         bool isPending;
         bytes32 dataHash;
         address[] voters;
+        mapping(address => bool) changeApplied;
         mapping(address => uint256) voterPower;
     }
 
@@ -103,6 +104,7 @@ contract metavestController is SafeTransferLib {
     error MetaVesTController_AmendmentAlreadyPending();
     error MetaVesTController_AmendmentCannotBeCanceled();
     error MetaVesTController_AmountNotApprovedForTransferFrom();
+    error MetaVesTController_AmendmentCanOnlyBeAppliedOnce();
     error MetaVesTController_CliffGreaterThanTotal();
     error MetaVesTController_ConditionNotSatisfied(address condition);
     error MetaVesTController_IncorrectMetaVesTType();
@@ -141,6 +143,7 @@ contract metavestController is SafeTransferLib {
         if (isMetavestInSet(_grant)) {
             bytes32 set = getSetOfMetavest(_grant);
             MajorityAmendmentProposal storage proposal = functionToSetMajorityProposal[msg.sig][set];
+            if(proposal.changeApplied[_grant]) revert MetaVesTController_AmendmentCanOnlyBeAppliedOnce();
             if (_data.length>32 && _data.length<69)
             {
                 if (!proposal.isPending || proposal.totalVotingPower>proposal.currentVotingPower*2 || keccak256(_data[_data.length - 32:]) != proposal.dataHash ) {
@@ -639,6 +642,8 @@ contract metavestController is SafeTransferLib {
         if(isMetavestInSet(_grant))
         {
             bytes32 set = getSetOfMetavest(_grant);
+            MajorityAmendmentProposal storage proposal = functionToSetMajorityProposal[_msgSig][set];
+            proposal.changeApplied[_grant] = true;
             setMajorityVoteActive[set] = false;
         }
         delete functionToGranteeToAmendmentPending[_msgSig][_grant];
