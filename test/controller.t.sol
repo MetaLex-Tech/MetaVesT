@@ -1338,6 +1338,13 @@ contract MetaVestControllerTest is Test {
         
     }
 
+    function testFailRemoveNonExistantMetaVestFromSet() public {
+        address mockAllocation2 = createDummyVestingAllocation();
+        vm.startPrank(authority);
+      //  controller.createSet("testSet");
+        controller.removeMetaVestFromSet("testSet", mockAllocation2);
+    }
+
 
     function testUpdateExercisePrice() public {
         address tokenOptionAllocation = createDummyTokenOptionAllocation();

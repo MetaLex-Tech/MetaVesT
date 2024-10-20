@@ -122,6 +122,7 @@ contract metavestController is SafeTransferLib {
     error MetaVesTController_ZeroPrice();
     error MetaVesT_AmountNotApprovedForTransferFrom();
     error MetaVesTController_SetDoesNotExist();
+    error MetaVestController_MetaVestNotInSet();
     error MetaVesTController_SetAlreadyExists();
     error MetaVesTController_StringTooLong();
 
@@ -727,7 +728,7 @@ contract metavestController is SafeTransferLib {
         bytes32 nameHash = keccak256(bytes(_name));
         if (!setNames.contains(nameHash)) revert MetaVesTController_SetDoesNotExist();
         if (setMajorityVoteActive[nameHash]) revert MetaVesTController_AmendmentAlreadyPending();
-        if (!sets[nameHash].contains(_metaVest)) revert MetaVesTController_SetDoesNotExist();
+        if (!sets[nameHash].contains(_metaVest)) revert MetaVestController_MetaVestNotInSet();
         
         sets[nameHash].remove(_metaVest);
         emit MetaVesTController_AddressRemovedFromSet(_name, _metaVest);
