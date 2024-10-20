@@ -659,6 +659,7 @@ contract metavestController is SafeTransferLib {
 
     function createSet(string memory _name) external onlyAuthority {
         bytes32 nameHash = keccak256(bytes(_name));
+        if(bytes(_name).length == 0) revert MetaVesTController_ZeroAddress();
         if (setNames.contains(nameHash)) revert MetaVesTController_SetAlreadyExists();
         if (bytes(_name).length > 512) revert MetaVesTController_StringTooLong();
         
@@ -706,8 +707,6 @@ contract metavestController is SafeTransferLib {
         for (uint256 i = 0; i < length; i++) {
             bytes32 nameHash = setNames.at(i);
             if (sets[nameHash].contains(_metavest)) {
-                // Note: You'll need to maintain a separate mapping of hash to name
-                // if you need to return the actual name string
                 return nameHash;
             }
         }
