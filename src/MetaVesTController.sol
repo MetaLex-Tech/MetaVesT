@@ -451,6 +451,7 @@ contract metavestController is SafeTransferLib {
        
         address _tokenContract = BaseAllocation(_grant).getMetavestDetails().tokenContract;
         if (_milestone.milestoneAward == 0) revert MetaVesTController_ZeroAmount();
+        if (_milestone.conditionContracts.length > ARRAY_LENGTH_LIMIT) revert MetaVesTController_LengthMismatch();
         if (_milestone.complete == true) revert MetaVesTController_MilestoneIndexCompletedOrDoesNotExist();
         if (
             IERC20M(_tokenContract).allowance(msg.sender, address(this)) < _milestone.milestoneAward ||
