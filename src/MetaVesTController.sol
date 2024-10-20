@@ -320,7 +320,7 @@ contract metavestController is SafeTransferLib {
         }
 
 
-    function createVestingAllocation(address _grantee, VestingAllocation.Allocation calldata _allocation, VestingAllocation.Milestone[] calldata _milestones) internal conditionCheck returns (address){
+    function createVestingAllocation(address _grantee, VestingAllocation.Allocation calldata _allocation, VestingAllocation.Milestone[] calldata _milestones) internal returns (address){
         //hard code values not to trigger the failure for the 2 parameters that don't matter for this type of allocation
         validateInputParameters(_grantee, address(this), 1, _allocation);
         validateAllocation(_allocation);
