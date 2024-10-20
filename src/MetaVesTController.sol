@@ -570,6 +570,7 @@ contract metavestController is SafeTransferLib {
         bytes calldata _callData
     ) external onlyAuthority {
         if(!doesSetExist(setName)) revert MetaVesTController_SetDoesNotExist();
+        if(_callData.length!=68) revert MetaVesTController_LengthMismatch();
         bytes32 nameHash = keccak256(bytes(setName));
         //if the majority proposal is already pending and not expired, revert
         if ((functionToSetMajorityProposal[_msgSig][nameHash].isPending && block.timestamp < functionToSetMajorityProposal[_msgSig][nameHash].time + AMENDMENT_TIME_LIMIT) || setMajorityVoteActive[nameHash])
