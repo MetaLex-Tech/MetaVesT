@@ -234,6 +234,7 @@ abstract contract BaseAllocation is ReentrancyGuard, SafeTransferLib{
         /// @param _milestoneIndex - the index of the milestone to confirm
         function confirmMilestone(uint256 _milestoneIndex) external nonReentrant {
             if(terminated) revert MetaVesT_AlreadyTerminated();
+            if(_milestoneIndex >= milestones.length) revert MetaVesT_MilestoneIndexOutOfRange();
             Milestone storage milestone = milestones[_milestoneIndex];
             if (_milestoneIndex >= milestones.length || milestone.complete)
                 revert MetaVesT_MilestoneIndexCompletedOrDoesNotExist();
