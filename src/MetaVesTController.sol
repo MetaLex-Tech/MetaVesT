@@ -104,6 +104,7 @@ contract metavestController is SafeTransferLib {
     error MetaVesTController_AmendmentCanOnlyBeAppliedOnce();
     error MetaVesTController_CliffGreaterThanTotal();
     error MetaVesTController_ConditionNotSatisfied(address condition);
+    error MetaVesTController_EmergencyUnlockNotSatisfied();
     error MetaVestController_DuplicateCondition();
     error MetaVesTController_IncorrectMetaVesTType();
     error MetaVesTController_LengthMismatch();
@@ -472,6 +473,19 @@ contract metavestController is SafeTransferLib {
         uint160 _unlockRate
     ) external onlyAuthority conditionCheck consentCheck(_grant, msg.data) {
         _resetAmendmentParams(_grant, msg.sig);
+        BaseAllocation(_grant).updateUnlockRate(_unlockRate);
+    }
+
+    /// @notice for 'authority' to update a MetaVesT's vestingRate if the vest has been terminated and previously unlock rate set to 0
+    /// @param _grant address of grantee whose MetaVesT is being updated
+    /// @param _unlockRate token vesting rate in tokens per second
+    function emergencyUpdateMetavestUnlockRate(
+        address _grant,
+        uint160 _unlockRate
+    ) external onlyAuthority conditionCheck {
+        //get unlock rate from the _grant
+        (,,,,,uint160 unlockRate,,) = BaseAllocation(_grant).allocation();
+        if(BaseAllocation(_grant).terminated() == false || unlockRate != 0) revert MetaVesTController_EmergencyUnlockNotSatisfied();
         BaseAllocation(_grant).updateUnlockRate(_unlockRate);
     }
 

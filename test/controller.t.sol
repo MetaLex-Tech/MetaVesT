@@ -1415,6 +1415,67 @@ contract MetaVestControllerTest is Test {
         assertEq(updatedAllocation.unlockRate, 20e18);
     }
 
+    function testUpdateUnlockRateZeroEmergency() public {
+        address vestingAllocation = createDummyVestingAllocation();
+        address[] memory addresses = new address[](1);
+        addresses[0] = vestingAllocation;
+        bytes4 selector = controller.updateMetavestUnlockRate.selector;
+        bytes memory msgData = abi.encodeWithSelector(selector, vestingAllocation, 0);
+        controller.proposeMetavestAmendment(vestingAllocation, controller.updateMetavestUnlockRate.selector, msgData);
+        vm.prank(grantee);
+        controller.consentToMetavestAmendment(vestingAllocation, controller.updateMetavestUnlockRate.selector, true);
+        
+        controller.updateMetavestUnlockRate(vestingAllocation, 0);
+        
+        BaseAllocation.Allocation memory updatedAllocation = BaseAllocation(vestingAllocation).getMetavestDetails();
+        assertEq(updatedAllocation.unlockRate, 0);
+        
+        controller.terminateMetavestVesting(vestingAllocation);
+
+        controller.emergencyUpdateMetavestUnlockRate(vestingAllocation, 1e20);
+         updatedAllocation = BaseAllocation(vestingAllocation).getMetavestDetails();
+        assertEq(updatedAllocation.unlockRate, 1e20);
+    }
+
+    function testFailUpdateUnlockRateZeroEmergency() public {
+        address vestingAllocation = createDummyVestingAllocation();
+        address[] memory addresses = new address[](1);
+        addresses[0] = vestingAllocation;
+        bytes4 selector = controller.updateMetavestUnlockRate.selector;
+        bytes memory msgData = abi.encodeWithSelector(selector, vestingAllocation, 0);
+        controller.proposeMetavestAmendment(vestingAllocation, controller.updateMetavestUnlockRate.selector, msgData);
+        vm.prank(grantee);
+        controller.consentToMetavestAmendment(vestingAllocation, controller.updateMetavestUnlockRate.selector, true);
+        
+        controller.terminateMetavestVesting(vestingAllocation);
+
+        controller.emergencyUpdateMetavestUnlockRate(vestingAllocation, 1e20);
+        BaseAllocation.Allocation memory updatedAllocation = BaseAllocation(vestingAllocation).getMetavestDetails();
+        assertEq(updatedAllocation.unlockRate, 1e20);
+    }
+
+    function testFailUpdateUnlockRateZeroEmergencyTerminated() public {
+        address vestingAllocation = createDummyVestingAllocation();
+        address[] memory addresses = new address[](1);
+        addresses[0] = vestingAllocation;
+        bytes4 selector = controller.updateMetavestUnlockRate.selector;
+        bytes memory msgData = abi.encodeWithSelector(selector, vestingAllocation, 0);
+        controller.proposeMetavestAmendment(vestingAllocation, controller.updateMetavestUnlockRate.selector, msgData);
+        vm.prank(grantee);
+        controller.consentToMetavestAmendment(vestingAllocation, controller.updateMetavestUnlockRate.selector, true);
+                vm.prank(grantee);
+        controller.consentToMetavestAmendment(vestingAllocation, controller.updateMetavestUnlockRate.selector, true);
+        
+        controller.updateMetavestUnlockRate(vestingAllocation, 0);
+        
+        BaseAllocation.Allocation memory updatedAllocation = BaseAllocation(vestingAllocation).getMetavestDetails();
+        assertEq(updatedAllocation.unlockRate, 0);
+
+        controller.emergencyUpdateMetavestUnlockRate(vestingAllocation, 1e20);
+         updatedAllocation = BaseAllocation(vestingAllocation).getMetavestDetails();
+        assertEq(updatedAllocation.unlockRate, 1e20);
+    }
+
     function testUpdateVestingRate() public {
         address vestingAllocation = createDummyVestingAllocation();
         address[] memory addresses = new address[](1);

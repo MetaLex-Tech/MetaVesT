@@ -220,7 +220,6 @@ abstract contract BaseAllocation is ReentrancyGuard, SafeTransferLib{
         /// @dev onlyController -- must be called from the metavest controller
         /// @param _newUnlockRate - the updated unlock rate in tokens per second in the vesting token decimal
         function updateUnlockRate(uint160 _newUnlockRate) external onlyController {
-            if(terminated) revert MetaVesT_AlreadyTerminated();
             allocation.unlockRate = _newUnlockRate;
             emit MetaVesT_UnlockRateUpdated(grantee, _newUnlockRate);
         }
