@@ -2348,4 +2348,23 @@ contract MetaVestControllerTest is Test {
         //create a dummy metavest
         address vestingAllocation = createDummyVestingAllocation();
     }
+
+    function testFailAddDuplicateCondition() public {
+        bytes4 functionSig = bytes4(keccak256("createMetavest(uint8,address,(uint256,uint128,uint128,uint160,uint48,uint160,uint48,address),(uint256,bool,bool,address[])[],uint256,address,uint256,uint256)"));
+      /*      constructor(
+        address[] memory _signers,
+        uint256 _threshold,
+        Logic _logic
+    ) */
+        address[] memory signers = new address[](2);
+        signers[0] = address(0x1);
+        signers[1] = address(0x2);
+        SignatureCondition condition = new SignatureCondition(signers, 1, SignatureCondition.Logic.AND);
+        
+        vm.prank(dao);
+        controller.updateFunctionCondition(address(condition), functionSig);
+        assert(controller.functionToConditions(functionSig, 0) == address(condition));
+        vm.prank(dao);
+        controller.updateFunctionCondition(address(condition), functionSig);
+    }
 }

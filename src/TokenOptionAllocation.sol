@@ -167,8 +167,8 @@ contract TokenOptionAllocation is BaseAllocation {
     function recoverForfeitTokens() external onlyAuthority nonReentrant {
         if(block.timestamp<shortStopTime || shortStopTime==0 || terminated != true) revert MetaVesT_ShortStopTimeNotReached();
         uint256 tokensToRecover = 0;
-        if(IERC20M(allocation.tokenContract).balanceOf(address(this)) > tokensExercised)
-            tokensToRecover = IERC20M(allocation.tokenContract).balanceOf(address(this)) - tokensExercised;
+        if(IERC20M(allocation.tokenContract).balanceOf(address(this)) > tokensExercised - tokensWithdrawn)
+            tokensToRecover = IERC20M(allocation.tokenContract).balanceOf(address(this)) + tokensWithdrawn - tokensExercised;
         safeTransfer(allocation.tokenContract, getAuthority(), tokensToRecover);
     }
 
@@ -211,7 +211,7 @@ contract TokenOptionAllocation is BaseAllocation {
     /// @return uint256 amount of tokens available for the grantee to withdraw
     function getAmountWithdrawable() public view override returns (uint256) {
         uint256 _tokensUnlocked = getUnlockedTokenAmount();
-        return _min(tokensExercised, _tokensUnlocked) - tokensWithdrawn;
+
          uint256 withdrawableAmount = _min(tokensExercised, _tokensUnlocked);
         if(withdrawableAmount>tokensWithdrawn)
             return withdrawableAmount - tokensWithdrawn;

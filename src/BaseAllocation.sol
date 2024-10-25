@@ -189,6 +189,7 @@ abstract contract BaseAllocation is ReentrancyGuard, SafeTransferLib{
         /// @return majorityVotingPower - the amount of tokens that are vested, locked, and unexercised
         function getMajorityVotingPower() external view returns (uint256 majorityVotingPower) {
             //add up the total tokens that are unvested or locked
+            if(terminated) return 0;
             uint256 totalMilestoneAward = 0;
             for(uint256 i; i < milestones.length; ++i)
             { 

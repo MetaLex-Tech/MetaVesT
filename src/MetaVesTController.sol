@@ -104,6 +104,7 @@ contract metavestController is SafeTransferLib {
     error MetaVesTController_AmendmentCanOnlyBeAppliedOnce();
     error MetaVesTController_CliffGreaterThanTotal();
     error MetaVesTController_ConditionNotSatisfied(address condition);
+    error MetaVestController_DuplicateCondition();
     error MetaVesTController_IncorrectMetaVesTType();
     error MetaVesTController_LengthMismatch();
     error MetaVesTController_MetaVesTAlreadyExists();
@@ -200,6 +201,10 @@ contract metavestController is SafeTransferLib {
     function updateFunctionCondition(address _condition, bytes4 _functionSig) external onlyDao {
         //call check condition to ensure the condition is valid
         IConditionM(_condition).checkCondition(address(this), msg.sig, "");
+        //check to ensure the condition is unique
+        for (uint256 i; i < functionToConditions[_functionSig].length; ++i) {
+            if (functionToConditions[_functionSig][i] == _condition) revert MetaVestController_DuplicateCondition();
+        }
         functionToConditions[_functionSig].push(_condition);
         emit MetaVesTController_ConditionUpdated(_condition, _functionSig);
     }
@@ -587,6 +592,7 @@ contract metavestController is SafeTransferLib {
             uint256 _votingPower = BaseAllocation(sets[nameHash].at(i)).getMajorityVotingPower();
             totalVotingPower += _votingPower;
             proposal.voterPower[sets[nameHash].at(i)] = _votingPower;
+            proposal.changeApplied[sets[nameHash].at(i)] = false;
         }
         proposal.totalVotingPower = totalVotingPower;
 
@@ -667,12 +673,12 @@ contract metavestController is SafeTransferLib {
         if (setMajorityVoteActive[nameHash]) revert MetaVesTController_AmendmentAlreadyPending();
         if (!setNames.contains(nameHash)) revert MetaVesTController_SetDoesNotExist();
         
-        // Remove all addresses from the set
-        uint256 length = sets[nameHash].length();
-        for (uint256 i = 0; i < length; i++) {
-            sets[nameHash].remove(sets[nameHash].at(0));
+        // Remove all addresses from the set starting from the last element
+        for (uint256 i = sets[nameHash].length(); i > 0; i--) {
+            address _grant = sets[nameHash].at(i - 1);
+            sets[nameHash].remove(_grant);
         }
-        
+
         setNames.remove(nameHash);
         emit MetaVesTController_SetRemoved(_name);
     }
