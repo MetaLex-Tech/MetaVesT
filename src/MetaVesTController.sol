@@ -8,14 +8,10 @@
 
 pragma solidity 0.8.20;
 
-//import "./MetaVesT.sol";
 import "./interfaces/IAllocationFactory.sol";
 import "./BaseAllocation.sol";
-import "./RestrictedTokenAllocation.sol";
 import "./interfaces/IPriceAllocation.sol";
 import "./lib/EnumberableSet.sol";
-
-//interface deleted
 
 /**
  * @title      MetaVesT Controller
