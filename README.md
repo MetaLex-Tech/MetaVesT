@@ -27,15 +27,13 @@ Each MetaVesT framework is designed to be on a per-BORG or more general per-auth
 
 A MetaVesT framework is initiated by calling `deployMetavestAndController()` in `MetaVesTFactory`, supplying:
 
-`_authority`: address of the `authority` who will have the ability to call the functions in the MetaVesTController (including creating and updating MetaVesTs within the framework) such as a BORG.
-
-`_dao`: DAO governance contract address which exercises control over ability of 'authority' to call certain functions via imposing conditions through 'updateFunctionCondition'
-
-`_vestingAllocationFactory`: factory contract address which will be used to create each vesting allocation in this MetaVesT framework
-
-`_tokenOptionFactory`: factory contract address which will be used to create each token option in this MetaVesT framework
-
-`_restrictedTokenFactory`: factory contract address which will be used to create each restricted token award in this MetaVesT framework
+| Name  | Type |  Description |
+| :---:  |:----:|  :---: |
+|`_authority`| address | the `authority` who will have the ability to call the functions in the MetaVesTController (including creating and updating MetaVesTs within the framework) such as a BORG.|
+|`_dao`| address | DAO governance contract address which exercises control over ability of `authority` to call certain functions in the MetaVesTController via imposing conditions through `updateFunctionCondition()`|
+|`_vestingAllocationFactory`| address | factory contract address which will be used to create each vesting allocation in this MetaVesT framework |
+| `_tokenOptionFactory`| address | factory contract address which will be used to create each token option in this MetaVesT framework |
+|`_restrictedTokenFactory`| address | factory contract address which will be used to create each restricted token award in this MetaVesT framework|
 
 This call deploys a [MetaVesTController.sol](https://github.com/MetaLex-Tech/MetaVesT/blob/main/src/MetaVesTController.sol), the authority-facing contract which it uses to create individual MetaVesTs, update MetaVesT details, add/remove/confirm milestones, terminate MetaVesTs, toggle transferability, etc. subject to grantee or majority-in-tokenGoverningPower consent where applicable (see below).
 
@@ -43,37 +41,39 @@ This call deploys a [MetaVesTController.sol](https://github.com/MetaLex-Tech/Met
 
 Each MetaVesT initiated via the MetaVesT Controller by the `authority` is designed to be on a per-grantee basis.
 
-Each separate MetaVesT under the framework can have a variety of different attributes, including different ERC20s, different MetaVesT types (vesting allocation, option, RTA), amounts, transferability, milestone amounts and conditions, vesting and unlock schedules, etc. The `authority` for a given MetaVesT framework creates a new MetaVesT for a given recipient by calling `createMetavest()` in the `MetaVesTController`, supplying:
+Each separate MetaVesT under the framework can have a variety of different attributes, including different ERC20s, different MetaVesT types (vesting allocation, token option, restricted token award), amounts, transferability, milestone amounts and conditions, vesting and unlock schedules, etc. The `authority` for a given MetaVesT framework creates a new MetaVesT for a given recipient by calling `createMetavest()` in the `MetaVesTController`, supplying:
 
-`_type`: enum of the MetaVesT type for this `grantee`, either `Vesting` (simple vesting allocation), `RestrictedToken` (restricted token award), or `TokenOption` (token option)
+`_type`: enum AllocationType of the MetaVesT type for this `grantee`, either `Vesting` (simple vesting allocation), `RestrictedToken` (restricted token award), or `TokenOption` (token option)
 
 `_grantee`: address of the `grantee` for the new MetaVesT
 
 `_allocation`: calldata of the `BaseAllocation.Allocation` struct for this grantee, comprised of:
-
-- `tokenStreamTotal`: uint256 total number of tokens subject to linear vesting/restriction removal (includes cliff credits but not each 'milestoneAward')
-- `vestingCliffCredit`: uint128 lump sum of tokens which become vested at `vestingStartTime`
-- `unlockingCliffCredit`: uint128 lump sum of tokens which become unlocked at `unlockStartTime`
-- `vestingRate`: uint160 tokens per second that become vested; if RestrictedToken type, this amount corresponds to 'lapse rate' for tokens that become non-repurchasable
-- `vestingStartTime`: uint48 linear vesting start time; if RestrictedToken type, this amount corresponds to 'lapse start time'
-- `unlockRate`: uint160 tokens per second that become unlocked
-- `unlockStartTime`: uint48 linear unlocking start time
-- `tokenContract`: contract address of the ERC20 token included in the MetaVesT
+| Name  | Type |  Description |
+| :---:  |:----:|  :---: |
+|`tokenStreamTotal`| uint256 | total number of tokens subject to linear vesting/restriction removal (includes cliff credits but not each `milestoneAward`) |
+| `vestingCliffCredit` | uint128 | lump sum of tokens which become vested at `vestingStartTime`|
+| `unlockingCliffCredit`| uint128 | lump sum of tokens which become unlocked at `unlockStartTime`|
+| `vestingRate` | uint160 | tokens per second that become vested; if RestrictedToken type, this amount corresponds to 'lapse rate' for tokens that become non-repurchasable |
+| `vestingStartTime`| uint48 | linear vesting start time; if RestrictedToken type, this amount corresponds to 'lapse start time'|
+| `unlockRate` | uint160 | tokens per second that become unlocked |
+| `unlockStartTime` | uint48 | linear unlocking start time |
+| `tokenContract` | address | contract address of the ERC20 token included in the MetaVesT |
 
 `_milestones`: calldata array of `Milestone` structs for this grantee, comprised of:
+| Name  | Type |  Description |
+| :---:  |:----:|  :---: |
+| `milestoneAward` | uint256 | per-milestone indexed lump sums of tokens vested upon corresponding milestone completion |
+| `unlockOnCompletion` | bool | whether the `milestoneAward` is to be unlocked upon completion |
+| `complete` | bool | whether the Milestone is satisfied and the `milestoneAward` is to be released |
+| `conditionContracts` | address[] | contract addresses corresponding to condition(s) that must satisfied for this Milestone to be `complete`|
 
-- `milestoneAward`: uint256 per-milestone indexed lump sums of tokens vested upon corresponding milestone completion
-- `unlockOnCompletion`: boolean whether the `milestoneAward` is to be unlocked upon completion
-- `complete`: bool whether the Milestone is satisfied and the `milestoneAward` is to be released
-- `conditionContracts`: array of contract addresses corresponding to condition(s) that must satisfied for this Milestone to be 'complete'
-
-`_exercisePrice`: if `_type` == `TokenOption`, the uint256 price in at which a token option may be exercised in vesting token decimals but only up to payment decimal precision. If `_type` == `RestrictedToken`, this corresponds to the `_repurchasePrice`: the uint256 price at which the restricted tokens can be repurchased in vesting token decimals but only up to payment decimal precision.
+`_exercisePrice`: if `_type` == `TokenOption`, the uint256 price in at which a token option may be exercised in vesting token decimals but only up to payment decimal precision. If `_type` == `RestrictedTokenAward`, this corresponds to the `_repurchasePrice`: the uint256 price at which the restricted tokens can be repurchased in vesting token decimals but only up to payment decimal precision.
 
 `_paymentToken`: contract address for the token used to pay for option exercises (for a grantee) or restricted token repurchases (for authority); immutable for this MetaVesT.
 
-`_shortStopDuration`: uint256 if `_type` == `TokenOption`, length of period before vesting stop time and exercise deadline; if `_type` == `RestrictedToken`, length of period before lapse stop time and repurchase deadline
+`_shortStopDuration`: uint256 if `_type` == `TokenOption`, length of period before vesting stop time and exercise deadline; if `_type` == `RestrictedTokenAward`, length of period before lapse stop time and repurchase deadline
 
-When a grantee’s MetaVesT is created by authority, the full amount of corresponding tokens will be transferred from `authority` to the applicable newly deployed contract (either `VestingAllocation.sol`, `RestrictedTokenAllocation.sol`, or `TokenOptionAllocation.sol`) in the same transaction. This consists of any combination of:
+When a grantee’s MetaVesT is created by `authority`, the full amount of corresponding tokens will be transferred from `authority` to the applicable newly deployed contract (either `VestingAllocation.sol`, `RestrictedTokenAllocation.sol`, or `TokenOptionAllocation.sol`) in the same transaction. This consists of any combination of:
 
 - Tokens to be linearly vested and unlocked, with any vested lump sum (cliff) credit at the `vestingStartTime` (`Allocation.vestingCliffCredit`) or unlocked lump sum (cliff) credit at the `unlockStartTime` (`Allocation.unlockingCliffCredit`). Altogether this amount is the `tokenStreamTotal`
 - Tokens to be vested and unlocked as a `milestoneAward`, according to any applicable `conditionContracts` assigned, within the `milestones` array of Milestone structs
@@ -140,11 +140,36 @@ Token Option Allocation inherits the Base Allocation and contains the vesting an
 
 ### RestrictedTokenAllocation.sol
 
-Restricted Token Allocation inherits the Base Allocation and contains the vesting and unlocking rate calculations, as well as repurchasable (`getAmountRepurchasable()`) tokens pursuant to the restricted token award terms. `Authority` repurchases available tokens by calling `repurchaseTokens()` with its applicable `_amount` and necessary payment amount in its balance which will be transferred to the contract during the call, and `grantee` claims the payment amount for any repurchased tokens by calling `claimRepurchasedTokens()`.
+Restricted Token Allocation inherits the Base Allocation and contains the vesting and unlocking rate calculations, as well as repurchasable (`getAmountRepurchasable()`) tokens pursuant to the restricted token award terms. `authority` repurchases available tokens by calling `repurchaseTokens()` with its applicable `_amount` and necessary payment amount in its balance which will be transferred to the contract during the call, and `grantee` claims the payment amount for any repurchased tokens by calling `claimRepurchasedTokens()`.
+
+### Factories
+
+An overall MetaVesT framework is initiated by calling `deployMetavestAndController()` in `MetaVesTFactory`, which deploys a `MetaVesTController`, passing the contract addresses of the factories for each MetaVesT type.
+
+Each new MetaVesT in a framework (i.e. for a given `MetaVesTController`) is deployed via a correponding factory contract upon the `authority`'s call to `createMetavest()` in the `MetaVesTController`. The factory contracts for each MetaVesT type are `VestingAllocationFactory`, `TokenOptionFactory`, and `RestrictedTokenFactory`; each contains a `createAllocation()` function with the following params:
+| Name  | Type |  Description |
+| :---:  |:----:|  :---: |
+| _allocationType | AllocationType enum | `Vesting`, `TokenOption`, or `RestrictedToken`|
+| _grantee | address | address of the grantee receiving the applicable MetaVesTed allocation |
+| _controller | address | contract address of the applicable MetaVesT Controller |
+| _allocation | Allocation struct | Allocation struct details (see above in "Creating and Using MetaVesTs") |
+| _milestones | Milestone[] | array of Milestone structs for this allocation (see above in "Creating and Using MetaVesTs") |
+| _paymentToken | address | contract address for the payment token, used for option exercises by grantee for token options, or for repurchases by authority for restricted token awards |
+| _exercisePrice | uint256 | price of the token option exercise in vesting token decimals for token options, or price at which the restricted tokens can be repurchased in vesting token decimals for restricted token awards |
+| _shortStopDuration | uint256 |  duration of the short stop for token options, or duration after termination during which restricted tokens can be repurchased for restricted token awards |
 
 ### Milestone Conditions
 
-- Each `conditionContract` (used in milestones as well, either alone or in combination, as well as any `conditionCheck()` imposed by `dao` on MetaVesTController functions) is intended to follow the [MetaLeX condition contract specs](https://github.com/MetaLex-Tech/BORG-CORE/tree/main/src/libs/conditions) and must return a boolean.
+Each `conditionContract` (used in milestones as well, either alone or in combination, as well as any `conditionCheck()` imposed by `dao` on MetaVesTController functions) is intended to follow the [MetaLeX condition contract specs](https://github.com/MetaLex-Tech/BORG-CORE/tree/main/src/libs/conditions). All condition contracts MUST have a `checkCondition` function which conforms to the following interface:
+
+    interface ICondition {
+        function checkCondition(
+            address _contract,
+            bytes4 _functionSignature,
+            bytes memory data
+        ) external view returns (bool);
+    }
+
 
 ## Restrictions and Considerations
 
