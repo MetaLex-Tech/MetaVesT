@@ -736,6 +736,46 @@ contract MetaVestControllerTest is Test {
         controller.updateMetavestTransferability(mockAllocation3, true);
     }
 
+    function testProposeMajorityMetavestAmendmentReAdd() public {
+        address mockAllocation2 = createDummyVestingAllocation();
+        address mockAllocation3 = createDummyVestingAllocation();
+        bytes4 msgSig = bytes4(keccak256("updateMetavestTransferability(address,bool)"));
+        bytes memory callData = abi.encodeWithSelector(msgSig, mockAllocation2, true);
+
+        vm.prank(authority);
+        controller.addMetaVestToSet("testSet", mockAllocation2);
+        controller.addMetaVestToSet("testSet", mockAllocation3);
+        vm.warp(block.timestamp + 1 days);
+        vm.prank(authority);
+        controller.proposeMajorityMetavestAmendment("testSet", msgSig, callData);
+
+        vm.prank(grantee);
+        controller.voteOnMetavestAmendment(mockAllocation2, "testSet", msgSig, true);
+
+        vm.prank(authority);
+        controller.updateMetavestTransferability(mockAllocation3, true);
+
+        vm.prank(authority);
+        controller.removeMetaVestFromSet("testSet", mockAllocation3);
+      //  vm.prank(authority);
+      //  controller.updateMetavestTransferability(mockAllocation3, true);
+        vm.warp(block.timestamp + 90 days);
+        vm.prank(authority);
+        controller.proposeMajorityMetavestAmendment("testSet", msgSig, callData);
+
+        vm.prank(grantee);
+        controller.voteOnMetavestAmendment(mockAllocation2, "testSet", msgSig, true);
+
+        vm.prank(authority);
+        controller.updateMetavestTransferability(mockAllocation2, true);
+
+        vm.prank(authority);
+        controller.addMetaVestToSet("testSet", mockAllocation3);
+
+        vm.prank(authority);
+        controller.updateMetavestTransferability(mockAllocation3, true);
+    }
+
         function testFailNoPassProposeMajorityMetavestAmendment() public {
         address mockAllocation2 = createDummyVestingAllocation();
         address mockAllocation3 = createDummyVestingAllocation();
