@@ -6,7 +6,7 @@
                                      *************************************
                                                                         */
 
-pragma solidity 0.8.20;
+pragma solidity 0.8.24;
 
 //import "./MetaVesT.sol";
 import "./interfaces/IAllocationFactory.sol";
@@ -14,6 +14,7 @@ import "./BaseAllocation.sol";
 import "./RestrictedTokenAllocation.sol";
 import "./interfaces/IPriceAllocation.sol";
 import "./lib/EnumberableSet.sol";
+import "../lib/zk-governance/l2-contracts/src/ZkCappedMinterFactory.sol";
 
 //interface deleted
 
@@ -31,6 +32,7 @@ contract metavestController is SafeTransferLib {
     uint256 internal constant AMENDMENT_TIME_LIMIT = 604800;
     uint256 internal constant ARRAY_LENGTH_LIMIT = 20;
 
+
     mapping(bytes32 => EnumerableSet.AddressSet) private sets;
     EnumerableSet.Bytes32Set private setNames;
 
@@ -39,8 +41,11 @@ contract metavestController is SafeTransferLib {
     address public vestingFactory;
     address public tokenOptionFactory;
     address public restrictedTokenFactory;
+    address public zkCappedMinterFactory;
+    address public ZkTokenAddress;
     address internal _pendingAuthority;
     address internal _pendingDao;
+    uint256 public metavestCounter;
 
     struct AmendmentProposal {
         bool isPending;
@@ -90,6 +95,8 @@ contract metavestController is SafeTransferLib {
     event MetaVesTController_SetRemoved(string indexed set);
     event MetaVesTController_AddressAddedToSet(string set, address indexed grantee);
     event MetaVesTController_AddressRemovedFromSet(string set, address indexed grantee);
+    event MetaVesTController_MetaVestCreated(address indexed metavest);
+    event MetaVesTController_ZKCapMinterCreated(address indexed zkCapMinter);
 
     ///
     /// ERRORS
@@ -173,12 +180,14 @@ contract metavestController is SafeTransferLib {
     /// @param _authority address of the authority who can call the functions in this contract and update each MetaVesT in '_metavest', such as a BORG
     /// @param _dao DAO governance contract address which exercises control over ability of 'authority' to call certain functions via imposing
     /// conditions through 'updateFunctionCondition'.
-    constructor(address _authority, address _dao, address _vestingFactory, address _tokenOptionFactory, address _restrictedTokenFactory) {
+    constructor(address _authority, address _dao, address _vestingFactory, address _tokenOptionFactory, address _restrictedTokenFactory, address _zkCappedMinterFactory, address _ZkTokenAddress) {
         if (_authority == address(0)) revert MetaVesTController_ZeroAddress();
         authority = _authority;
         vestingFactory = _vestingFactory;
         tokenOptionFactory = _tokenOptionFactory;
         restrictedTokenFactory = _restrictedTokenFactory;
+        zkCappedMinterFactory = _zkCappedMinterFactory;
+        ZkTokenAddress = _ZkTokenAddress;
         dao = _dao;
     }
 
@@ -224,6 +233,7 @@ contract metavestController is SafeTransferLib {
 
     function createMetavest(metavestType _type, address _grantee,  BaseAllocation.Allocation calldata _allocation, BaseAllocation.Milestone[] calldata _milestones, uint256 _exercisePrice, address _paymentToken,  uint256 _shortStopDuration, uint256 _longStopDate) external onlyAuthority conditionCheck returns (address)
     {
+        
         address newMetavest;
         if(_type == metavestType.Vesting)
         {
@@ -241,6 +251,12 @@ contract metavestController is SafeTransferLib {
         {
             revert MetaVesTController_IncorrectMetaVesTType();
         }
+        uint256 _milestoneTotal = validateAndCalculateMilestones(_milestones);
+        uint256 _total = _allocation.tokenStreamTotal + _milestoneTotal; 
+        address zkCappedMinterDeployAddress = ZkCappedMinterFactory(zkCappedMinterFactory).createCappedMinter(IMintableAndDelegatable(ZkTokenAddress), newMetavest, _total, metavestCounter++);
+        BaseAllocation(newMetavest).setZkCappedMinterAddress(zkCappedMinterDeployAddress);
+        emit MetaVesTController_MetaVestCreated(newMetavest);
+        emit MetaVesTController_ZKCapMinterCreated(zkCappedMinterDeployAddress);
         return newMetavest;
     }
     

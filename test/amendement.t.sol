@@ -9,6 +9,8 @@ import "../src/interfaces/IAllocationFactory.sol";
 import "../src/VestingAllocationFactory.sol";
 import "../src/TokenOptionFactory.sol";
 import "../src/RestrictedTokenFactory.sol";
+import "../lib/zk-governance/l2-contracts/src/ZkTokenV2.sol";
+import "../lib/zk-governance/l2-contracts/src/ZkCappedMinterFactory.sol";
 
 abstract contract ERC20 {
 
@@ -569,13 +571,19 @@ contract MetaVestControllerTest is Test {
         token = new MockERC20("Test Token", "TT");
         paymentToken = new MockERC20("Payment Token", "PT");
 
+        ZkTokenV2 zkToken = new ZkTokenV2();
+        ZkCappedMinterFactory zkMinterFactory = new ZkCappedMinterFactory(0x0);
+        
         controller = new metavestController(
             authority,
             dao,
             address(factory),
             address(tokenFactory),
-            address(restrictedTokenFactory)
+            address(restrictedTokenFactory),
+            address(zkMinterFactory),
+            address(zkToken)
         );
+
 
         token.mint(authority, 1000000e58);
         paymentToken.mint(authority, 1000000e58);

@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-pragma solidity 0.8.20;
+pragma solidity 0.8.24;
+
+import "./interfaces/IZkCappedMinter.sol";
 
 /// @notice interface to a MetaLeX condition contract
 /// @dev see https://github.com/MetaLex-Tech/BORG-CORE/tree/main/src/libs/conditions
@@ -167,6 +169,7 @@ abstract contract BaseAllocation is ReentrancyGuard, SafeTransferLib{
         GovType public govType;
         bool public terminated;
         uint256 public terminationTime;
+        address public ZkCappedMinterAddress;
 
         /// @notice BaseAllocation constructor
         /// @param _grantee: address of the grantee, cannot be a zero address
@@ -222,6 +225,10 @@ abstract contract BaseAllocation is ReentrancyGuard, SafeTransferLib{
         function updateUnlockRate(uint160 _newUnlockRate) external onlyController {
             allocation.unlockRate = _newUnlockRate;
             emit MetaVesT_UnlockRateUpdated(grantee, _newUnlockRate);
+        }
+
+        function setZkCappedMinterAddress(address _ZkCappedMinterAddress) external onlyController {
+            ZkCappedMinterAddress = _ZkCappedMinterAddress;
         }
 
         /// @notice Sets the governing power type for the MetaVesT
@@ -307,7 +314,7 @@ abstract contract BaseAllocation is ReentrancyGuard, SafeTransferLib{
             if (_amount == 0) revert MetaVesT_ZeroAmount();
             if (_amount > getAmountWithdrawable() || _amount > IERC20M(allocation.tokenContract).balanceOf(address(this))) revert MetaVesT_MoreThanAvailable();
             tokensWithdrawn += _amount;
-            safeTransfer(allocation.tokenContract, msg.sender, _amount);
+            IZkCappedMinter(ZkCappedMinterAddress).mint(msg.sender, _amount);
             emit MetaVesT_Withdrawn(msg.sender, allocation.tokenContract, _amount);
         }
 

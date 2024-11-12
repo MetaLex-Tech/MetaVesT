@@ -8,6 +8,8 @@ import "../src/MetaVesTController.sol";
 import "../src/VestingAllocationFactory.sol";
 import "../src/TokenOptionFactory.sol";
 import "../src/RestrictedTokenFactory.sol";
+import "../lib/zk-governance/l2-contracts/src/ZkTokenV2.sol";
+import "../lib/zk-governance/l2-contracts/src/ZkCappedMinterFactory.sol";
 
 interface IERC20 {
     function transfer(address recipient, uint256 amount) external returns (bool);
@@ -46,17 +48,24 @@ contract MetaVesTFactoryTest is Test {
 
         address _dao = address(0xB);
         address _paymentToken = address(0xC);
+        RestrictedTokenFactory restrictedTokenFactory = new RestrictedTokenFactory();
+
+        ZkTokenV2 zkToken = new ZkTokenV2();
+        ZkCappedMinterFactory zkMinterFactory = new ZkCappedMinterFactory(0x0);
         
-        address _controller = factory.deployMetavestAndController(_authority, _dao, address(_factory), address(_factory2), address(_factory3));
+        address _controller = factory.deployMetavestAndController(_authority, _dao, address(_factory), address(_factory2), address(_factory3), address(zkMinterFactory), address(zkToken));
     }
 
     function testDeployMetavestAndController() public {
         address _authority = address(0xa);
         address _dao = address(0xB);
         address _paymentToken = address(0xC);
-        
+        RestrictedTokenFactory restrictedTokenFactory = new RestrictedTokenFactory();
 
-        address _controller = factory.deployMetavestAndController(_authority, _dao, address(_factory), address(_factory2), address(_factory3));
+        ZkTokenV2 zkToken = new ZkTokenV2();
+        ZkCappedMinterFactory zkMinterFactory = new ZkCappedMinterFactory(0x0);
+
+        address _controller = factory.deployMetavestAndController(_authority, _dao, address(_factory), address(_factory2), address(_factory3), address(zkMinterFactory), address(zkToken));
         metavestController controller = metavestController(_controller);
     }
 
@@ -64,7 +73,7 @@ contract MetaVesTFactoryTest is Test {
         address _authority = address(0);
         address _dao = address(0);
         address _paymentToken = address(0);
-        factory.deployMetavestAndController(_authority, _dao, address(0), address(0), address(0));
+        factory.deployMetavestAndController(_authority, _dao, address(0), address(0), address(0), address(0), address(0));
     }   
 
 

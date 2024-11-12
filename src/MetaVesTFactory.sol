@@ -1,6 +1,6 @@
 //SPDX-License-Identifier: AGPL-3.0-only
 
-pragma solidity 0.8.20;
+pragma solidity 0.8.24;
 
 /*
 ************************************
@@ -39,10 +39,10 @@ contract MetaVesTFactory {
     /// @dev conditionals are contained in the deployed MetaVesT, which is deployed in the MetaVesTController's constructor(); the MetaVesT within the MetaVesTController is immutable, but the 'authority' which has access control within the controller may replace itself
     /// @param _authority: address which initiates and may update each MetaVesT, such as a BORG or DAO
     /// @param _dao: contract address which token may be staked and used for voting, typically a DAO pool, governor, staking address. Submit address(0) for no such functionality.
-    function deployMetavestAndController(address _authority, address _dao, address _vestingAllocationFactory, address _tokenOptionFactory, address _restrictedTokenFactory ) external returns(address) {
+    function deployMetavestAndController(address _authority, address _dao, address _vestingAllocationFactory, address _tokenOptionFactory, address _restrictedTokenFactory, address _ZkCappedMinterFactory, address _zkTokenAddress ) external returns(address) {
         if(_vestingAllocationFactory == address(0) || _tokenOptionFactory == address(0) || _restrictedTokenFactory == address(0))
            revert MetaVesTFactory_ZeroAddress();
-        metavestController _controller = new metavestController(_authority, _dao, _vestingAllocationFactory, _tokenOptionFactory, _restrictedTokenFactory);
+        metavestController _controller = new metavestController(_authority, _dao, _vestingAllocationFactory, _tokenOptionFactory, _restrictedTokenFactory, _ZkCappedMinterFactory, _zkTokenAddress);
         emit MetaVesT_Deployment(address(0), _authority, address(_controller), _dao, _vestingAllocationFactory, _tokenOptionFactory, _restrictedTokenFactory);
         return address(_controller);
     }

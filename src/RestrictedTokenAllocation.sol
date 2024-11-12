@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import "./BaseAllocation.sol";
 
-pragma solidity 0.8.20;
+pragma solidity 0.8.24;
 
 contract RestrictedTokenAward is BaseAllocation {
 
