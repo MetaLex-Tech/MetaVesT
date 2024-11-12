@@ -1,3 +1,6 @@
 [submodule "lib/forge-std"]
 	path = lib/forge-std
 	url = https://github.com/foundry-rs/forge-std
+[submodule "lib/zk-governance"]
+	path = lib/zk-governance
+	url = https://github.com/zksync-association/zk-governance
