@@ -13,6 +13,7 @@ import "../src/RestrictedTokenFactory.sol";
 import "./mocks/MockCondition.sol";
 import "../lib/zk-governance/l2-contracts/src/ZkTokenV2.sol";
 import "../lib/zk-governance/l2-contracts/src/ZkCappedMinterFactory.sol";
+import {console} from "forge-std/console.sol";
 
 abstract contract ERC20 {
 
@@ -1117,8 +1118,9 @@ contract MetaVestControllerTest is Test {
         RestrictedTokenFactory restrictedTokenFactory = new RestrictedTokenFactory();
 
         ZkTokenV2 zkToken = new ZkTokenV2();
-        ZkCappedMinterFactory zkMinterFactory = new ZkCappedMinterFactory(0x0);
-        
+        ZkCappedMinterFactory zkMinterFactory = new ZkCappedMinterFactory(0x073749a0f8ed0d49b1acfd4e0efdc59328c83d0c2eed9ee099a3979f0c332ff8);
+
+      
         controller = new metavestController(
             authority,
             dao,
@@ -1176,6 +1178,8 @@ contract MetaVestControllerTest is Test {
     }
 
     function testCreateTokenOptionAllocation() public {
+        bytes32 bytecodeHash = keccak256(type(ZkCappedMinter).creationCode);
+         console.logBytes32(bytecodeHash);
         BaseAllocation.Allocation memory allocation = BaseAllocation.Allocation({
             tokenContract: address(token),
             tokenStreamTotal: 1000e18,

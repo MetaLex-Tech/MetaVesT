@@ -8,7 +8,8 @@ import "../src/TokenOptionFactory.sol";
 import "../src/RestrictedTokenFactory.sol";
 import "../src/MetaVesTController.sol";
 import "../src/MetaVesTFactory.sol";
-
+import "../lib/zk-governance/l2-contracts/src/ZkTokenV2.sol";
+import "../lib/zk-governance/l2-contracts/src/ZkCappedMinterFactory.sol";
 
 contract BaseScript is Script {
     address deployerAddress;
@@ -25,7 +26,12 @@ contract BaseScript is Script {
             TokenOptionFactory tokenOptionFactory = new TokenOptionFactory();
             RestrictedTokenFactory restrictedTokenFactory = new RestrictedTokenFactory();
             MetaVesTFactory factory = new MetaVesTFactory();
-            metaVesTController = factory.deployMetavestAndController(deployerAddress, deployerAddress, address(vestingFactory), address(tokenOptionFactory), address(restrictedTokenFactory));
+
+            ZkTokenV2 zkToken = new ZkTokenV2();
+            ZkCappedMinterFactory zkMinterFactory = new ZkCappedMinterFactory(0x073749a0f8ed0d49b1acfd4e0efdc59328c83d0c2eed9ee099a3979f0c332ff8);
+        
+
+            metaVesTController = factory.deployMetavestAndController(deployerAddress, deployerAddress, address(vestingFactory), address(tokenOptionFactory), address(restrictedTokenFactory), address(zkMinterFactory), address(zkToken));
             //metaVesTController = new metavestController(deployerAddress, deployerAddress, address(vestingFactory), address(tokenOptionFactory), address(restrictedTokenFactory));
             vm.stopBroadcast();
             console.log("Deployed");
@@ -34,5 +40,8 @@ contract BaseScript is Script {
             console.log("TokenOptionFactory: ", address(tokenOptionFactory));
             console.log("RestrictedTokenFactory: ", address(restrictedTokenFactory));
             console.log("MetaVesTController: ", metaVesTController);
+            console.log("MetaVesTFactory: ", address(factory));
+            console.log("ZkToken: ", address(zkToken));
+            console.log("ZkCappedMinterFactory: ", address(zkMinterFactory));
         }
 }
