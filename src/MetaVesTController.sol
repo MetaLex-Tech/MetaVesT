@@ -348,7 +348,7 @@ contract metavestController is SafeTransferLib {
 
         uint256 _total = _allocation.tokenStreamTotal + _milestoneTotal;
         if (_total == 0) revert MetaVesTController_ZeroAmount();
-        validateTokenApprovalAndBalance(_allocation.tokenContract, _total);
+        //validateTokenApprovalAndBalance(_allocation.tokenContract, _total);
 
         address vestingAllocation = IAllocationFactory(vestingFactory).createAllocation(
             IAllocationFactory.AllocationType.Vesting,
@@ -360,7 +360,7 @@ contract metavestController is SafeTransferLib {
             0,
             0
         );
-        safeTransferFrom(_allocation.tokenContract, authority, vestingAllocation, _total);
+        //safeTransferFrom(_allocation.tokenContract, authority, vestingAllocation, _total);
 
         return vestingAllocation;
     }
@@ -373,7 +373,7 @@ contract metavestController is SafeTransferLib {
 
         uint256 _total = _allocation.tokenStreamTotal + _milestoneTotal;
         if (_total == 0) revert MetaVesTController_ZeroAmount();
-        validateTokenApprovalAndBalance(_allocation.tokenContract, _total);
+        //validateTokenApprovalAndBalance(_allocation.tokenContract, _total);
         
         address tokenOptionAllocation = createAndInitializeTokenOptionAllocation(
                 _grantee,
@@ -384,7 +384,7 @@ contract metavestController is SafeTransferLib {
                 _milestones
             );
 
-            safeTransferFrom(_allocation.tokenContract, authority, tokenOptionAllocation, _total);
+            //safeTransferFrom(_allocation.tokenContract, authority, tokenOptionAllocation, _total);
             return tokenOptionAllocation;
         }
 
@@ -395,7 +395,7 @@ contract metavestController is SafeTransferLib {
 
             uint256 _total = _allocation.tokenStreamTotal + _milestoneTotal;
             if (_total == 0) revert MetaVesTController_ZeroAmount();
-            validateTokenApprovalAndBalance(_allocation.tokenContract, _total);
+            //validateTokenApprovalAndBalance(_allocation.tokenContract, _total);
 
             address restrictedTokenAward = createAndInitializeRestrictedTokenAward(
                 _grantee,
@@ -406,7 +406,7 @@ contract metavestController is SafeTransferLib {
                 _milestones
             );
 
-            safeTransferFrom(_allocation.tokenContract, authority, restrictedTokenAward, _total);
+            //safeTransferFrom(_allocation.tokenContract, authority, restrictedTokenAward, _total);
             return restrictedTokenAward;
         }
     
