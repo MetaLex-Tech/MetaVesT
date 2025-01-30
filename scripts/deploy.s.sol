@@ -20,6 +20,8 @@ contract BaseScript is Script {
      function run() public {
             deployerAddress = vm.addr(vm.envUint("PRIVATE_KEY_DEPLOY"));
             uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY_DEPLOY");
+            address dao = 0xda0d1a30949b870a1FA7B2792B03070395720Da0;
+            address borg = 0x9EfbfE69a522aC81685e21EEb52aFBd5398b2CBc;
             
             vm.startBroadcast(deployerPrivateKey);
             VestingAllocationFactory vestingFactory = new VestingAllocationFactory();
@@ -28,12 +30,14 @@ contract BaseScript is Script {
             MetaVesTFactory factory = new MetaVesTFactory();
 
             ZkTokenV2 zkToken = new ZkTokenV2();
+            zkToken.initialize(dao, dao, 0);
             ZkCappedMinterFactory zkMinterFactory = new ZkCappedMinterFactory(0x073749a0f8ed0d49b1acfd4e0efdc59328c83d0c2eed9ee099a3979f0c332ff8);
         
 
-            metaVesTController = factory.deployMetavestAndController(deployerAddress, deployerAddress, address(vestingFactory), address(tokenOptionFactory), address(restrictedTokenFactory), address(zkMinterFactory), address(zkToken));
-            //metaVesTController = new metavestController(deployerAddress, deployerAddress, address(vestingFactory), address(tokenOptionFactory), address(restrictedTokenFactory));
+            metaVesTController = factory.deployMetavestAndController(borg, borg, address(vestingFactory), address(tokenOptionFactory), address(restrictedTokenFactory), address(zkMinterFactory), address(zkToken));
+           // metaVesTController = new metavestController(dao, deployerAddress, address(vestingFactory), address(tokenOptionFactory), address(restrictedTokenFactory));
             vm.stopBroadcast();
+            console.log("Deployer: ", deployerAddress); 
             console.log("Deployed");
             console.log("Addresses:");
             console.log("VestingAllocationFactory: ", address(vestingFactory));

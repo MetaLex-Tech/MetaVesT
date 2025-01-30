@@ -48,10 +48,10 @@ contract MetaVesTFactoryTest is Test {
 
         address _dao = address(0xB);
         address _paymentToken = address(0xC);
-        RestrictedTokenFactory restrictedTokenFactory = new RestrictedTokenFactory();
 
-        ZkTokenV2 zkToken = new ZkTokenV2();
-        ZkCappedMinterFactory zkMinterFactory = new ZkCappedMinterFactory(0x0);
+
+        ZkTokenV2 zkToken = ZkTokenV2(0x3D65a7e2960ac3820262b847b4C4dCB50F225f1a);
+        ZkCappedMinterFactory zkMinterFactory = ZkCappedMinterFactory(0x25BDFa33Fb8873701DDbeeD3f09edD173Ac71A1b);
         
         address _controller = factory.deployMetavestAndController(_authority, _dao, address(_factory), address(_factory2), address(_factory3), address(zkMinterFactory), address(zkToken));
     }
@@ -60,13 +60,48 @@ contract MetaVesTFactoryTest is Test {
         address _authority = address(0xa);
         address _dao = address(0xB);
         address _paymentToken = address(0xC);
+        address grantee = address(0xD);
         RestrictedTokenFactory restrictedTokenFactory = new RestrictedTokenFactory();
 
-        ZkTokenV2 zkToken = new ZkTokenV2();
-        ZkCappedMinterFactory zkMinterFactory = new ZkCappedMinterFactory(0x0);
+        ZkTokenV2 zkToken = ZkTokenV2(0x3D65a7e2960ac3820262b847b4C4dCB50F225f1a);
+        ZkCappedMinterFactory zkMinterFactory = ZkCappedMinterFactory(0x25BDFa33Fb8873701DDbeeD3f09edD173Ac71A1b);
 
         address _controller = factory.deployMetavestAndController(_authority, _dao, address(_factory), address(_factory2), address(_factory3), address(zkMinterFactory), address(zkToken));
         metavestController controller = metavestController(_controller);
+                BaseAllocation.Allocation memory allocation = BaseAllocation.Allocation({
+            tokenContract: address(token),
+            tokenStreamTotal: 1000e18,
+            vestingCliffCredit: 100e18,
+            unlockingCliffCredit: 100e18,
+            vestingRate: 10e18,
+            vestingStartTime: uint48(block.timestamp),
+            unlockRate: 10e18,
+            unlockStartTime: uint48(block.timestamp)
+        });
+
+        BaseAllocation.Milestone[] memory milestones = new BaseAllocation.Milestone[](1);
+        milestones[0] = BaseAllocation.Milestone({
+            milestoneAward: 100e18,
+            unlockOnCompletion: true,
+            complete: false,
+            conditionContracts: new address[](0)
+        });
+
+        //token.approve(address(controller), 1100e18);
+
+        address vestingAllocation = controller.createMetavest(
+            metavestController.metavestType.Vesting,
+            grantee,
+            allocation,
+            milestones,
+            0,
+            address(0),
+            0,
+            0
+            
+        );
+
+        assertEq(token.balanceOf(vestingAllocation), 1100e18);,9u
     }
 
     function testFailControllerZeroAddress() public {

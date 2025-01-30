@@ -231,7 +231,7 @@ contract metavestController is SafeTransferLib {
         emit MetaVesTController_ConditionUpdated(_condition, _functionSig);
     }
 
-    function createMetavest(metavestType _type, address _grantee,  BaseAllocation.Allocation calldata _allocation, BaseAllocation.Milestone[] calldata _milestones, uint256 _exercisePrice, address _paymentToken,  uint256 _shortStopDuration, uint256 _longStopDate) external onlyAuthority conditionCheck returns (address)
+    function createMetavest(metavestType _type, address _grantee,  BaseAllocation.Allocation calldata _allocation, BaseAllocation.Milestone[] calldata _milestones, uint256 _exercisePrice, address _paymentToken,  uint256 _shortStopDuration, uint256 _longStopDate) external conditionCheck returns (address)
     {
         
         address newMetavest;
