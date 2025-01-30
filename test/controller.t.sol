@@ -2302,6 +2302,7 @@ contract MetaVestControllerTest is Test {
 
     function testFailUpdateExercisePriceForVesting() public {
         address vestingAllocation = createDummyVestingAllocation();
+        console.log(VestingAllocation(vestingAllocation).totalTokens());
         controller.updateExerciseOrRepurchasePrice(vestingAllocation, 2e18);
     }
 

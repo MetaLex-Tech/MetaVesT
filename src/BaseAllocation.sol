@@ -207,6 +207,10 @@ abstract contract BaseAllocation is ReentrancyGuard, SafeTransferLib{
             emit MetaVesT_TransferabilityUpdated(grantee, _transferable);
         }
 
+        function totalTokens() external view returns (uint256) {
+            return IERC20M(allocation.tokenContract).balanceOf(address(this));
+        }
+
         /// @notice updates the vesting rate of the VestingAllocation
         /// @dev onlyController -- must be called from the metavest controller
         /// @param _newVestingRate - the updated vesting rate in tokens per second in the vesting token decimal
