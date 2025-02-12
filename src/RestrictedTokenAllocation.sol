@@ -60,6 +60,15 @@ contract RestrictedTokenAward is BaseAllocation {
         }
     }
 
+    function test(
+        address _grantee,
+        address _controller,
+        Allocation memory _allocation,
+        Milestone[] memory _milestones
+    ) external pure {
+        
+    }
+
     /// @notice returns the vesting type for RestrictedTokenAward
     /// @return uint256 type 3
     function getVestingType() external pure override returns (uint256) {

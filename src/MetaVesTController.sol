@@ -79,6 +79,7 @@ contract metavestController is SafeTransferLib {
     /// EVENTS
     ///
 
+    event MetaVesTController_MetavestCreated(address indexed metavest, address indexed grantee, metavestType _type);
     event MetaVesTController_AmendmentConsentUpdated(bytes4 indexed msgSig, address indexed grantee, bool inFavor);
     event MetaVesTController_AmendmentProposed(address indexed grant, bytes4 msgSig);
     event MetaVesTController_AuthorityUpdated(address indexed newAuthority);
@@ -241,6 +242,7 @@ contract metavestController is SafeTransferLib {
         {
             revert MetaVesTController_IncorrectMetaVesTType();
         }
+        emit MetaVesTController_MetavestCreated(newMetavest, _grantee, _type);
         return newMetavest;
     }
     
