@@ -69,7 +69,7 @@ contract MetaVesTFactoryTest is Test {
         address _controller = factory.deployMetavestAndController(_authority, _dao, address(_factory), address(_factory2), address(_factory3), address(zkMinterFactory), address(zkToken));
         metavestController controller = metavestController(_controller);
                 BaseAllocation.Allocation memory allocation = BaseAllocation.Allocation({
-            tokenContract: address(token),
+            tokenContract: address(zkToken),
             tokenStreamTotal: 1000e18,
             vestingCliffCredit: 100e18,
             unlockingCliffCredit: 100e18,
@@ -101,13 +101,14 @@ contract MetaVesTFactoryTest is Test {
             
         );
 
-        assertEq(token.balanceOf(vestingAllocation), 1100e18);,9u
+        assertEq(zkToken.balanceOf(vestingAllocation), 1100e18);
     }
 
-    function testFailControllerZeroAddress() public {
+    function test_RevertIf_ControllerZeroAddress() public {
         address _authority = address(0);
         address _dao = address(0);
         address _paymentToken = address(0);
+        vm.expectRevert(abi.encodeWithSelector(MetaVesTFactory.MetaVesTFactory_ZeroAddress.selector));
         factory.deployMetavestAndController(_authority, _dao, address(0), address(0), address(0), address(0), address(0));
     }   
 
