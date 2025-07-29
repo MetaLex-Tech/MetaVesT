@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity 0.8.24;
 
-import "./interfaces/IZkCappedMinter.sol";
+import "./interfaces/zk-governance/IZkCappedMinter.sol";
 
 /// @notice interface to a MetaLeX condition contract
 /// @dev see https://github.com/MetaLex-Tech/BORG-CORE/tree/main/src/libs/conditions
@@ -312,7 +312,11 @@ abstract contract BaseAllocation is ReentrancyGuard, SafeTransferLib{
         /// @param _amount - the amount of tokens to withdraw
         function withdraw(uint256 _amount) external nonReentrant onlyGrantee {
             if (_amount == 0) revert MetaVesT_ZeroAmount();
-            if (_amount > getAmountWithdrawable() || _amount > IERC20M(allocation.tokenContract).balanceOf(address(this))) revert MetaVesT_MoreThanAvailable();
+
+            // TODO Update other places accordingly
+//            if (_amount > getAmountWithdrawable() || _amount > IERC20M(allocation.tokenContract).balanceOf(address(this))) revert MetaVesT_MoreThanAvailable();
+            if (_amount > getAmountWithdrawable()) revert MetaVesT_MoreThanAvailable();
+
             tokensWithdrawn += _amount;
             IZkCappedMinter(ZkCappedMinterAddress).mint(msg.sender, _amount);
             emit MetaVesT_Withdrawn(msg.sender, allocation.tokenContract, _amount);

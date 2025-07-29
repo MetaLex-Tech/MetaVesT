@@ -9,12 +9,12 @@
 pragma solidity 0.8.24;
 
 //import "./MetaVesT.sol";
-import "./interfaces/IAllocationFactory.sol";
 import "./BaseAllocation.sol";
 import "./RestrictedTokenAllocation.sol";
+import "./interfaces/IAllocationFactory.sol";
 import "./interfaces/IPriceAllocation.sol";
+import "./interfaces/zk-governance/IZkCappedMinterFactory.sol";
 import "./lib/EnumberableSet.sol";
-import "../lib/zk-governance/l2-contracts/src/ZkCappedMinterFactory.sol";
 
 //interface deleted
 
@@ -253,7 +253,7 @@ contract metavestController is SafeTransferLib {
         }
         uint256 _milestoneTotal = validateAndCalculateMilestones(_milestones);
         uint256 _total = _allocation.tokenStreamTotal + _milestoneTotal; 
-        address zkCappedMinterDeployAddress = ZkCappedMinterFactory(zkCappedMinterFactory).createCappedMinter(IMintableAndDelegatable(ZkTokenAddress), newMetavest, _total, metavestCounter++);
+        address zkCappedMinterDeployAddress = IZkCappedMinterFactory(zkCappedMinterFactory).createCappedMinter(ZkTokenAddress, newMetavest, _total, metavestCounter++);
         BaseAllocation(newMetavest).setZkCappedMinterAddress(zkCappedMinterDeployAddress);
         emit MetaVesTController_MetaVestCreated(newMetavest);
         emit MetaVesTController_ZKCapMinterCreated(zkCappedMinterDeployAddress);
