@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity 0.8.24;
 
-import "./interfaces/zk-governance/IZkCappedMinter.sol";
+import "./interfaces/zk-governance/IZkCappedMinterV2.sol";
 
 /// @notice interface to a MetaLeX condition contract
 /// @dev see https://github.com/MetaLex-Tech/BORG-CORE/tree/main/src/libs/conditions
@@ -318,7 +318,7 @@ abstract contract BaseAllocation is ReentrancyGuard, SafeTransferLib{
             if (_amount > getAmountWithdrawable()) revert MetaVesT_MoreThanAvailable();
 
             tokensWithdrawn += _amount;
-            IZkCappedMinter(ZkCappedMinterAddress).mint(msg.sender, _amount);
+            IZkCappedMinterV2(ZkCappedMinterAddress).mint(msg.sender, _amount);
             emit MetaVesT_Withdrawn(msg.sender, allocation.tokenContract, _amount);
         }
 

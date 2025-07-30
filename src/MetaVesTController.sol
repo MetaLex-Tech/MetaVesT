@@ -13,7 +13,8 @@ import "./BaseAllocation.sol";
 import "./RestrictedTokenAllocation.sol";
 import "./interfaces/IAllocationFactory.sol";
 import "./interfaces/IPriceAllocation.sol";
-import "./interfaces/zk-governance/IZkCappedMinterFactory.sol";
+import "./interfaces/zk-governance/IZkCappedMinterV2.sol";
+import "./interfaces/zk-governance/IZkCappedMinterV2Factory.sol";
 import "./lib/EnumberableSet.sol";
 
 //interface deleted
@@ -252,11 +253,19 @@ contract metavestController is SafeTransferLib {
             revert MetaVesTController_IncorrectMetaVesTType();
         }
         uint256 _milestoneTotal = validateAndCalculateMilestones(_milestones);
-        uint256 _total = _allocation.tokenStreamTotal + _milestoneTotal; 
-        address zkCappedMinterDeployAddress = IZkCappedMinterFactory(zkCappedMinterFactory).createCappedMinter(ZkTokenAddress, newMetavest, _total, metavestCounter++);
-        BaseAllocation(newMetavest).setZkCappedMinterAddress(zkCappedMinterDeployAddress);
+        uint256 _total = _allocation.tokenStreamTotal + _milestoneTotal;
+        IZkCappedMinterV2 zkCappedMinter = IZkCappedMinterV2(IZkCappedMinterV2Factory(zkCappedMinterFactory).createCappedMinter(
+            ZkTokenAddress,
+            address(this),
+            _total,
+            uint48(block.timestamp), // TODO should take input parameters
+            uint48(block.timestamp + 3600 * 24 * 365 * 99), // TODO should take input parameters
+            metavestCounter++
+        ));
+        zkCappedMinter.grantRole(zkCappedMinter.MINTER_ROLE(), newMetavest); // Grant MetaVesT minter privilege
+        BaseAllocation(newMetavest).setZkCappedMinterAddress(address(zkCappedMinter));
         emit MetaVesTController_MetaVestCreated(newMetavest);
-        emit MetaVesTController_ZKCapMinterCreated(zkCappedMinterDeployAddress);
+        emit MetaVesTController_ZKCapMinterCreated(address(zkCappedMinter));
         return newMetavest;
     }
     

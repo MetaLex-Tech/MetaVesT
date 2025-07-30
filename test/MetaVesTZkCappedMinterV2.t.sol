@@ -12,7 +12,7 @@ import "forge-std/Test.sol";
 contract MetaVesTZkCappedMinterV2Test is Test {
     address zkTokenAdmin;
     IZkTokenV1 zkToken;
-    IZkCappedMinterFactory zkCappedMinterFactory;
+    IZkCappedMinterV2Factory zkCappedMinterFactory;
 
     address authority = address(0x2);
     address dao = address(0x3);
@@ -25,15 +25,14 @@ contract MetaVesTZkCappedMinterV2Test is Test {
     metavestController controller;
 
     function setUp() public {
-        // zkSync Era Sepolia does not work, but the addresses aren't verified anyways
+        // zkSync Era Sepolia
         zkTokenAdmin = 0x0d9DD6964692a0027e1645902536E7A3b34AA1d7;
         zkToken = IZkTokenV1(0x69e5DC39E2bCb1C17053d2A4ee7CAEAAc5D36f96);
-        zkCappedMinterFactory = IZkCappedMinterFactory(0x4dBBd2dE17F811B5281a79275a66f4a8aFbc7bc7);
-        // TODO try zkSync Era mainnet
-//        zkToken = ZkTokenV2(0x5A7d6b2F92C77FAD6CCaBd7EE0624E64907Eaf3E);
-//        zkCappedMinterFactory = ZkCappedMinterFactory(0x4dBBd2dE17F811B5281a79275a66f4a8aFbc7bc7);
-//        zkToken = new ZkTokenV2();
-//        zkCappedMinterFactory = new ZkCappedMinterFactory(0x073749a0f8ed0d49b1acfd4e0efdc59328c83d0c2eed9ee099a3979f0c332ff8);
+        zkCappedMinterFactory = IZkCappedMinterV2Factory(0x329CE320a0Ef03F8c0E01195604b5ef7D3Fb150E);
+//        // zkSync Era mainnet
+//        zkTokenAdmin = 0xe5d21A9179CA2E1F0F327d598D464CcF60d89c3d;
+//        zkToken = IZkTokenV1(0x5A7d6b2F92C77FAD6CCaBd7EE0624E64907Eaf3E);
+//        zkCappedMinterFactory = IZkCappedMinterV2Factory(0x0400E6bc22B68686Fb197E91f66E199C6b0DDD6a);
 
         vestingAllocationFactory = new VestingAllocationFactory();
         tokenOptionFactory = new TokenOptionFactory();
