@@ -8,6 +8,7 @@ import "../src/VestingAllocationFactory.sol";
 import "../src/interfaces/zk-governance/IZkTokenV1.sol";
 import "forge-std/Test.sol";
 
+// TODO this does not use the actual ZkCappedMinterV2 yet. Still v1
 contract MetaVesTZkCappedMinterV2Test is Test {
     address zkTokenAdmin;
     IZkTokenV1 zkToken;
@@ -49,7 +50,12 @@ contract MetaVesTZkCappedMinterV2Test is Test {
         );
     }
 
-    function testVestingAllocation() public {
+    // Test by forge test --zksync --fork-url https://zksync-sepolia.g.alchemy.com/v2/<api-key> --mc MetaVesTZkCappedMinterV2Test
+    function test_GuardianCompensationYear1_2() public {
+        // TODO guardians to sign agreements
+
+        // Create MetaVesT for grantee
+
         BaseAllocation.Allocation memory allocation = BaseAllocation.Allocation({
             tokenContract: address(zkToken),
             tokenStreamTotal: 1000e18,
@@ -81,16 +87,21 @@ contract MetaVesTZkCappedMinterV2Test is Test {
         ));
         assertEq(zkToken.balanceOf(address(vestingAllocation)), 0, "Vesting contract should not have any token (it is minted on-the-fly)");
 
-        // Token admin to allow ZkCappedMinter to mint
-        // TODO this is a hack. Ideally we should grant minter role to only one parent Minter instead of all individual sub-minters
+        // Simulate TPP approval and ZK Token admin to grant our ZkCappedMinter access
+
         bytes32 minterRole = zkToken.MINTER_ROLE();
+        // TODO this is a hack. Ideally we should not create one ZkCappedMinter for every MetaVesT created. We should share it so only one ZkCappedMinter needs TPP approval
         address zkCappedMinter = BaseAllocation(vestingAllocation).ZkCappedMinterAddress();
         vm.prank(zkTokenAdmin);
         zkToken.grantRole(minterRole, zkCappedMinter);
+
+        // Simulate grantee withdrawal
+        // Since there is a cliff and vesting/unlock starts immediately, the grantee should be able to withdraw the cliff amount
 
         uint256 balanceBefore = zkToken.balanceOf(grantee);
         vm.prank(grantee);
         vestingAllocation.withdraw(100e18);
         assertEq(zkToken.balanceOf(grantee), balanceBefore + 100e18, "Grantee should be able to withdraw cliff amount");
+        assertEq(zkToken.balanceOf(address(vestingAllocation)), 0, "Vesting contract should not have any token (it is minted on-the-fly)");
     }
 }
