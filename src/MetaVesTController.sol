@@ -42,7 +42,7 @@ contract metavestController is SafeTransferLib {
     address public vestingFactory;
     address public tokenOptionFactory;
     address public restrictedTokenFactory;
-    address public zkCappedMinterFactory;
+    address public zkCappedMinter;
     address public ZkTokenAddress;
     address internal _pendingAuthority;
     address internal _pendingDao;
@@ -97,7 +97,6 @@ contract metavestController is SafeTransferLib {
     event MetaVesTController_AddressAddedToSet(string set, address indexed grantee);
     event MetaVesTController_AddressRemovedFromSet(string set, address indexed grantee);
     event MetaVesTController_MetaVestCreated(address indexed metavest);
-    event MetaVesTController_ZKCapMinterCreated(address indexed zkCapMinter);
 
     ///
     /// ERRORS
@@ -181,14 +180,13 @@ contract metavestController is SafeTransferLib {
     /// @param _authority address of the authority who can call the functions in this contract and update each MetaVesT in '_metavest', such as a BORG
     /// @param _dao DAO governance contract address which exercises control over ability of 'authority' to call certain functions via imposing
     /// conditions through 'updateFunctionCondition'.
-    constructor(address _authority, address _dao, address _vestingFactory, address _tokenOptionFactory, address _restrictedTokenFactory, address _zkCappedMinterFactory, address _ZkTokenAddress) {
+    constructor(address _authority, address _dao, address _vestingFactory, address _tokenOptionFactory, address _restrictedTokenFactory, address _zkCappedMinter) {
         if (_authority == address(0)) revert MetaVesTController_ZeroAddress();
         authority = _authority;
         vestingFactory = _vestingFactory;
         tokenOptionFactory = _tokenOptionFactory;
         restrictedTokenFactory = _restrictedTokenFactory;
-        zkCappedMinterFactory = _zkCappedMinterFactory;
-        ZkTokenAddress = _ZkTokenAddress;
+        zkCappedMinter = _zkCappedMinter;
         dao = _dao;
     }
 
@@ -254,18 +252,13 @@ contract metavestController is SafeTransferLib {
         }
         uint256 _milestoneTotal = validateAndCalculateMilestones(_milestones);
         uint256 _total = _allocation.tokenStreamTotal + _milestoneTotal;
-        IZkCappedMinterV2 zkCappedMinter = IZkCappedMinterV2(IZkCappedMinterV2Factory(zkCappedMinterFactory).createCappedMinter(
-            ZkTokenAddress,
-            address(this),
-            _total,
-            uint48(block.timestamp), // TODO should take input parameters
-            uint48(block.timestamp + 3600 * 24 * 365 * 99), // TODO should take input parameters
-            metavestCounter++
-        ));
-        zkCappedMinter.grantRole(zkCappedMinter.MINTER_ROLE(), newMetavest); // Grant MetaVesT minter privilege
+        // Grant MetaVesT minter privilege
+        IZkCappedMinterV2(zkCappedMinter).grantRole(
+            IZkCappedMinterV2(zkCappedMinter).MINTER_ROLE(),
+            newMetavest
+        );
         BaseAllocation(newMetavest).setZkCappedMinterAddress(address(zkCappedMinter));
         emit MetaVesTController_MetaVestCreated(newMetavest);
-        emit MetaVesTController_ZKCapMinterCreated(address(zkCappedMinter));
         return newMetavest;
     }
     

@@ -13,16 +13,24 @@ contract MetaVesTZkCappedMinterV2Test is Test {
     address zkTokenAdmin;
     IZkTokenV1 zkToken;
     IZkCappedMinterV2Factory zkCappedMinterFactory;
+    IZkCappedMinterV2 zkCappedMinter;
 
-    address authority = address(0x2);
-    address dao = address(0x3);
-    address grantee = address(0x4);
+    address deployer = address(0x2);
+    address authority = address(0x3);
+    address dao = address(0x4);
+    address alice = address(0x5);
+    address bob = address(0x6);
 
     VestingAllocationFactory vestingAllocationFactory;
     TokenOptionFactory tokenOptionFactory;
     RestrictedTokenFactory restrictedTokenFactory;
 
     metavestController controller;
+
+    // Parameters
+    uint256 cap = 1e6 ether;
+    uint48 cappedMinterStartTime = uint48(block.timestamp + 30 days);
+    uint48 cappedMinterExpirationTime = uint48(block.timestamp + 30 days + 365 days * 2);
 
     function setUp() public {
         // zkSync Era Sepolia
@@ -34,6 +42,22 @@ contract MetaVesTZkCappedMinterV2Test is Test {
 //        zkToken = IZkTokenV1(0x5A7d6b2F92C77FAD6CCaBd7EE0624E64907Eaf3E);
 //        zkCappedMinterFactory = IZkCappedMinterV2Factory(0x0400E6bc22B68686Fb197E91f66E199C6b0DDD6a);
 
+        vm.startPrank(deployer);
+
+        // Deploy ZK Capped Minter v2
+
+        zkCappedMinter = IZkCappedMinterV2(zkCappedMinterFactory.createCappedMinter(
+            address(zkToken),
+            // TODO WIP derive address of MeteVesT controller
+            0x49276208F85b2BA414B20fddE455a9a9711453aa, // Grant controller admin privilege so it can grant minter privilege to deployed MetaVesT
+            cap,
+            cappedMinterStartTime,
+            cappedMinterExpirationTime,
+            uint256(keccak256("MetaLexZkSyncTest"))
+        ));
+
+        // Deploy MetaVesT controller
+
         vestingAllocationFactory = new VestingAllocationFactory();
         tokenOptionFactory = new TokenOptionFactory();
         restrictedTokenFactory = new RestrictedTokenFactory();
@@ -44,16 +68,17 @@ contract MetaVesTZkCappedMinterV2Test is Test {
             address(vestingAllocationFactory),
             address(tokenOptionFactory),
             address(restrictedTokenFactory),
-            address(zkCappedMinterFactory),
-            address(zkToken)
+            address(zkCappedMinter)
         );
+
+        vm.stopPrank();
     }
 
     // Test by forge test --zksync --fork-url https://zksync-sepolia.g.alchemy.com/v2/<api-key> --mc MetaVesTZkCappedMinterV2Test
     function test_GuardianCompensationYear1_2() public {
         // TODO guardians to sign agreements
 
-        // Create MetaVesT for grantee
+        // Create MetaVesT for Alice
 
         BaseAllocation.Allocation memory allocation = BaseAllocation.Allocation({
             tokenContract: address(zkToken),
@@ -76,7 +101,7 @@ contract MetaVesTZkCappedMinterV2Test is Test {
 
         VestingAllocation vestingAllocation = VestingAllocation(controller.createMetavest(
             metavestController.metavestType.Vesting,
-            grantee,
+            alice,
             allocation,
             milestones,
             0,
@@ -89,18 +114,19 @@ contract MetaVesTZkCappedMinterV2Test is Test {
         // Simulate TPP approval and ZK Token admin to grant our ZkCappedMinter access
 
         bytes32 minterRole = zkToken.MINTER_ROLE();
-        // TODO this is a hack. Ideally we should not create one ZkCappedMinter for every MetaVesT created. We should share it so only one ZkCappedMinter needs TPP approval
-        address zkCappedMinter = BaseAllocation(vestingAllocation).ZkCappedMinterAddress();
         vm.prank(zkTokenAdmin);
-        zkToken.grantRole(minterRole, zkCappedMinter);
+        zkToken.grantRole(minterRole, address(zkCappedMinter));
 
-        // Simulate grantee withdrawal
+        // Wait until capped minter start time
+        skip(30 days);
+
+        // Simulate alice withdrawal
         // Since there is a cliff and vesting/unlock starts immediately, the grantee should be able to withdraw the cliff amount
 
-        uint256 balanceBefore = zkToken.balanceOf(grantee);
-        vm.prank(grantee);
+        uint256 balanceBefore = zkToken.balanceOf(alice);
+        vm.prank(alice);
         vestingAllocation.withdraw(100e18);
-        assertEq(zkToken.balanceOf(grantee), balanceBefore + 100e18, "Grantee should be able to withdraw cliff amount");
+        assertEq(zkToken.balanceOf(alice), balanceBefore + 100e18, "Grantee should be able to withdraw cliff amount");
         assertEq(zkToken.balanceOf(address(vestingAllocation)), 0, "Vesting contract should not have any token (it is minted on-the-fly)");
     }
 }
