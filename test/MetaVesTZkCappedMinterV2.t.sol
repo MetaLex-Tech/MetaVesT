@@ -28,6 +28,7 @@ contract MetaVesTZkCappedMinterV2Test is Test {
     metavestController controller;
 
     // Parameters
+    bytes32 salt = keccak256("MetaLexZkSyncTest");
     uint256 cap = 1e6 ether;
     uint48 cappedMinterStartTime = uint48(block.timestamp + 30 days);
     uint48 cappedMinterExpirationTime = uint48(block.timestamp + 30 days + 365 days * 2);
@@ -44,34 +45,35 @@ contract MetaVesTZkCappedMinterV2Test is Test {
 
         vm.startPrank(deployer);
 
-        // Deploy ZK Capped Minter v2
-
-        zkCappedMinter = IZkCappedMinterV2(zkCappedMinterFactory.createCappedMinter(
-            address(zkToken),
-            // TODO WIP derive address of MeteVesT controller
-            0x49276208F85b2BA414B20fddE455a9a9711453aa, // Grant controller admin privilege so it can grant minter privilege to deployed MetaVesT
-            cap,
-            cappedMinterStartTime,
-            cappedMinterExpirationTime,
-            uint256(keccak256("MetaLexZkSyncTest"))
-        ));
-
         // Deploy MetaVesT controller
 
         vestingAllocationFactory = new VestingAllocationFactory();
         tokenOptionFactory = new TokenOptionFactory();
         restrictedTokenFactory = new RestrictedTokenFactory();
 
-        controller = new metavestController(
+        controller = new metavestController{salt: salt}(
             authority,
             dao,
             address(vestingAllocationFactory),
             address(tokenOptionFactory),
-            address(restrictedTokenFactory),
-            address(zkCappedMinter)
+            address(restrictedTokenFactory)
         );
 
+        // Deploy ZK Capped Minter v2
+
+        zkCappedMinter = IZkCappedMinterV2(zkCappedMinterFactory.createCappedMinter(
+            address(zkToken),
+            address(controller), // Grant controller admin privilege so it can grant minter privilege to deployed MetaVesT
+            cap,
+            cappedMinterStartTime,
+            cappedMinterExpirationTime,
+            uint256(salt)
+        ));
+
         vm.stopPrank();
+
+        vm.prank(authority);
+        controller.setZkCappedMinter(address(zkCappedMinter));
     }
 
     // Test by forge test --zksync --fork-url https://zksync-sepolia.g.alchemy.com/v2/<api-key> --mc MetaVesTZkCappedMinterV2Test

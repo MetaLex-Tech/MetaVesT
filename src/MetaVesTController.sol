@@ -97,6 +97,7 @@ contract metavestController is SafeTransferLib {
     event MetaVesTController_AddressAddedToSet(string set, address indexed grantee);
     event MetaVesTController_AddressRemovedFromSet(string set, address indexed grantee);
     event MetaVesTController_MetaVestCreated(address indexed metavest);
+    event MetaVesTController_ZkCappedMinterUpdated(address zkCappedMinter);
 
     ///
     /// ERRORS
@@ -180,13 +181,12 @@ contract metavestController is SafeTransferLib {
     /// @param _authority address of the authority who can call the functions in this contract and update each MetaVesT in '_metavest', such as a BORG
     /// @param _dao DAO governance contract address which exercises control over ability of 'authority' to call certain functions via imposing
     /// conditions through 'updateFunctionCondition'.
-    constructor(address _authority, address _dao, address _vestingFactory, address _tokenOptionFactory, address _restrictedTokenFactory, address _zkCappedMinter) {
+    constructor(address _authority, address _dao, address _vestingFactory, address _tokenOptionFactory, address _restrictedTokenFactory) {
         if (_authority == address(0)) revert MetaVesTController_ZeroAddress();
         authority = _authority;
         vestingFactory = _vestingFactory;
         tokenOptionFactory = _tokenOptionFactory;
         restrictedTokenFactory = _restrictedTokenFactory;
-        zkCappedMinter = _zkCappedMinter;
         dao = _dao;
     }
 
@@ -765,4 +765,8 @@ contract metavestController is SafeTransferLib {
         emit MetaVesTController_AddressRemovedFromSet(_name, _metaVest);
     }
 
+    function setZkCappedMinter(address _zkCappedMinter) external onlyAuthority {
+        zkCappedMinter = _zkCappedMinter;
+        emit MetaVesTController_ZkCappedMinterUpdated(zkCappedMinter);
+    }
 }
