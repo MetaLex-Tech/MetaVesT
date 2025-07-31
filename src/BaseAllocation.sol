@@ -271,8 +271,7 @@ abstract contract BaseAllocation is ReentrancyGuard, SafeTransferLib{
             if(terminated) revert MetaVesT_AlreadyTerminated();
             if (_milestoneIndex >= milestones.length) revert MetaVesT_MilestoneIndexOutOfRange();
             uint256 _milestoneAward = milestones[_milestoneIndex].milestoneAward;
-            //transfer the milestone award back to the authority, we check in the controller to ensure only uncompleted milestones can be removed
-            safeTransfer(allocation.tokenContract, getAuthority(), _milestoneAward);
+            // No need to transfer the milestone award back to the authority since the tokens are minted on-demand
             delete milestones[_milestoneIndex];
             milestones[_milestoneIndex] = milestones[milestones.length - 1];
             milestones.pop();
@@ -312,11 +311,7 @@ abstract contract BaseAllocation is ReentrancyGuard, SafeTransferLib{
         /// @param _amount - the amount of tokens to withdraw
         function withdraw(uint256 _amount) external nonReentrant onlyGrantee {
             if (_amount == 0) revert MetaVesT_ZeroAmount();
-
-            // TODO Update other places accordingly
-//            if (_amount > getAmountWithdrawable() || _amount > IERC20M(allocation.tokenContract).balanceOf(address(this))) revert MetaVesT_MoreThanAvailable();
             if (_amount > getAmountWithdrawable()) revert MetaVesT_MoreThanAvailable();
-
             tokensWithdrawn += _amount;
             IZkCappedMinterV2(ZkCappedMinterAddress).mint(msg.sender, _amount);
             emit MetaVesT_Withdrawn(msg.sender, allocation.tokenContract, _amount);

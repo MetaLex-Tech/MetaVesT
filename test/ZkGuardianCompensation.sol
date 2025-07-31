@@ -33,7 +33,7 @@ contract ZkGuardianCompensationTest is Test {
     uint48 cappedMinterExpirationTime = uint48(block.timestamp + 30 days + 365 days * 2);
 
     function setUp() public {
-        // zkSync Era Sepolia
+        // zkSync Era Sepolia @ 5576300
         zkTokenAdmin = 0x0d9DD6964692a0027e1645902536E7A3b34AA1d7;
         zkToken = IZkTokenV1(0x69e5DC39E2bCb1C17053d2A4ee7CAEAAc5D36f96);
         zkCappedMinterFactory = IZkCappedMinterV2Factory(0x329CE320a0Ef03F8c0E01195604b5ef7D3Fb150E);

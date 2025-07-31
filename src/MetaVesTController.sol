@@ -240,10 +240,12 @@ contract metavestController is SafeTransferLib {
         }
         else if(_type == metavestType.TokenOption)
         {
+            // TODO WIP adopt ZkCappedMinter v2
             newMetavest = createTokenOptionAllocation(_grantee, _exercisePrice, _paymentToken, _shortStopDuration, _allocation, _milestones);
         }
         else if(_type == metavestType.RestrictedTokenAward)
         {
+            // TODO WIP adopt ZkCappedMinter v2
             newMetavest = createRestrictedTokenAward(_grantee, _exercisePrice, _paymentToken, _shortStopDuration, _allocation, _milestones);
         }
         else
@@ -472,13 +474,9 @@ contract metavestController is SafeTransferLib {
         if (_milestone.milestoneAward == 0) revert MetaVesTController_ZeroAmount();
         if (_milestone.conditionContracts.length > ARRAY_LENGTH_LIMIT) revert MetaVesTController_LengthMismatch();
         if (_milestone.complete == true) revert MetaVesTController_MilestoneIndexCompletedOrDoesNotExist();
-        if (
-            IERC20M(_tokenContract).allowance(msg.sender, address(this)) < _milestone.milestoneAward ||
-            IERC20M(_tokenContract).balanceOf(msg.sender) < _milestone.milestoneAward
-        ) revert MetaVesT_AmountNotApprovedForTransferFrom();
 
-        // send the new milestoneAward to 'metavest'
-        safeTransferFrom(_tokenContract, msg.sender, _grant, _milestone.milestoneAward);
+        // No need to allocate token right now since they are minted on-demand
+        
         BaseAllocation(_grant).addMilestone(_milestone);
     }
 
