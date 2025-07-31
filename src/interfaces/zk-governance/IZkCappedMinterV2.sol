@@ -3,6 +3,7 @@ pragma solidity 0.8.24;
 
 interface IZkCappedMinterV2 {
       function MINTER_ROLE() external returns (bytes32);
+      function START_TIME() external returns (uint48);
 
       function grantRole(bytes32 role, address account) external;
 
