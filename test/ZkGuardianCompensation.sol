@@ -10,9 +10,15 @@ import "forge-std/Test.sol";
 
 // TODO this does not use the actual ZkCappedMinterV2 yet. Still v1
 contract ZkGuardianCompensationTest is Test {
-    address zkTokenAdmin;
-    IZkTokenV1 zkToken;
-    IZkCappedMinterV2Factory zkCappedMinterFactory;
+    // zkSync Era Sepolia @ 5576300
+    address zkTokenAdmin = 0x0d9DD6964692a0027e1645902536E7A3b34AA1d7;
+    IZkTokenV1 zkToken = IZkTokenV1(0x69e5DC39E2bCb1C17053d2A4ee7CAEAAc5D36f96);
+    IZkCappedMinterV2Factory zkCappedMinterFactory = IZkCappedMinterV2Factory(0x329CE320a0Ef03F8c0E01195604b5ef7D3Fb150E);
+//    // zkSync Era mainnet
+//    address zkTokenAdmin = 0xe5d21A9179CA2E1F0F327d598D464CcF60d89c3d;
+//    IZkTokenV1 zkToken = IZkTokenV1(0x5A7d6b2F92C77FAD6CCaBd7EE0624E64907Eaf3E);
+//    IZkCappedMinterV2Factory zkCappedMinterFactory = IZkCappedMinterV2Factory(0x0400E6bc22B68686Fb197E91f66E199C6b0DDD6a);
+
     IZkCappedMinterV2 zkCappedMinter;
 
     address deployer = address(0x2);
@@ -33,15 +39,6 @@ contract ZkGuardianCompensationTest is Test {
     uint48 cappedMinterExpirationTime = uint48(block.timestamp + 30 days + 365 days * 2);
 
     function setUp() public {
-        // zkSync Era Sepolia @ 5576300
-        zkTokenAdmin = 0x0d9DD6964692a0027e1645902536E7A3b34AA1d7;
-        zkToken = IZkTokenV1(0x69e5DC39E2bCb1C17053d2A4ee7CAEAAc5D36f96);
-        zkCappedMinterFactory = IZkCappedMinterV2Factory(0x329CE320a0Ef03F8c0E01195604b5ef7D3Fb150E);
-//        // zkSync Era mainnet
-//        zkTokenAdmin = 0xe5d21A9179CA2E1F0F327d598D464CcF60d89c3d;
-//        zkToken = IZkTokenV1(0x5A7d6b2F92C77FAD6CCaBd7EE0624E64907Eaf3E);
-//        zkCappedMinterFactory = IZkCappedMinterV2Factory(0x0400E6bc22B68686Fb197E91f66E199C6b0DDD6a);
-
         vm.startPrank(deployer);
 
         // Deploy MetaVesT controller
@@ -75,16 +72,17 @@ contract ZkGuardianCompensationTest is Test {
         controller.setZkCappedMinter(address(zkCappedMinter));
     }
 
-    // Test by forge test --zksync --fork-url https://zksync-sepolia.g.alchemy.com/v2/<api-key> --mc MetaVesTZkCappedMinterV2Test
+    // Test by forge test --zksync --via-ir
     function test_GuardianCompensationYear1_2() public {
-        // TODO guardians to sign agreements
+        // Assume ZK Capped Minter and its MetaVesTController counterpart are already deployed
 
-        // Create MetaVesT for Alice and Bob
+        // Guardians to sign agreements and register on MetaVesTController
 
         BaseAllocation.Milestone[] memory milestones = new BaseAllocation.Milestone[](0);
-
-        VestingAllocation vestingAllocationAlice = VestingAllocation(controller.createMetavest(
+        vm.startPrank(guardianSafe);
+        controller.registerGrantee(
             metavestController.metavestType.Vesting,
+            alice,
             alice,
             BaseAllocation.Allocation({
                 tokenContract: address(zkToken),
@@ -97,15 +95,12 @@ contract ZkGuardianCompensationTest is Test {
                 unlockStartTime: zkCappedMinter.START_TIME() // start along with capped minter
             }),
             milestones,
-            0,
-            address(0),
-            0,
-            0
-        ));
-        assertEq(zkToken.balanceOf(address(vestingAllocationAlice)), 0, "Alice's vesting contract should not have any token (it mints on-demand)");
-
-        VestingAllocation vestingAllocationBob = VestingAllocation(controller.createMetavest(
+            "ipfs.io/ipfs/[cid]",
+            hex"1234" // TODO WIP: signature of all arguments above
+        );
+        controller.registerGrantee(
             metavestController.metavestType.Vesting,
+            bob,
             bob,
             BaseAllocation.Allocation({
                 tokenContract: address(zkToken),
@@ -118,26 +113,32 @@ contract ZkGuardianCompensationTest is Test {
                 unlockStartTime: zkCappedMinter.START_TIME() // start along with capped minter
             }),
             milestones,
-            0,
-            address(0),
-            0,
-            0
-        ));
-        assertEq(zkToken.balanceOf(address(vestingAllocationBob)), 0, "Vesting contract should not have any token (it mints on-demand)");
+            "ipfs.io/ipfs/[cid]",
+            hex"1234" // TODO WIP: signature of all arguments above
+        );
+        vm.stopPrank();
 
-        // Simulate TPP approval and ZK Token admin to grant our ZkCappedMinter access
+        // TPP to review agreements and on-chain parameters, then approve by granting our ZkCappedMinter permissions
 
         bytes32 minterRole = zkToken.MINTER_ROLE();
         vm.prank(zkTokenAdmin);
         zkToken.grantRole(minterRole, address(zkCappedMinter));
 
-        // Wait until capped minter start time and simulate grantee withdrawing cliff amounts
+        // Anyone can create MetaVesT for Alice and Bob (per agreements) to start vesting
+
+        VestingAllocation vestingAllocationAlice = VestingAllocation(controller.createMetavest(0));
+        assertEq(zkToken.balanceOf(address(vestingAllocationAlice)), 0, "Alice's vesting contract should not have any token (it mints on-demand)");
+
+        VestingAllocation vestingAllocationBob = VestingAllocation(controller.createMetavest(1));
+        assertEq(zkToken.balanceOf(address(vestingAllocationBob)), 0, "Vesting contract should not have any token (it mints on-demand)");
+
+        // Alice and Bob should be able to start withdrawal after capped minter and MetaVesT start
         skip(30 days);
 
         granteeWithdrawAndAsserts(vestingAllocationAlice, 100e18, "Alice cliff");
         granteeWithdrawAndAsserts(vestingAllocationBob, 200e18, "Bob cliff");
 
-        // Wait until fully vested and unlocked and simulate full withdrawal
+        // Alice and Bob should be able to withdrawal all remaining tokens after sufficient time passed
         skip(90 seconds);
 
         granteeWithdrawAndAsserts(vestingAllocationAlice, 900e18, "Alice full");

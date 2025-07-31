@@ -65,6 +65,16 @@ contract metavestController is SafeTransferLib {
         mapping(address => uint256) voterPower;
     }
 
+    struct GranteeMeta {
+        uint256 id;
+        metavestType _metavestType;
+        address grantee;
+        address recipient;
+        BaseAllocation.Allocation allocation;
+        BaseAllocation.Milestone[] milestones;
+        string agreementUri;
+    }
+
     enum metavestType { Vesting, TokenOption, RestrictedTokenAward }
 
     /// @notice maps a function's signature to a Condition contract address
@@ -81,6 +91,9 @@ contract metavestController is SafeTransferLib {
 
     mapping(bytes32 => bool) public setMajorityVoteActive;
 
+    /// @notice granteeId => granteeData
+    mapping(uint256 => GranteeMeta) public pendingGrantees;
+
     ///
     /// EVENTS
     ///
@@ -96,8 +109,9 @@ contract metavestController is SafeTransferLib {
     event MetaVesTController_SetRemoved(string indexed set);
     event MetaVesTController_AddressAddedToSet(string set, address indexed grantee);
     event MetaVesTController_AddressRemovedFromSet(string set, address indexed grantee);
-    event MetaVesTController_MetaVestCreated(address indexed metavest);
+    event MetaVesTController_MetaVestCreated(address indexed metavest, uint256 granteeId);
     event MetaVesTController_ZkCappedMinterUpdated(address zkCappedMinter);
+    event MetaVesTController_GranteeRegistered(address indexed grantee, address indexed recipient, uint256 granteeId, metavestType metavestType, BaseAllocation.Allocation allocation, BaseAllocation.Milestone[] milestones);
 
     ///
     /// ERRORS
@@ -132,6 +146,7 @@ contract metavestController is SafeTransferLib {
     error MetaVestController_MetaVestNotInSet();
     error MetaVesTController_SetAlreadyExists();
     error MetaVesTController_StringTooLong();
+    error MetaVesTController_TypeNotSupported(metavestType _type);
 
     ///
     /// FUNCTIONS
@@ -230,37 +245,73 @@ contract metavestController is SafeTransferLib {
         emit MetaVesTController_ConditionUpdated(_condition, _functionSig);
     }
 
-    function createMetavest(metavestType _type, address _grantee,  BaseAllocation.Allocation calldata _allocation, BaseAllocation.Milestone[] calldata _milestones, uint256 _exercisePrice, address _paymentToken,  uint256 _shortStopDuration, uint256 _longStopDate) external conditionCheck returns (address)
+    function registerGrantee(
+        metavestType _metavestType,
+        address grantee,
+        address recipient,
+        BaseAllocation.Allocation calldata allocation,
+        BaseAllocation.Milestone[] calldata milestones,
+        string calldata agreementUri,
+        bytes calldata signature
+    ) external onlyAuthority returns (uint256) {
+        // TODO WIP
+        // TODO Verify signature
+        uint256 granteeId = metavestCounter++;
+
+        // TODO test
+        BaseAllocation.Milestone[] memory milestones2 = new BaseAllocation.Milestone[](0);
+
+        pendingGrantees[granteeId] = GranteeMeta({
+            id: granteeId,
+            _metavestType: _metavestType,
+            grantee: grantee,
+            recipient: recipient,
+            allocation: allocation,
+            milestones: milestones2,
+            agreementUri: agreementUri
+        });
+        emit MetaVesTController_GranteeRegistered(grantee, recipient, granteeId, _metavestType, allocation, milestones);
+        return granteeId;
+    }
+
+    function createMetavest(uint256 granteeId) external conditionCheck returns (address)
     {
+        GranteeMeta storage granteeMeta = pendingGrantees[granteeId];
+        require(granteeMeta.grantee != address(0), "Grantee not registered");
+
+        // TODO test
+        BaseAllocation.Milestone[] memory milestones = new BaseAllocation.Milestone[](0);
         
         address newMetavest;
-        if(_type == metavestType.Vesting)
+        if(granteeMeta._metavestType == metavestType.Vesting)
         {
-            newMetavest = createVestingAllocation(_grantee, _allocation, _milestones);
+            // TODO WIP: must support recipient
+            newMetavest = createVestingAllocation(granteeMeta.grantee, granteeMeta.allocation, milestones); // TODO use test milestones for now
         }
-        else if(_type == metavestType.TokenOption)
+        else if(granteeMeta._metavestType == metavestType.TokenOption)
         {
-            // TODO WIP adopt ZkCappedMinter v2
-            newMetavest = createTokenOptionAllocation(_grantee, _exercisePrice, _paymentToken, _shortStopDuration, _allocation, _milestones);
+            revert MetaVesTController_TypeNotSupported(granteeMeta._metavestType);
         }
-        else if(_type == metavestType.RestrictedTokenAward)
+        else if(granteeMeta._metavestType == metavestType.RestrictedTokenAward)
         {
-            // TODO WIP adopt ZkCappedMinter v2
-            newMetavest = createRestrictedTokenAward(_grantee, _exercisePrice, _paymentToken, _shortStopDuration, _allocation, _milestones);
+            revert MetaVesTController_TypeNotSupported(granteeMeta._metavestType);
         }
         else
         {
             revert MetaVesTController_IncorrectMetaVesTType();
         }
-        uint256 _milestoneTotal = validateAndCalculateMilestones(_milestones);
-        uint256 _total = _allocation.tokenStreamTotal + _milestoneTotal;
         // Grant MetaVesT minter privilege
         IZkCappedMinterV2(zkCappedMinter).grantRole(
             IZkCappedMinterV2(zkCappedMinter).MINTER_ROLE(),
             newMetavest
         );
         BaseAllocation(newMetavest).setZkCappedMinterAddress(address(zkCappedMinter));
-        emit MetaVesTController_MetaVestCreated(newMetavest);
+
+        // TODO revision needed
+        // Remove from queue
+        delete pendingGrantees[granteeId];
+
+        emit MetaVesTController_MetaVestCreated(newMetavest, granteeId);
         return newMetavest;
     }
     
@@ -269,13 +320,13 @@ contract metavestController is SafeTransferLib {
         address _grantee,
         address _paymentToken,
         uint256 _exercisePrice,
-        VestingAllocation.Allocation calldata _allocation
+        VestingAllocation.Allocation memory _allocation
     ) internal pure {
         if (_grantee == address(0) || _allocation.tokenContract == address(0) || _paymentToken == address(0) || _exercisePrice == 0)
             revert MetaVesTController_ZeroAddress();
     }
 
-    function validateAllocation(VestingAllocation.Allocation calldata _allocation) internal pure {
+    function validateAllocation(VestingAllocation.Allocation memory _allocation) internal pure {
         if (
             _allocation.vestingCliffCredit > _allocation.tokenStreamTotal ||
             _allocation.unlockingCliffCredit > _allocation.tokenStreamTotal
@@ -283,7 +334,7 @@ contract metavestController is SafeTransferLib {
     }
 
     function validateAndCalculateMilestones(
-        VestingAllocation.Milestone[] calldata _milestones
+        VestingAllocation.Milestone[] memory _milestones
     ) internal pure returns (uint256 _milestoneTotal) {
         if (_milestones.length != 0) {
             if (_milestones.length > ARRAY_LENGTH_LIMIT) revert MetaVesTController_LengthMismatch();
@@ -344,7 +395,7 @@ contract metavestController is SafeTransferLib {
         }
 
 
-    function createVestingAllocation(address _grantee, VestingAllocation.Allocation calldata _allocation, VestingAllocation.Milestone[] calldata _milestones) internal returns (address){
+    function createVestingAllocation(address _grantee, VestingAllocation.Allocation memory _allocation, VestingAllocation.Milestone[] memory _milestones) internal returns (address){
         //hard code values not to trigger the failure for the 2 parameters that don't matter for this type of allocation
         validateInputParameters(_grantee, address(this), 1, _allocation);
         validateAllocation(_allocation);
