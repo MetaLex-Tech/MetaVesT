@@ -91,6 +91,11 @@ contract metavestController is SafeTransferLib {
         BaseAllocation.Milestone[] milestones;
     }
 
+    struct Delegation {
+        address delegate;
+        uint256 expiry;
+    }
+
     enum metavestType { Vesting, TokenOption, RestrictedTokenAward }
 
     /// @notice maps a function's signature to a Condition contract address
@@ -110,6 +115,8 @@ contract metavestController is SafeTransferLib {
     /// @notice granteeId => granteeData
     mapping(bytes32 => AgreementData) public agreements;
 
+    mapping(address => Delegation) public delegations;
+
     ///
     /// EVENTS
     ///
@@ -128,6 +135,8 @@ contract metavestController is SafeTransferLib {
     event MetaVesTController_MetaVestCreated(address indexed metavest, bytes32 contractId);
     event MetaVesTController_ZkCappedMinterUpdated(address zkCappedMinter);
     event MetaVesTController_ContractCreated(bytes32 indexed contractId, address indexed grantee, address indexed recipient, metavestType metavestType, BaseAllocation.Allocation allocation, BaseAllocation.Milestone[] milestones);
+    event MetaVesTController_DelegationSet(address indexed delegator, address indexed delegate, uint256 expiry);
+    event MetaVesTController_DelegationRevoked(address indexed delegator, address indexed delegate);
 
     ///
     /// ERRORS
@@ -888,6 +897,62 @@ contract metavestController is SafeTransferLib {
         return keccak256(abi.encode(salt, agreementUri, grantee, recipient, allocation, milestones));
     }
 
+    function getAgreement(bytes32 contractId) public view returns (AgreementData memory) {
+        return agreements[contractId];
+    }
+
+    function setDelegation(address delegate, uint256 expiry) external {
+        if (delegate == address(0)) revert("Cannot delegate to zero address");
+        if (delegate == msg.sender) revert("Cannot delegate to self");
+        if (expiry != 0 && expiry <= block.timestamp) revert("Expiry must be in the future");
+
+        delegations[msg.sender] = Delegation({delegate: delegate, expiry: expiry});
+        emit MetaVesTController_DelegationSet(msg.sender, delegate, expiry);
+    }
+
+    /**
+     * @dev Revoke delegation for the caller
+     */
+    function revokeDelegation() external {
+        address delegate = delegations[msg.sender].delegate;
+        delete delegations[msg.sender];
+        emit MetaVesTController_DelegationRevoked(msg.sender, delegate);
+    }
+
+    /**
+     * @dev Get delegation info for a given address
+     * @param delegator The address to check for delegation
+     * @return delegate The delegate address
+     * @return expiry The expiry timestamp (0 if no expiry)
+     */
+    function getDelegation(address delegator) external view returns (address delegate, uint256 expiry) {
+        Delegation storage delegation = delegations[delegator];
+        return (delegation.delegate, delegation.expiry);
+    }
+
+    /**
+     * @dev Check if a delegation is valid (not expired)
+     * @param delegator The delegator address
+     * @return True if delegation exists and is not expired
+     */
+    function isValidDelegation(address delegator) external view returns (bool) {
+        Delegation storage delegation = delegations[delegator];
+        return delegation.delegate != address(0) &&
+            (delegation.expiry == 0 || delegation.expiry > block.timestamp);
+    }
+
+    /**
+     * @dev Check if an address is a valid delegate for a given delegator
+     * @param delegator The delegator address
+     * @param delegate The delegate address to check
+     * @return True if the delegate is valid and not expired
+     */
+    function isValidDelegate(address delegator, address delegate) external view returns (bool) {
+        Delegation storage delegation = delegations[delegator];
+        return delegation.delegate == delegate &&
+            (delegation.expiry == 0 || delegation.expiry > block.timestamp);
+    }
+
     function _verifySignature(
         address signer,
         SignedAgreementData memory data,
@@ -904,13 +969,12 @@ contract metavestController is SafeTransferLib {
             return true;
         }
 
-        // TODO WIP: delegation signature
         // Check delegation signature
-//        Delegation storage delegation = delegations[signer];
-//        if (delegation.delegate == recoveredSigner &&
-//            (delegation.expiry == 0 || delegation.expiry > block.timestamp)) {
-//            return true;
-//        }
+        Delegation storage delegation = delegations[signer];
+        if (delegation.delegate == recoveredSigner &&
+            (delegation.expiry == 0 || delegation.expiry > block.timestamp)) {
+            return true;
+        }
 
         return false;
     }
