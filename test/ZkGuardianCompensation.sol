@@ -6,6 +6,7 @@ import "../src/RestrictedTokenFactory.sol";
 import "../src/TokenOptionFactory.sol";
 import "../src/VestingAllocationFactory.sol";
 import "../src/interfaces/zk-governance/IZkTokenV1.sol";
+import "./lib/MetaVesTUtils.sol";
 import "forge-std/Test.sol";
 
 // TODO this does not use the actual ZkCappedMinterV2 yet. Still v1
@@ -23,8 +24,11 @@ contract ZkGuardianCompensationTest is Test {
 
     address deployer = address(0x2);
     address guardianSafe = address(0x3);
-    address alice = address(0x4);
-    address bob = address(0x5);
+
+    uint256 alicePrivateKey = 1;
+    address alice = vm.addr(alicePrivateKey);
+    uint256 bobPrivateKey = 2;
+    address bob = vm.addr(bobPrivateKey);
 
     VestingAllocationFactory vestingAllocationFactory;
     TokenOptionFactory tokenOptionFactory;
@@ -78,12 +82,12 @@ contract ZkGuardianCompensationTest is Test {
 
         // Guardians to sign agreements and register on MetaVesTController
 
-        BaseAllocation.Milestone[] memory milestones = new BaseAllocation.Milestone[](0);
         vm.startPrank(guardianSafe);
-        controller.registerGrantee(
-            metavestController.metavestType.Vesting,
+
+        bytes32 contractIdAlice = signAndCreateContract(
             alice,
-            alice,
+            alicePrivateKey,
+            "ipfs.io/ipfs/[cid]",
             BaseAllocation.Allocation({
                 tokenContract: address(zkToken),
                 tokenStreamTotal: 1000e18,
@@ -94,14 +98,13 @@ contract ZkGuardianCompensationTest is Test {
                 unlockRate: 10e18,
                 unlockStartTime: zkCappedMinter.START_TIME() // start along with capped minter
             }),
-            milestones,
-            "ipfs.io/ipfs/[cid]",
-            hex"1234" // TODO WIP: signature of all arguments above
+            new BaseAllocation.Milestone[](0)
         );
-        controller.registerGrantee(
-            metavestController.metavestType.Vesting,
+
+        bytes32 contractIdBob = signAndCreateContract(
             bob,
-            bob,
+            bobPrivateKey,
+            "ipfs.io/ipfs/[cid]",
             BaseAllocation.Allocation({
                 tokenContract: address(zkToken),
                 tokenStreamTotal: 2000e18,
@@ -112,10 +115,9 @@ contract ZkGuardianCompensationTest is Test {
                 unlockRate: 20e18,
                 unlockStartTime: zkCappedMinter.START_TIME() // start along with capped minter
             }),
-            milestones,
-            "ipfs.io/ipfs/[cid]",
-            hex"1234" // TODO WIP: signature of all arguments above
+            new BaseAllocation.Milestone[](0)
         );
+
         vm.stopPrank();
 
         // TPP to review agreements and on-chain parameters, then approve by granting our ZkCappedMinter permissions
@@ -126,10 +128,10 @@ contract ZkGuardianCompensationTest is Test {
 
         // Anyone can create MetaVesT for Alice and Bob (per agreements) to start vesting
 
-        VestingAllocation vestingAllocationAlice = VestingAllocation(controller.createMetavest(0));
+        VestingAllocation vestingAllocationAlice = VestingAllocation(controller.createMetavest(contractIdAlice));
         assertEq(zkToken.balanceOf(address(vestingAllocationAlice)), 0, "Alice's vesting contract should not have any token (it mints on-demand)");
 
-        VestingAllocation vestingAllocationBob = VestingAllocation(controller.createMetavest(1));
+        VestingAllocation vestingAllocationBob = VestingAllocation(controller.createMetavest(contractIdBob));
         assertEq(zkToken.balanceOf(address(vestingAllocationBob)), 0, "Vesting contract should not have any token (it mints on-demand)");
 
         // Alice and Bob should be able to start withdrawal after capped minter and MetaVesT start
@@ -145,6 +147,28 @@ contract ZkGuardianCompensationTest is Test {
         granteeWithdrawAndAsserts(vestingAllocationBob, 1800e18, "Bob full");
     }
 
+    function test_RevertIf_IncorrectAgreementSignature() public {
+        // Register Alice with someone else's signature should fail
+        vm.startPrank(guardianSafe);
+        signAndCreateContract(
+            alice,
+            bobPrivateKey, // Use someone else to sign
+            "ipfs.io/ipfs/[cid]",
+            BaseAllocation.Allocation({
+                tokenContract: address(zkToken),
+                tokenStreamTotal: 1000e18,
+                vestingCliffCredit: 100e18,
+                unlockingCliffCredit: 100e18,
+                vestingRate: 10e18,
+                vestingStartTime: zkCappedMinter.START_TIME(), // start along with capped minter
+                unlockRate: 10e18,
+                unlockStartTime: zkCappedMinter.START_TIME() // start along with capped minter
+            }),
+            new BaseAllocation.Milestone[](0),
+            abi.encodeWithSelector(metavestController.MetaVesTController_SignatureVerificationFailed.selector) // Expected revert
+        );
+    }
+
     function granteeWithdrawAndAsserts(VestingAllocation vestingAllocation, uint256 amount, string memory assertName) public {
         address grantee = vestingAllocation.grantee();
         uint256 balanceBefore = zkToken.balanceOf(grantee);
@@ -153,5 +177,65 @@ contract ZkGuardianCompensationTest is Test {
         vestingAllocation.withdraw(amount);
         assertEq(zkToken.balanceOf(grantee), balanceBefore + amount, string(abi.encodePacked(assertName, ": unexpected received amount")));
         assertEq(zkToken.balanceOf(address(vestingAllocation)), 0, string(abi.encodePacked(assertName, ": vesting contract should not have any token (it mints on-demand)")));
+    }
+
+    function signAndCreateContract(
+        address grantee,
+        uint256 granteePrivateKey,
+        string memory agreementUri,
+        BaseAllocation.Allocation memory allocation,
+        BaseAllocation.Milestone[] memory milestones
+    ) public returns(bytes32) {
+        return signAndCreateContract(
+            grantee, granteePrivateKey, agreementUri, allocation, milestones,
+            "" // Not expecting revert
+        );
+    }
+
+    function signAndCreateContract(
+        address grantee,
+        uint256 granteePrivateKey,
+        string memory agreementUri,
+        BaseAllocation.Allocation memory allocation,
+        BaseAllocation.Milestone[] memory milestones,
+        bytes memory expectRevertData
+    ) public returns(bytes32) {
+        uint256 contractSalt = block.timestamp;
+        bytes32 expectedContractId = controller.computeContractId(contractSalt, agreementUri, grantee, grantee, allocation, milestones);
+        bytes memory signature = MetaVesTUtils.signAgreementTypedData(
+            vm,
+            controller,
+            metavestController.SignedAgreementData({
+                id: expectedContractId,
+                agreementUri: agreementUri,
+                _metavestType: metavestController.metavestType.Vesting,
+                grantee: grantee,
+                recipient: grantee,
+                allocation: allocation,
+                milestones: milestones
+            }),
+            granteePrivateKey
+        );
+
+        if (expectRevertData.length > 0) {
+            vm.expectRevert(expectRevertData);
+        }
+        bytes32 contractId = controller.createSignedContract(
+            contractSalt,
+            metavestController.metavestType.Vesting,
+            grantee,
+            grantee,
+            allocation,
+            milestones,
+            agreementUri,
+            signature
+        );
+
+        if (expectRevertData.length == 0) {
+            assertEq(contractId, expectedContractId, "Unexpected contract ID");
+            return contractId;
+        } else {
+            return 0;
+        }
     }
 }

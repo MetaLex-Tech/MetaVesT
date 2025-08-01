@@ -8,7 +8,7 @@
 
 pragma solidity 0.8.24;
 
-//import "./MetaVesT.sol";
+import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "./BaseAllocation.sol";
 import "./RestrictedTokenAllocation.sol";
 import "./interfaces/IAllocationFactory.sol";
@@ -27,8 +27,19 @@ import "./lib/EnumberableSet.sol";
  *             by an applicable affected grantee or a majority-in-governing power of similar token grantees
  **/
 contract metavestController is SafeTransferLib {
+    using ECDSA for bytes32;
     using EnumerableSet for EnumerableSet.AddressSet;
     using EnumerableSet for EnumerableSet.Bytes32Set;
+
+    // Domain information
+    string public constant name = "metavestController";
+    string public version;
+    bytes32 public DOMAIN_SEPARATOR;
+    // Type hash for SignedAgreementData
+    bytes32 public SIGNED_AGREEMENT_DATA_TYPEHASH;
+    bytes32 public ALLOCATION_TYPEHASH;
+    bytes32 public MILESTONE_TYPEHASH;
+
     /// @dev opinionated time limit for a MetaVesT amendment, one calendar week in seconds
     uint256 internal constant AMENDMENT_TIME_LIMIT = 604800;
     uint256 internal constant ARRAY_LENGTH_LIMIT = 20;
@@ -65,14 +76,19 @@ contract metavestController is SafeTransferLib {
         mapping(address => uint256) voterPower;
     }
 
-    struct GranteeMeta {
-        uint256 id;
+    struct AgreementData {
+        SignedAgreementData signedData;
+        bool pending; // Pending MeteVesT deployment
+    }
+
+    struct SignedAgreementData {
+        bytes32 id;
+        string agreementUri;
         metavestType _metavestType;
         address grantee;
         address recipient;
         BaseAllocation.Allocation allocation;
         BaseAllocation.Milestone[] milestones;
-        string agreementUri;
     }
 
     enum metavestType { Vesting, TokenOption, RestrictedTokenAward }
@@ -92,7 +108,7 @@ contract metavestController is SafeTransferLib {
     mapping(bytes32 => bool) public setMajorityVoteActive;
 
     /// @notice granteeId => granteeData
-    mapping(uint256 => GranteeMeta) public pendingGrantees;
+    mapping(bytes32 => AgreementData) public agreements;
 
     ///
     /// EVENTS
@@ -109,9 +125,9 @@ contract metavestController is SafeTransferLib {
     event MetaVesTController_SetRemoved(string indexed set);
     event MetaVesTController_AddressAddedToSet(string set, address indexed grantee);
     event MetaVesTController_AddressRemovedFromSet(string set, address indexed grantee);
-    event MetaVesTController_MetaVestCreated(address indexed metavest, uint256 granteeId);
+    event MetaVesTController_MetaVestCreated(address indexed metavest, bytes32 contractId);
     event MetaVesTController_ZkCappedMinterUpdated(address zkCappedMinter);
-    event MetaVesTController_GranteeRegistered(address indexed grantee, address indexed recipient, uint256 granteeId, metavestType metavestType, BaseAllocation.Allocation allocation, BaseAllocation.Milestone[] milestones);
+    event MetaVesTController_ContractCreated(bytes32 indexed contractId, address indexed grantee, address indexed recipient, metavestType metavestType, BaseAllocation.Allocation allocation, BaseAllocation.Milestone[] milestones);
 
     ///
     /// ERRORS
@@ -147,6 +163,8 @@ contract metavestController is SafeTransferLib {
     error MetaVesTController_SetAlreadyExists();
     error MetaVesTController_StringTooLong();
     error MetaVesTController_TypeNotSupported(metavestType _type);
+    error MetaVesTController_AgreementAlreadyProcessed();
+    error MetaVesTController_SignatureVerificationFailed();
 
     ///
     /// FUNCTIONS
@@ -203,6 +221,31 @@ contract metavestController is SafeTransferLib {
         tokenOptionFactory = _tokenOptionFactory;
         restrictedTokenFactory = _restrictedTokenFactory;
         dao = _dao;
+
+        version = "1";
+        DOMAIN_SEPARATOR = keccak256(
+            abi.encode(
+                keccak256(
+                    "EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"
+                ),
+                keccak256(bytes(name)),
+                keccak256(bytes(version)),
+                block.chainid,
+                address(this)
+            )
+        );
+
+        SIGNED_AGREEMENT_DATA_TYPEHASH = keccak256(
+            "SignedAgreementData(bytes32 id,string agreementUri,metavestType _metavestType,address grantee,address recipient,Allocation allocation,Milestone[] milestones)"
+        );
+
+        ALLOCATION_TYPEHASH = keccak256(
+            "Allocation(uint256 tokenStreamTotal,uint128 vestingCliffCredit,uint128 unlockingCliffCredit,uint160 vestingRate,uint48 vestingStartTime,uint160 unlockRate,uint48 unlockStartTime,address tokenContract)"
+        );
+
+        MILESTONE_TYPEHASH = keccak256(
+            "Milestone(uint256 milestoneAward,bool unlockOnCompletion,bool complete,address[] conditionContracts)"
+        );
     }
 
     /// @notice for a grantee to consent to an update to one of their metavestDetails by 'authority' corresponding to the applicable function in this controller
@@ -245,7 +288,8 @@ contract metavestController is SafeTransferLib {
         emit MetaVesTController_ConditionUpdated(_condition, _functionSig);
     }
 
-    function registerGrantee(
+    function createSignedContract(
+        uint256 salt,
         metavestType _metavestType,
         address grantee,
         address recipient,
@@ -253,48 +297,66 @@ contract metavestController is SafeTransferLib {
         BaseAllocation.Milestone[] calldata milestones,
         string calldata agreementUri,
         bytes calldata signature
-    ) external onlyAuthority returns (uint256) {
-        // TODO WIP
-        // TODO Verify signature
-        uint256 granteeId = metavestCounter++;
+    ) external onlyAuthority returns (bytes32) {
+        bytes32 contractId = computeContractId(salt, agreementUri, grantee, recipient, allocation, milestones);
 
-        // TODO test
-        BaseAllocation.Milestone[] memory milestones2 = new BaseAllocation.Milestone[](0);
+        // Verify signature
+        if (!_verifySignature(
+            grantee,
+            SignedAgreementData({
+                id: contractId,
+                agreementUri: agreementUri,
+                _metavestType: _metavestType,
+                grantee: grantee,
+                recipient: recipient,
+                allocation: allocation,
+                milestones: milestones
+            }),
+            signature
+        )) {
+            revert MetaVesTController_SignatureVerificationFailed();
+        }
 
-        pendingGrantees[granteeId] = GranteeMeta({
-            id: granteeId,
-            _metavestType: _metavestType,
-            grantee: grantee,
-            recipient: recipient,
-            allocation: allocation,
-            milestones: milestones2,
-            agreementUri: agreementUri
+        agreements[contractId] = AgreementData({
+            signedData: SignedAgreementData({
+                id: contractId,
+                agreementUri: agreementUri,
+                _metavestType: _metavestType,
+                grantee: grantee,
+                recipient: recipient,
+                allocation: allocation,
+                milestones: milestones
+            }),
+            pending: true
         });
-        emit MetaVesTController_GranteeRegistered(grantee, recipient, granteeId, _metavestType, allocation, milestones);
-        return granteeId;
+        emit MetaVesTController_ContractCreated(contractId, grantee, recipient, _metavestType, allocation, milestones);
+        return contractId;
     }
 
-    function createMetavest(uint256 granteeId) external conditionCheck returns (address)
+    function createMetavest(bytes32 contractId) external conditionCheck returns (address)
     {
-        GranteeMeta storage granteeMeta = pendingGrantees[granteeId];
-        require(granteeMeta.grantee != address(0), "Grantee not registered");
+        AgreementData storage agreement = agreements[contractId];
 
-        // TODO test
-        BaseAllocation.Milestone[] memory milestones = new BaseAllocation.Milestone[](0);
-        
+        if (!agreement.pending) {
+            revert MetaVesTController_AgreementAlreadyProcessed();
+        }
+        agreement.pending = false;
+
         address newMetavest;
-        if(granteeMeta._metavestType == metavestType.Vesting)
+        if(agreement.signedData._metavestType == metavestType.Vesting)
         {
             // TODO WIP: must support recipient
-            newMetavest = createVestingAllocation(granteeMeta.grantee, granteeMeta.allocation, milestones); // TODO use test milestones for now
+            newMetavest = createVestingAllocation(agreement.signedData.grantee, agreement.signedData.allocation, agreement.signedData.milestones);
         }
-        else if(granteeMeta._metavestType == metavestType.TokenOption)
+        else if(agreement.signedData._metavestType == metavestType.TokenOption)
         {
-            revert MetaVesTController_TypeNotSupported(granteeMeta._metavestType);
+            // TODO will be supported in the next stage
+            revert MetaVesTController_TypeNotSupported(agreement.signedData._metavestType);
         }
-        else if(granteeMeta._metavestType == metavestType.RestrictedTokenAward)
+        else if(agreement.signedData._metavestType == metavestType.RestrictedTokenAward)
         {
-            revert MetaVesTController_TypeNotSupported(granteeMeta._metavestType);
+            // TODO will be supported in the next stage
+            revert MetaVesTController_TypeNotSupported(agreement.signedData._metavestType);
         }
         else
         {
@@ -307,11 +369,7 @@ contract metavestController is SafeTransferLib {
         );
         BaseAllocation(newMetavest).setZkCappedMinterAddress(address(zkCappedMinter));
 
-        // TODO revision needed
-        // Remove from queue
-        delete pendingGrantees[granteeId];
-
-        emit MetaVesTController_MetaVestCreated(newMetavest, granteeId);
+        emit MetaVesTController_MetaVestCreated(newMetavest, contractId);
         return newMetavest;
     }
     
@@ -817,5 +875,105 @@ contract metavestController is SafeTransferLib {
     function setZkCappedMinter(address _zkCappedMinter) external onlyAuthority {
         zkCappedMinter = _zkCappedMinter;
         emit MetaVesTController_ZkCappedMinterUpdated(zkCappedMinter);
+    }
+
+    function computeContractId(
+        uint256 salt,
+        string memory agreementUri,
+        address grantee,
+        address recipient,
+        BaseAllocation.Allocation memory allocation,
+        BaseAllocation.Milestone[] memory milestones
+    ) public pure returns (bytes32) {
+        return keccak256(abi.encode(salt, agreementUri, grantee, recipient, allocation, milestones));
+    }
+
+    function _verifySignature(
+        address signer,
+        SignedAgreementData memory data,
+        bytes memory signature
+    ) internal view returns (bool) {
+        // Hash the data (AgreementData) according to EIP-712
+        bytes32 digest = _hashTypedDataV4(data);
+
+        // Recover the signer address
+        address recoveredSigner = digest.recover(signature);
+
+        // Check direct signature
+        if (recoveredSigner == signer) {
+            return true;
+        }
+
+        // TODO WIP: delegation signature
+        // Check delegation signature
+//        Delegation storage delegation = delegations[signer];
+//        if (delegation.delegate == recoveredSigner &&
+//            (delegation.expiry == 0 || delegation.expiry > block.timestamp)) {
+//            return true;
+//        }
+
+        return false;
+    }
+
+    function _hashTypedDataV4(metavestController.SignedAgreementData memory data) internal view returns(bytes32) {
+        return keccak256(abi.encodePacked(
+            "\x19\x01",
+            DOMAIN_SEPARATOR,
+            keccak256(abi.encode(
+                SIGNED_AGREEMENT_DATA_TYPEHASH,
+                data.id,
+                keccak256(bytes(data.agreementUri)),
+                data._metavestType,
+                data.grantee,
+                data.recipient,
+                _hashAllocaiton(data.allocation),
+                _hashMilestones(data.milestones)
+            ))
+        ));
+    }
+
+    function _hashSignedAgreementData(metavestController.SignedAgreementData memory data) internal view returns (bytes32) {
+        return keccak256(abi.encode(
+            SIGNED_AGREEMENT_DATA_TYPEHASH,
+            data.id,
+            keccak256(bytes(data.agreementUri)),
+            data._metavestType,
+            data.grantee,
+            data.recipient,
+            _hashAllocaiton(data.allocation),
+            _hashMilestones(data.milestones)
+        ));
+    }
+
+    function _hashAllocaiton(BaseAllocation.Allocation memory allocation) internal view returns (bytes32) {
+        return keccak256(abi.encode(
+            ALLOCATION_TYPEHASH,
+            allocation.tokenContract,
+            allocation.tokenStreamTotal,
+            allocation.vestingCliffCredit,
+            allocation.unlockingCliffCredit,
+            allocation.vestingRate,
+            allocation.vestingStartTime,
+            allocation.unlockRate,
+            allocation.unlockStartTime
+        ));
+    }
+
+    function _hashMilestones(BaseAllocation.Milestone[] memory milestones) internal view returns (bytes32) {
+        bytes32[] memory hashes = new bytes32[](milestones.length);
+        for (uint256 i = 0; i < milestones.length; i++) {
+            hashes[i] = _hashMilestone(milestones[i]);
+        }
+        return keccak256(abi.encodePacked(hashes));
+    }
+
+    function _hashMilestone(BaseAllocation.Milestone memory milestone) internal view returns (bytes32) {
+        return keccak256(abi.encode(
+            MILESTONE_TYPEHASH,
+            milestone.milestoneAward,
+            milestone.unlockOnCompletion,
+            milestone.complete,
+            keccak256(abi.encodePacked(milestone.conditionContracts))
+        ));
     }
 }
