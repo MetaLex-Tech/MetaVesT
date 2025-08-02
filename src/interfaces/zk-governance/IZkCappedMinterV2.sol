@@ -2,6 +2,8 @@
 pragma solidity 0.8.24;
 
 interface IZkCappedMinterV2 {
+      error ZkCappedMinterV2__CapExceeded(address minter, uint256 amount);
+
       function MINTER_ROLE() external returns (bytes32);
       function START_TIME() external returns (uint48);
 

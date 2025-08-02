@@ -51,8 +51,8 @@ contract metavestController is SafeTransferLib {
     address public authority;
     address public dao;
     address public vestingFactory;
-    address public tokenOptionFactory;
-    address public restrictedTokenFactory;
+//    address public tokenOptionFactory;
+//    address public restrictedTokenFactory;
     address public zkCappedMinter;
     address public ZkTokenAddress;
     address internal _pendingAuthority;
@@ -223,12 +223,18 @@ contract metavestController is SafeTransferLib {
     /// @param _authority address of the authority who can call the functions in this contract and update each MetaVesT in '_metavest', such as a BORG
     /// @param _dao DAO governance contract address which exercises control over ability of 'authority' to call certain functions via imposing
     /// conditions through 'updateFunctionCondition'.
-    constructor(address _authority, address _dao, address _vestingFactory, address _tokenOptionFactory, address _restrictedTokenFactory) {
+    constructor(
+        address _authority,
+        address _dao,
+        address _vestingFactory
+//        address _tokenOptionFactory,
+//        address _restrictedTokenFactory
+    ) {
         if (_authority == address(0)) revert MetaVesTController_ZeroAddress();
         authority = _authority;
         vestingFactory = _vestingFactory;
-        tokenOptionFactory = _tokenOptionFactory;
-        restrictedTokenFactory = _restrictedTokenFactory;
+//        tokenOptionFactory = _tokenOptionFactory;
+//        restrictedTokenFactory = _restrictedTokenFactory;
         dao = _dao;
 
         version = "1";
@@ -421,45 +427,45 @@ contract metavestController is SafeTransferLib {
         ) revert MetaVesTController_AmountNotApprovedForTransferFrom();
     }
 
-     function createAndInitializeTokenOptionAllocation(
-            address _grantee,
-            address _paymentToken,
-            uint256 _exercisePrice,
-            uint256 _shortStopDuration,
-            VestingAllocation.Allocation calldata _allocation,
-            VestingAllocation.Milestone[] calldata _milestones
-        ) internal returns (address) {
-            return IAllocationFactory(tokenOptionFactory).createAllocation(
-                IAllocationFactory.AllocationType.TokenOption,
-                _grantee,
-                address(this),
-                _allocation,
-                _milestones,
-                _paymentToken,
-                _exercisePrice,
-                _shortStopDuration
-            );
-        }
-
-        function createAndInitializeRestrictedTokenAward(
-            address _grantee,
-            address _paymentToken,
-            uint256 _repurchasePrice,
-            uint256 _shortStopDuration,
-            VestingAllocation.Allocation calldata _allocation,
-            VestingAllocation.Milestone[] calldata _milestones
-        ) internal returns (address) {
-            return IAllocationFactory(restrictedTokenFactory).createAllocation(
-                IAllocationFactory.AllocationType.RestrictedToken,
-                _grantee,
-                address(this),
-                _allocation,
-                _milestones,
-                _paymentToken,
-                _repurchasePrice,
-                _shortStopDuration
-            );
-        }
+//     function createAndInitializeTokenOptionAllocation(
+//            address _grantee,
+//            address _paymentToken,
+//            uint256 _exercisePrice,
+//            uint256 _shortStopDuration,
+//            VestingAllocation.Allocation calldata _allocation,
+//            VestingAllocation.Milestone[] calldata _milestones
+//        ) internal returns (address) {
+//            return IAllocationFactory(tokenOptionFactory).createAllocation(
+//                IAllocationFactory.AllocationType.TokenOption,
+//                _grantee,
+//                address(this),
+//                _allocation,
+//                _milestones,
+//                _paymentToken,
+//                _exercisePrice,
+//                _shortStopDuration
+//            );
+//        }
+//
+//        function createAndInitializeRestrictedTokenAward(
+//            address _grantee,
+//            address _paymentToken,
+//            uint256 _repurchasePrice,
+//            uint256 _shortStopDuration,
+//            VestingAllocation.Allocation calldata _allocation,
+//            VestingAllocation.Milestone[] calldata _milestones
+//        ) internal returns (address) {
+//            return IAllocationFactory(restrictedTokenFactory).createAllocation(
+//                IAllocationFactory.AllocationType.RestrictedToken,
+//                _grantee,
+//                address(this),
+//                _allocation,
+//                _milestones,
+//                _paymentToken,
+//                _repurchasePrice,
+//                _shortStopDuration
+//            );
+//        }
 
 
     function createVestingAllocation(address _grantee, VestingAllocation.Allocation memory _allocation, VestingAllocation.Milestone[] memory _milestones) internal returns (address){
@@ -487,50 +493,50 @@ contract metavestController is SafeTransferLib {
         return vestingAllocation;
     }
 
-    function createTokenOptionAllocation(address _grantee, uint256 _exercisePrice, address _paymentToken,  uint256 _shortStopDuration, VestingAllocation.Allocation calldata _allocation, VestingAllocation.Milestone[] calldata _milestones) internal conditionCheck returns (address) {
-        
-        validateInputParameters(_grantee, _paymentToken, _exercisePrice, _allocation);
-        validateAllocation(_allocation);
-        uint256 _milestoneTotal = validateAndCalculateMilestones(_milestones);
-
-        uint256 _total = _allocation.tokenStreamTotal + _milestoneTotal;
-        if (_total == 0) revert MetaVesTController_ZeroAmount();
-        //validateTokenApprovalAndBalance(_allocation.tokenContract, _total);
-        
-        address tokenOptionAllocation = createAndInitializeTokenOptionAllocation(
-                _grantee,
-                _paymentToken,
-                _exercisePrice,
-                _shortStopDuration,
-                _allocation,
-                _milestones
-            );
-
-            //safeTransferFrom(_allocation.tokenContract, authority, tokenOptionAllocation, _total);
-            return tokenOptionAllocation;
-        }
-
-        function createRestrictedTokenAward(address _grantee, uint256 _repurchasePrice, address _paymentToken, uint256 _shortStopDuration, VestingAllocation.Allocation calldata _allocation, VestingAllocation.Milestone[] calldata _milestones) internal conditionCheck returns (address){
-            validateInputParameters(_grantee, _paymentToken, _repurchasePrice, _allocation);
-            validateAllocation(_allocation);
-            uint256 _milestoneTotal = validateAndCalculateMilestones(_milestones);
-
-            uint256 _total = _allocation.tokenStreamTotal + _milestoneTotal;
-            if (_total == 0) revert MetaVesTController_ZeroAmount();
-            //validateTokenApprovalAndBalance(_allocation.tokenContract, _total);
-
-            address restrictedTokenAward = createAndInitializeRestrictedTokenAward(
-                _grantee,
-                _paymentToken,
-                _repurchasePrice,
-                _shortStopDuration,
-                _allocation,
-                _milestones
-            );
-
-            //safeTransferFrom(_allocation.tokenContract, authority, restrictedTokenAward, _total);
-            return restrictedTokenAward;
-        }
+//    function createTokenOptionAllocation(address _grantee, uint256 _exercisePrice, address _paymentToken,  uint256 _shortStopDuration, VestingAllocation.Allocation calldata _allocation, VestingAllocation.Milestone[] calldata _milestones) internal conditionCheck returns (address) {
+//
+//        validateInputParameters(_grantee, _paymentToken, _exercisePrice, _allocation);
+//        validateAllocation(_allocation);
+//        uint256 _milestoneTotal = validateAndCalculateMilestones(_milestones);
+//
+//        uint256 _total = _allocation.tokenStreamTotal + _milestoneTotal;
+//        if (_total == 0) revert MetaVesTController_ZeroAmount();
+//        //validateTokenApprovalAndBalance(_allocation.tokenContract, _total);
+//
+//        address tokenOptionAllocation = createAndInitializeTokenOptionAllocation(
+//                _grantee,
+//                _paymentToken,
+//                _exercisePrice,
+//                _shortStopDuration,
+//                _allocation,
+//                _milestones
+//            );
+//
+//            //safeTransferFrom(_allocation.tokenContract, authority, tokenOptionAllocation, _total);
+//            return tokenOptionAllocation;
+//        }
+//
+//        function createRestrictedTokenAward(address _grantee, uint256 _repurchasePrice, address _paymentToken, uint256 _shortStopDuration, VestingAllocation.Allocation calldata _allocation, VestingAllocation.Milestone[] calldata _milestones) internal conditionCheck returns (address){
+//            validateInputParameters(_grantee, _paymentToken, _repurchasePrice, _allocation);
+//            validateAllocation(_allocation);
+//            uint256 _milestoneTotal = validateAndCalculateMilestones(_milestones);
+//
+//            uint256 _total = _allocation.tokenStreamTotal + _milestoneTotal;
+//            if (_total == 0) revert MetaVesTController_ZeroAmount();
+//            //validateTokenApprovalAndBalance(_allocation.tokenContract, _total);
+//
+//            address restrictedTokenAward = createAndInitializeRestrictedTokenAward(
+//                _grantee,
+//                _paymentToken,
+//                _repurchasePrice,
+//                _shortStopDuration,
+//                _allocation,
+//                _milestones
+//            );
+//
+//            //safeTransferFrom(_allocation.tokenContract, authority, restrictedTokenAward, _total);
+//            return restrictedTokenAward;
+//        }
     
     function getMetaVestType(address _grant) public view returns (uint256) {
         return BaseAllocation(_grant).getVestingType();

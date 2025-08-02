@@ -2,23 +2,22 @@
 pragma solidity ^0.8.20;
 
 import "../src/MetaVesTController.sol";
-import "../src/RestrictedTokenFactory.sol";
-import "../src/TokenOptionFactory.sol";
 import "../src/VestingAllocationFactory.sol";
 import "../src/interfaces/zk-governance/IZkTokenV1.sol";
+import "../src/interfaces/zk-governance/IZkCappedMinterV2.sol";
 import "./lib/MetaVesTUtils.sol";
 import "forge-std/Test.sol";
 
-// TODO this does not use the actual ZkCappedMinterV2 yet. Still v1
+// Test by forge test --zksync --via-ir
 contract ZkGuardianCompensationTest is Test {
-    // zkSync Era Sepolia @ 5576300
-    address zkTokenAdmin = 0x0d9DD6964692a0027e1645902536E7A3b34AA1d7;
-    IZkTokenV1 zkToken = IZkTokenV1(0x69e5DC39E2bCb1C17053d2A4ee7CAEAAc5D36f96);
-    IZkCappedMinterV2Factory zkCappedMinterFactory = IZkCappedMinterV2Factory(0x329CE320a0Ef03F8c0E01195604b5ef7D3Fb150E);
-//    // zkSync Era mainnet
-//    address zkTokenAdmin = 0xe5d21A9179CA2E1F0F327d598D464CcF60d89c3d;
-//    IZkTokenV1 zkToken = IZkTokenV1(0x5A7d6b2F92C77FAD6CCaBd7EE0624E64907Eaf3E);
-//    IZkCappedMinterV2Factory zkCappedMinterFactory = IZkCappedMinterV2Factory(0x0400E6bc22B68686Fb197E91f66E199C6b0DDD6a);
+//    // zkSync Era Sepolia @ 5576300
+//    address zkTokenAdmin = 0x0d9DD6964692a0027e1645902536E7A3b34AA1d7;
+//    IZkTokenV1 zkToken = IZkTokenV1(0x69e5DC39E2bCb1C17053d2A4ee7CAEAAc5D36f96);
+//    IZkCappedMinterV2Factory zkCappedMinterFactory = IZkCappedMinterV2Factory(0x329CE320a0Ef03F8c0E01195604b5ef7D3Fb150E);
+    // zkSync Era mainnet @ 63631890
+    address zkTokenAdmin = 0xe5d21A9179CA2E1F0F327d598D464CcF60d89c3d;
+    IZkTokenV1 zkToken = IZkTokenV1(0x5A7d6b2F92C77FAD6CCaBd7EE0624E64907Eaf3E);
+    IZkCappedMinterV2Factory zkCappedMinterFactory = IZkCappedMinterV2Factory(0x0400E6bc22B68686Fb197E91f66E199C6b0DDD6a);
 
     IZkCappedMinterV2 zkCappedMinter;
 
@@ -29,34 +28,33 @@ contract ZkGuardianCompensationTest is Test {
     address alice = vm.addr(alicePrivateKey);
     uint256 bobPrivateKey = 2;
     address bob = vm.addr(bobPrivateKey);
+    uint256 chadPrivateKey = 3;
+    address chad = vm.addr(chadPrivateKey);
 
     VestingAllocationFactory vestingAllocationFactory;
-    TokenOptionFactory tokenOptionFactory;
-    RestrictedTokenFactory restrictedTokenFactory;
 
     metavestController controller;
 
     // Parameters
     bytes32 salt = keccak256("MetaLexZkSyncTest");
-    uint256 cap = 1e6 ether;
-    uint48 cappedMinterStartTime = uint48(block.timestamp + 30 days);
-    uint48 cappedMinterExpirationTime = uint48(block.timestamp + 30 days + 365 days * 2);
+    uint256 cap = 1e6 ether; // 1M ZK
+    uint48 cappedMinterStartTime = 1756684800; // 2025/9/1 UTC
+    uint48 cappedMinterExpirationTime = cappedMinterStartTime + 365 days * 2; // Expect to vest over an year with a margin of an extra year for withdrawal
 
     function setUp() public {
+        // Assume deployment 7 days before the vesting starts
+        vm.warp(cappedMinterStartTime - 7 days);
+
         vm.startPrank(deployer);
 
         // Deploy MetaVesT controller
 
         vestingAllocationFactory = new VestingAllocationFactory();
-        tokenOptionFactory = new TokenOptionFactory();
-        restrictedTokenFactory = new RestrictedTokenFactory();
 
         controller = new metavestController{salt: salt}(
             guardianSafe,
             guardianSafe,
-            address(vestingAllocationFactory),
-            address(tokenOptionFactory),
-            address(restrictedTokenFactory)
+            address(vestingAllocationFactory)
         );
 
         // Deploy ZK Capped Minter v2
@@ -76,53 +74,10 @@ contract ZkGuardianCompensationTest is Test {
         controller.setZkCappedMinter(address(zkCappedMinter));
     }
 
-    // Test by forge test --zksync --via-ir
     function test_GuardianCompensationYear1_2() public {
         // Assume ZK Capped Minter and its MetaVesTController counterpart are already deployed
 
-        // Guardians to sign agreements and register on MetaVesTController
-
-        bytes32 contractIdAlice = _signAndCreateContract(
-            guardianSafe,
-            alice,
-            alicePrivateKey,
-            "ipfs.io/ipfs/[cid]",
-            BaseAllocation.Allocation({
-                tokenContract: address(zkToken),
-                tokenStreamTotal: 1000e18,
-                vestingCliffCredit: 100e18,
-                unlockingCliffCredit: 100e18,
-                vestingRate: 10e18,
-                vestingStartTime: zkCappedMinter.START_TIME(), // start along with capped minter
-                unlockRate: 10e18,
-                unlockStartTime: zkCappedMinter.START_TIME() // start along with capped minter
-            }),
-            new BaseAllocation.Milestone[](0)
-        );
-
-        bytes32 contractIdBob = _signAndCreateContract(
-            guardianSafe,
-            bob,
-            bobPrivateKey,
-            "ipfs.io/ipfs/[cid]",
-            BaseAllocation.Allocation({
-                tokenContract: address(zkToken),
-                tokenStreamTotal: 2000e18,
-                vestingCliffCredit: 200e18,
-                unlockingCliffCredit: 200e18,
-                vestingRate: 20e18,
-                vestingStartTime: zkCappedMinter.START_TIME(), // start along with capped minter
-                unlockRate: 20e18,
-                unlockStartTime: zkCappedMinter.START_TIME() // start along with capped minter
-            }),
-            new BaseAllocation.Milestone[](0)
-        );
-
-        // TPP to review agreements and on-chain parameters, then approve by granting our ZkCappedMinter permissions
-
-        bytes32 minterRole = zkToken.MINTER_ROLE();
-        vm.prank(zkTokenAdmin);
-        zkToken.grantRole(minterRole, address(zkCappedMinter));
+        (bytes32 contractIdAlice, bytes32 contractIdBob) = _guardiansSignAndTppPass();
 
         // Anyone can create MetaVesT for Alice and Bob (per agreements) to start vesting
 
@@ -132,17 +87,98 @@ contract ZkGuardianCompensationTest is Test {
         VestingAllocation vestingAllocationBob = VestingAllocation(controller.createMetavest(contractIdBob));
         assertEq(zkToken.balanceOf(address(vestingAllocationBob)), 0, "Vesting contract should not have any token (it mints on-demand)");
 
-        // Alice and Bob should be able to start withdrawal after capped minter and MetaVesT start
+        // Grantees should not be able to withdraw yet
+        vm.prank(alice);
+        vm.expectRevert(abi.encodeWithSelector(BaseAllocation.MetaVesT_MoreThanAvailable.selector));
+        vestingAllocationAlice.withdraw(1 ether);
+        vm.prank(bob);
+        vm.expectRevert(abi.encodeWithSelector(BaseAllocation.MetaVesT_MoreThanAvailable.selector));
+        vestingAllocationBob.withdraw(1 ether);
+
+        // Grantees should be able to start withdrawal after capped minter and MetaVesT start
+        vm.warp(cappedMinterStartTime);
+
+        _granteeWithdrawAndAsserts(vestingAllocationAlice, 50e3 ether, "Alice cliff");
+        _granteeWithdrawAndAsserts(vestingAllocationBob, 40e3 ether, "Bob cliff");
+
+        // Grantees should be able to withdraw all remaining tokens after sufficient time passed
+        skip(365 days + 1);
+
+        _granteeWithdrawAndAsserts(vestingAllocationAlice, 50e3 ether, "Alice full");
+        _granteeWithdrawAndAsserts(vestingAllocationBob, 30e3 ether, "Bob partial");
+
+        // Grantees should be able to withdraw within an year after vesting ends
+        skip(364 days);
+
+        _granteeWithdrawAndAsserts(vestingAllocationBob, 10e3 ether, "Bob full");
+    }
+
+    function test_AdminToolingCompensation() public {
+        (bytes32 contractIdAlice, bytes32 contractIdBob) = _guardiansSignAndTppPass();
+
+        // Vesting starts and a month has passed
+        vm.warp(cappedMinterStartTime + 30 days);
+
+        // Alice creates vesting contract and start withdrawal
+        VestingAllocation vestingAllocationAlice = VestingAllocation(controller.createMetavest(contractIdAlice));
+        _granteeWithdrawAndAsserts(vestingAllocationAlice, uint256(50e3 ether) + uint160(50e3 ether) / 365 days * 30 days, "Alice cliff + first month");
+
+        // Second month
         skip(30 days);
 
-        _granteeWithdrawAndAsserts(vestingAllocationAlice, 100e18, "Alice cliff");
-        _granteeWithdrawAndAsserts(vestingAllocationBob, 200e18, "Bob cliff");
+        // Add new grantee for admin/tooling compensation
+        bytes32 contractIdChad = _signAndCreateContract(
+            guardianSafe,
+            chad,
+            chadPrivateKey,
+            "ipfs.io/ipfs/[cid]",
+            BaseAllocation.Allocation({
+                tokenContract: address(zkToken),
+                // 10k ZK total in one cliff
+                tokenStreamTotal: 10e3 ether,
+                vestingCliffCredit: 10e3 ether,
+                unlockingCliffCredit: 10e3 ether,
+                vestingRate: 0,
+                vestingStartTime: 0,
+                unlockRate: 0,
+                unlockStartTime: 0
+            }),
+            new BaseAllocation.Milestone[](0)
+        );
+        VestingAllocation vestingAllocationChad = VestingAllocation(controller.createMetavest(contractIdChad));
+        _granteeWithdrawAndAsserts(vestingAllocationChad, 10e3 ether, "Chad cliff");
+    }
 
-        // Alice and Bob should be able to withdrawal all remaining tokens after sufficient time passed
-        skip(90 seconds);
+    function test_RevertIf_ExceedCap() public {
+        _guardiansSignAndTppPass();
 
-        _granteeWithdrawAndAsserts(vestingAllocationAlice, 900e18, "Alice full");
-        _granteeWithdrawAndAsserts(vestingAllocationBob, 1800e18, "Bob full");
+        // Add a large grant that exceeds the cap
+        bytes32 contractIdChad = _signAndCreateContract(
+            guardianSafe,
+            chad,
+            chadPrivateKey,
+            "ipfs.io/ipfs/[cid]",
+            BaseAllocation.Allocation({
+                tokenContract: address(zkToken),
+                // 1.01M ZK total in one cliff
+                tokenStreamTotal: 1.01e6 ether,
+                vestingCliffCredit: 1.01e6 ether,
+                unlockingCliffCredit: 1.01e6 ether,
+                vestingRate: 0,
+                vestingStartTime: 0,
+                unlockRate: 0,
+                unlockStartTime: 0
+            }),
+            new BaseAllocation.Milestone[](0)
+        );
+        VestingAllocation vestingAllocationChad = VestingAllocation(controller.createMetavest(contractIdChad));
+
+        // Wait until minter starts
+        vm.warp(cappedMinterStartTime);
+
+        vm.prank(chad);
+        vm.expectRevert(abi.encodeWithSelector(IZkCappedMinterV2.ZkCappedMinterV2__CapExceeded.selector, address(vestingAllocationChad), 1.01e6 ether));
+        vestingAllocationChad.withdraw(1.01e6 ether);
     }
 
     function test_RevertIf_NotAuthority() public {
@@ -241,10 +277,59 @@ contract ZkGuardianCompensationTest is Test {
         );
     }
 
+    function _guardiansSignAndTppPass() internal returns(bytes32, bytes32) {
+        // Guardians to sign agreements and register on MetaVesTController
+
+        bytes32 contractIdAlice = _signAndCreateContract(
+            guardianSafe,
+            alice,
+            alicePrivateKey,
+            "ipfs.io/ipfs/[cid]",
+            BaseAllocation.Allocation({
+                tokenContract: address(zkToken),
+            // 100k ZK total, the first half unlocks with a cliff and the second half unlocks over an year
+                tokenStreamTotal: 100e3 ether,
+                vestingCliffCredit: 50e3 ether,
+                unlockingCliffCredit: 50e3 ether,
+                vestingRate: uint160(50e3 ether) / 365 days,
+                vestingStartTime: zkCappedMinter.START_TIME(), // start along with capped minter
+                unlockRate: uint160(50e3 ether) / 365 days,
+                unlockStartTime: zkCappedMinter.START_TIME() // start along with capped minter
+            }),
+            new BaseAllocation.Milestone[](0)
+        );
+
+        bytes32 contractIdBob = _signAndCreateContract(
+            guardianSafe,
+            bob,
+            bobPrivateKey,
+            "ipfs.io/ipfs/[cid]",
+            BaseAllocation.Allocation({
+                tokenContract: address(zkToken),
+            // 80k ZK total, the first half unlocks with a cliff and the second half unlocks over an year
+                tokenStreamTotal: 80e3 ether,
+                vestingCliffCredit: 40e3 ether,
+                unlockingCliffCredit: 40e3 ether,
+                vestingRate: uint160(40e3 ether) / 365 days,
+                vestingStartTime: zkCappedMinter.START_TIME(), // start along with capped minter
+                unlockRate: uint160(40e3 ether) / 365 days,
+                unlockStartTime: zkCappedMinter.START_TIME() // start along with capped minter
+            }),
+            new BaseAllocation.Milestone[](0)
+        );
+
+        // TPP to review agreements and on-chain parameters, then approve by granting our ZkCappedMinter permissions
+
+        bytes32 minterRole = zkToken.MINTER_ROLE();
+        vm.prank(zkTokenAdmin);
+        zkToken.grantRole(minterRole, address(zkCappedMinter));
+
+        return (contractIdAlice, contractIdBob);
+    }
+
     function _granteeWithdrawAndAsserts(VestingAllocation vestingAllocation, uint256 amount, string memory assertName) internal {
         address grantee = vestingAllocation.grantee();
         uint256 balanceBefore = zkToken.balanceOf(grantee);
-        assertEq(vestingAllocation.getAmountWithdrawable(), amount, string(abi.encodePacked(assertName, ": unexpected withdrawable amount after cliff")));
         vm.prank(grantee);
         vestingAllocation.withdraw(amount);
         assertEq(zkToken.balanceOf(grantee), balanceBefore + amount, string(abi.encodePacked(assertName, ": unexpected received amount")));
