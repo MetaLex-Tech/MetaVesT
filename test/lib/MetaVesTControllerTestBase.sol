@@ -60,10 +60,11 @@ contract MetaVesTControllerTestBase is Test {
         BaseAllocation.Milestone[] memory milestones,
         string[] memory globalValues,
         string[] memory partyValues,
+        bytes32 secretHash,
         uint256 expiry
     ) internal returns(bytes32) {
         return _proposeAndSignDeal(
-            templateId, authority, grantee, granteePrivateKey, allocation, milestones, globalValues, partyValues, expiry,
+            templateId, authority, grantee, granteePrivateKey, allocation, milestones, globalValues, partyValues, secretHash, expiry,
             "" // Not expecting revert
         );
     }
@@ -77,6 +78,7 @@ contract MetaVesTControllerTestBase is Test {
         BaseAllocation.Milestone[] memory milestones,
         string[] memory globalValues,
         string[] memory partyValues,
+        bytes32 secretHash,
         uint256 expiry,
         bytes memory expectRevertData
     ) internal returns(bytes32) {
@@ -121,6 +123,7 @@ contract MetaVesTControllerTestBase is Test {
             globalValues,
             partyValues,
             signature,
+            secretHash,
             expiry
         );
 

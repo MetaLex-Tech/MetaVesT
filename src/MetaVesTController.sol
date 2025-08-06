@@ -78,13 +78,8 @@ contract metavestController is SafeTransferLib {
         mapping(address => uint256) voterPower;
     }
 
-    struct AgreementData {
-        SignedAgreementData signedData;
-        bool pending; // Pending MeteVesT deployment
-    }
-
-    struct SignedAgreementData {
-        bytes32 id;
+    struct DealData {
+        bytes32 agreementId;
         metavestType _metavestType;
         address grantee;
         address recipient;
@@ -114,7 +109,7 @@ contract metavestController is SafeTransferLib {
     mapping(bytes32 => bool) public setMajorityVoteActive;
 
     /// @notice granteeId => granteeData
-    mapping(bytes32 => AgreementData) public agreements;
+    mapping(bytes32 => DealData) public deals;
 
     mapping(address => Delegation) public delegations;
 
@@ -133,9 +128,22 @@ contract metavestController is SafeTransferLib {
     event MetaVesTController_SetRemoved(string indexed set);
     event MetaVesTController_AddressAddedToSet(string set, address indexed grantee);
     event MetaVesTController_AddressRemovedFromSet(string set, address indexed grantee);
-    event MetaVesTController_MetaVestCreated(address indexed metavest, bytes32 contractId);
+    event MetaVesTController_MetaVestCreated(address indexed metavest, bytes32 agreementId);
     event MetaVesTController_ZkCappedMinterUpdated(address zkCappedMinter);
-    event MetaVesTController_ContractCreated(bytes32 indexed contractId, address indexed grantee, address indexed recipient, metavestType metavestType, BaseAllocation.Allocation allocation, BaseAllocation.Milestone[] milestones);
+    event MetaVesTController_DealProposed(
+        bytes32 indexed agreementId,
+        address indexed grantee,
+        address indexed recipient,
+        metavestType metavestType,
+        BaseAllocation.Allocation allocation,
+        BaseAllocation.Milestone[] milestones,
+        bool hasSecret,
+        address registry
+    );
+    event MetaVesTController_DealFinalizedAndMetaVestCreated(
+        bytes32 indexed agreementId,
+        address metavest
+    );
     event MetaVesTController_DelegationSet(address indexed delegator, address indexed delegate, uint256 expiry);
     event MetaVesTController_DelegationRevoked(address indexed delegator, address indexed delegate);
 
@@ -173,7 +181,7 @@ contract metavestController is SafeTransferLib {
     error MetaVesTController_SetAlreadyExists();
     error MetaVesTController_StringTooLong();
     error MetaVesTController_TypeNotSupported(metavestType _type);
-    error MetaVesTController_AgreementAlreadyProcessed();
+    error MetaVesTController_DealAlreadyFinalized();
     error MetaVesTController_SignatureVerificationFailed();
 
     ///
@@ -317,6 +325,7 @@ contract metavestController is SafeTransferLib {
         string[] memory globalValues,
         string[] memory partyValues,
         bytes calldata signature,
+        bytes32 secretHash,
         uint256 expiry
     ) external onlyAuthority returns (bytes32) {
         address[] memory allParties = new address[](1);
@@ -330,54 +339,60 @@ contract metavestController is SafeTransferLib {
             globalValues,
             allParties,
             allPartyValues,
-            bytes32(0), // TODO WIP
+            secretHash,
             address(this),
             expiry
         );
 
-        // TODO revise needed
-        agreements[agreementId] = AgreementData({
-            signedData: SignedAgreementData({
-                id: agreementId,
-                _metavestType: _metavestType,
-                grantee: grantee,
-                recipient: recipient,
-                allocation: allocation,
-                milestones: milestones
-            }),
-            pending: true
+        deals[agreementId] = DealData({
+            agreementId: agreementId,
+            _metavestType: _metavestType,
+            grantee: grantee,
+            recipient: recipient,
+            allocation: allocation,
+            milestones: milestones
         });
 
-        ICyberAgreementRegistry(registry).signContractFor(grantee, agreementId, allPartyValues[0], signature, false, "");
+        ICyberAgreementRegistry(registry).signContractFor(
+            grantee,
+            agreementId,
+            allPartyValues[0],
+            signature,
+            false, // Not meant for anyone else other than the signer
+            "" // Signer == proposer, no secret needed
+        );
 
-        emit MetaVesTController_ContractCreated(agreementId, grantee, recipient, _metavestType, allocation, milestones);
+        emit MetaVesTController_DealProposed(
+            agreementId, grantee, recipient, _metavestType, allocation, milestones,
+            secretHash > 0,
+            registry
+        );
         return agreementId;
     }
 
-    function createMetavest(bytes32 contractId) external conditionCheck returns (address)
+    function createMetavest(bytes32 agreementId) external conditionCheck returns (address)
     {
-        AgreementData storage agreement = agreements[contractId];
-
-        if (!agreement.pending) {
-            revert MetaVesTController_AgreementAlreadyProcessed();
+        if (ICyberAgreementRegistry(registry).isFinalized(agreementId)) {
+            revert MetaVesTController_DealAlreadyFinalized();
         }
-        agreement.pending = false;
+
+        DealData storage deal = deals[agreementId];
 
         address newMetavest;
-        if(agreement.signedData._metavestType == metavestType.Vesting)
+        if(deal._metavestType == metavestType.Vesting)
         {
             // TODO WIP: must support recipient
-            newMetavest = createVestingAllocation(agreement.signedData.grantee, agreement.signedData.allocation, agreement.signedData.milestones);
+            newMetavest = createVestingAllocation(deal.grantee, deal.allocation, deal.milestones);
         }
-        else if(agreement.signedData._metavestType == metavestType.TokenOption)
+        else if(deal._metavestType == metavestType.TokenOption)
         {
             // TODO will be supported in the next stage
-            revert MetaVesTController_TypeNotSupported(agreement.signedData._metavestType);
+            revert MetaVesTController_TypeNotSupported(deal._metavestType);
         }
-        else if(agreement.signedData._metavestType == metavestType.RestrictedTokenAward)
+        else if(deal._metavestType == metavestType.RestrictedTokenAward)
         {
             // TODO will be supported in the next stage
-            revert MetaVesTController_TypeNotSupported(agreement.signedData._metavestType);
+            revert MetaVesTController_TypeNotSupported(deal._metavestType);
         }
         else
         {
@@ -390,7 +405,9 @@ contract metavestController is SafeTransferLib {
         );
         BaseAllocation(newMetavest).setZkCappedMinterAddress(address(zkCappedMinter));
 
-        emit MetaVesTController_MetaVestCreated(newMetavest, contractId);
+        ICyberAgreementRegistry(registry).finalizeContract(agreementId);
+
+        emit MetaVesTController_DealFinalizedAndMetaVestCreated(agreementId, newMetavest);
         return newMetavest;
     }
     
@@ -909,8 +926,8 @@ contract metavestController is SafeTransferLib {
         return keccak256(abi.encode(salt, agreementUri, grantee, recipient, allocation, milestones));
     }
 
-    function getAgreement(bytes32 contractId) public view returns (AgreementData memory) {
-        return agreements[contractId];
+    function getDeal(bytes32 agreementId) public view returns (DealData memory) {
+        return deals[agreementId];
     }
 
     function setDelegation(address delegate, uint256 expiry) external {

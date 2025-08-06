@@ -312,6 +312,7 @@ contract ZkGuardianCompensationTest is MetaVesTControllerTestBase {
                 new BaseAllocation.Milestone[](0),
                 globalValues,
                 partyValues,
+                bytes32(0), // no secrets
                 block.timestamp + 3600
             );
         }
@@ -358,6 +359,7 @@ contract ZkGuardianCompensationTest is MetaVesTControllerTestBase {
                 new BaseAllocation.Milestone[](0),
                 globalValues,
                 partyValues,
+                bytes32(0), // no secrets
                 block.timestamp + 3600
             );
         }
