@@ -5,9 +5,9 @@ import "forge-std/Test.sol";
 import "../../src/MetaVesTController.sol";
 import "../../src/VestingAllocationFactory.sol";
 import "../../src/interfaces/zk-governance/IZkTokenV1.sol";
-import "./MetaVesTUtils.sol";
-import {BorgAuth} from "cybercorps-contracts/libs/auth.sol";
-import {CyberAgreementRegistry} from "cybercorps-contracts/CyberAgreementRegistry.sol";
+import {BorgAuth} from "cybercorps-contracts/src/libs/auth.sol";
+import {CyberAgreementRegistry} from "cybercorps-contracts/src/CyberAgreementRegistry.sol";
+import {CyberAgreementUtils} from "cybercorps-contracts/test/libs/CyberAgreementUtils.sol";
 
 contract MetaVesTControllerTestBase is Test {
 //    // zkSync Era Sepolia @ 5576300
@@ -31,6 +31,10 @@ contract MetaVesTControllerTestBase is Test {
     uint256 chadPrivateKey = 3;
     address chad = vm.addr(chadPrivateKey);
 
+    string agreementUri = "ipfs.io/ipfs/[cid]";
+    string[] globalFields;
+    string[] partyFields;
+
     BorgAuth auth;
     CyberAgreementRegistry registry;
 
@@ -47,43 +51,58 @@ contract MetaVesTControllerTestBase is Test {
         assertEq(zkToken.balanceOf(address(vestingAllocation)), 0, string(abi.encodePacked(assertName, ": vesting contract should not have any token (it mints on-demand)")));
     }
 
-    function _signAndCreateContract(
+    function _proposeAndSignDeal(
+        bytes32 templateId,
         address authority,
         address grantee,
         uint256 granteePrivateKey,
-        string memory agreementUri,
         BaseAllocation.Allocation memory allocation,
-        BaseAllocation.Milestone[] memory milestones
+        BaseAllocation.Milestone[] memory milestones,
+        string[] memory globalValues,
+        string[] memory partyValues,
+        uint256 expiry
     ) internal returns(bytes32) {
-        return _signAndCreateContract(
-            authority, grantee, granteePrivateKey, agreementUri, allocation, milestones,
+        return _proposeAndSignDeal(
+            templateId, authority, grantee, granteePrivateKey, allocation, milestones, globalValues, partyValues, expiry,
             "" // Not expecting revert
         );
     }
 
-    function _signAndCreateContract(
+    function _proposeAndSignDeal(
+        bytes32 templateId,
         address authority,
         address grantee,
         uint256 granteePrivateKey,
-        string memory agreementUri,
         BaseAllocation.Allocation memory allocation,
         BaseAllocation.Milestone[] memory milestones,
+        string[] memory globalValues,
+        string[] memory partyValues,
+        uint256 expiry,
         bytes memory expectRevertData
     ) internal returns(bytes32) {
         uint256 contractSalt = block.timestamp;
-        bytes32 expectedContractId = controller.computeContractId(contractSalt, agreementUri, grantee, grantee, allocation, milestones);
-        bytes memory signature = MetaVesTUtils.signAgreementTypedData(
+
+        address[] memory allParties = new address[](1);
+        allParties[0] = grantee;
+        bytes32 expectedContractId = keccak256(
+            abi.encode(
+                templateId,
+                contractSalt,
+                globalValues,
+                allParties
+            )
+        );
+
+        bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
             vm,
-            controller,
-            metavestController.SignedAgreementData({
-                id: expectedContractId,
-                agreementUri: agreementUri,
-                _metavestType: metavestController.metavestType.Vesting,
-                grantee: grantee,
-                recipient: grantee,
-                allocation: allocation,
-                milestones: milestones
-            }),
+            registry.DOMAIN_SEPARATOR(),
+            registry.SIGNATUREDATA_TYPEHASH(),
+            expectedContractId,
+            agreementUri,
+            globalFields,
+            partyFields,
+            globalValues,
+            partyValues,
             granteePrivateKey
         );
 
@@ -91,15 +110,18 @@ contract MetaVesTControllerTestBase is Test {
             vm.expectRevert(expectRevertData);
         }
         vm.prank(authority);
-        bytes32 contractId = controller.createSignedContract(
+        bytes32 contractId = controller.proposeAndSignDeal(
             contractSalt,
+            templateId,
             metavestController.metavestType.Vesting,
             grantee,
             grantee,
             allocation,
             milestones,
-            agreementUri,
-            signature
+            globalValues,
+            partyValues,
+            signature,
+            expiry
         );
 
         if (expectRevertData.length == 0) {

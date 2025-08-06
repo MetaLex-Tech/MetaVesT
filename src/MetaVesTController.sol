@@ -9,6 +9,7 @@
 pragma solidity ^0.8.24;
 
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+import {ICyberAgreementRegistry} from "cybercorps-contracts/src/interfaces/ICyberAgreementRegistry.sol";
 import "./BaseAllocation.sol";
 import "./RestrictedTokenAllocation.sol";
 import "./interfaces/IAllocationFactory.sol";
@@ -50,6 +51,7 @@ contract metavestController is SafeTransferLib {
 
     address public authority;
     address public dao;
+    address public registry;
     address public vestingFactory;
 //    address public tokenOptionFactory;
 //    address public restrictedTokenFactory;
@@ -83,7 +85,6 @@ contract metavestController is SafeTransferLib {
 
     struct SignedAgreementData {
         bytes32 id;
-        string agreementUri;
         metavestType _metavestType;
         address grantee;
         address recipient;
@@ -226,12 +227,14 @@ contract metavestController is SafeTransferLib {
     constructor(
         address _authority,
         address _dao,
+        address _registry,
         address _vestingFactory
 //        address _tokenOptionFactory,
 //        address _restrictedTokenFactory
     ) {
         if (_authority == address(0)) revert MetaVesTController_ZeroAddress();
         authority = _authority;
+        registry = _registry;
         vestingFactory = _vestingFactory;
 //        tokenOptionFactory = _tokenOptionFactory;
 //        restrictedTokenFactory = _restrictedTokenFactory;
@@ -303,39 +306,39 @@ contract metavestController is SafeTransferLib {
         emit MetaVesTController_ConditionUpdated(_condition, _functionSig);
     }
 
-    function createSignedContract(
+    function proposeAndSignDeal(
         uint256 salt,
+        bytes32 templateId,
         metavestType _metavestType,
         address grantee,
         address recipient,
         BaseAllocation.Allocation calldata allocation,
         BaseAllocation.Milestone[] calldata milestones,
-        string calldata agreementUri,
-        bytes calldata signature
+        string[] memory globalValues,
+        string[] memory partyValues,
+        bytes calldata signature,
+        uint256 expiry
     ) external onlyAuthority returns (bytes32) {
-        bytes32 contractId = computeContractId(salt, agreementUri, grantee, recipient, allocation, milestones);
+        address[] memory allParties = new address[](1);
+        allParties[0] = grantee;
+        string[][] memory allPartyValues = new string[][](1);
+        allPartyValues[0] = partyValues;
 
-        // Verify signature
-        if (!_verifySignature(
-            grantee,
-            SignedAgreementData({
-                id: contractId,
-                agreementUri: agreementUri,
-                _metavestType: _metavestType,
-                grantee: grantee,
-                recipient: recipient,
-                allocation: allocation,
-                milestones: milestones
-            }),
-            signature
-        )) {
-            revert MetaVesTController_SignatureVerificationFailed();
-        }
+        bytes32 agreementId = ICyberAgreementRegistry(registry).createContract(
+            templateId,
+            salt,
+            globalValues,
+            allParties,
+            allPartyValues,
+            bytes32(0), // TODO WIP
+            address(this),
+            expiry
+        );
 
-        agreements[contractId] = AgreementData({
+        // TODO revise needed
+        agreements[agreementId] = AgreementData({
             signedData: SignedAgreementData({
-                id: contractId,
-                agreementUri: agreementUri,
+                id: agreementId,
                 _metavestType: _metavestType,
                 grantee: grantee,
                 recipient: recipient,
@@ -344,8 +347,11 @@ contract metavestController is SafeTransferLib {
             }),
             pending: true
         });
-        emit MetaVesTController_ContractCreated(contractId, grantee, recipient, _metavestType, allocation, milestones);
-        return contractId;
+
+        ICyberAgreementRegistry(registry).signContractFor(grantee, agreementId, allPartyValues[0], signature, false, "");
+
+        emit MetaVesTController_ContractCreated(agreementId, grantee, recipient, _metavestType, allocation, milestones);
+        return agreementId;
     }
 
     function createMetavest(bytes32 contractId) external conditionCheck returns (address)
@@ -959,91 +965,91 @@ contract metavestController is SafeTransferLib {
             (delegation.expiry == 0 || delegation.expiry > block.timestamp);
     }
 
-    function _verifySignature(
-        address signer,
-        SignedAgreementData memory data,
-        bytes memory signature
-    ) internal view returns (bool) {
-        // Hash the data (AgreementData) according to EIP-712
-        bytes32 digest = _hashTypedDataV4(data);
-
-        // Recover the signer address
-        address recoveredSigner = digest.recover(signature);
-
-        // Check direct signature
-        if (recoveredSigner == signer) {
-            return true;
-        }
-
-        // Check delegation signature
-        Delegation storage delegation = delegations[signer];
-        if (delegation.delegate == recoveredSigner &&
-            (delegation.expiry == 0 || delegation.expiry > block.timestamp)) {
-            return true;
-        }
-
-        return false;
-    }
-
-    function _hashTypedDataV4(metavestController.SignedAgreementData memory data) internal view returns(bytes32) {
-        return keccak256(abi.encodePacked(
-            "\x19\x01",
-            DOMAIN_SEPARATOR,
-            keccak256(abi.encode(
-                SIGNED_AGREEMENT_DATA_TYPEHASH,
-                data.id,
-                keccak256(bytes(data.agreementUri)),
-                data._metavestType,
-                data.grantee,
-                data.recipient,
-                _hashAllocaiton(data.allocation),
-                _hashMilestones(data.milestones)
-            ))
-        ));
-    }
-
-    function _hashSignedAgreementData(metavestController.SignedAgreementData memory data) internal view returns (bytes32) {
-        return keccak256(abi.encode(
-            SIGNED_AGREEMENT_DATA_TYPEHASH,
-            data.id,
-            keccak256(bytes(data.agreementUri)),
-            data._metavestType,
-            data.grantee,
-            data.recipient,
-            _hashAllocaiton(data.allocation),
-            _hashMilestones(data.milestones)
-        ));
-    }
-
-    function _hashAllocaiton(BaseAllocation.Allocation memory allocation) internal view returns (bytes32) {
-        return keccak256(abi.encode(
-            ALLOCATION_TYPEHASH,
-            allocation.tokenContract,
-            allocation.tokenStreamTotal,
-            allocation.vestingCliffCredit,
-            allocation.unlockingCliffCredit,
-            allocation.vestingRate,
-            allocation.vestingStartTime,
-            allocation.unlockRate,
-            allocation.unlockStartTime
-        ));
-    }
-
-    function _hashMilestones(BaseAllocation.Milestone[] memory milestones) internal view returns (bytes32) {
-        bytes32[] memory hashes = new bytes32[](milestones.length);
-        for (uint256 i = 0; i < milestones.length; i++) {
-            hashes[i] = _hashMilestone(milestones[i]);
-        }
-        return keccak256(abi.encodePacked(hashes));
-    }
-
-    function _hashMilestone(BaseAllocation.Milestone memory milestone) internal view returns (bytes32) {
-        return keccak256(abi.encode(
-            MILESTONE_TYPEHASH,
-            milestone.milestoneAward,
-            milestone.unlockOnCompletion,
-            milestone.complete,
-            keccak256(abi.encodePacked(milestone.conditionContracts))
-        ));
-    }
+//    function _verifySignature(
+//        address signer,
+//        SignedAgreementData memory data,
+//        bytes memory signature
+//    ) internal view returns (bool) {
+//        // Hash the data (AgreementData) according to EIP-712
+//        bytes32 digest = _hashTypedDataV4(data);
+//
+//        // Recover the signer address
+//        address recoveredSigner = digest.recover(signature);
+//
+//        // Check direct signature
+//        if (recoveredSigner == signer) {
+//            return true;
+//        }
+//
+//        // Check delegation signature
+//        Delegation storage delegation = delegations[signer];
+//        if (delegation.delegate == recoveredSigner &&
+//            (delegation.expiry == 0 || delegation.expiry > block.timestamp)) {
+//            return true;
+//        }
+//
+//        return false;
+//    }
+//
+//    function _hashTypedDataV4(metavestController.SignedAgreementData memory data) internal view returns(bytes32) {
+//        return keccak256(abi.encodePacked(
+//            "\x19\x01",
+//            DOMAIN_SEPARATOR,
+//            keccak256(abi.encode(
+//                SIGNED_AGREEMENT_DATA_TYPEHASH,
+//                data.id,
+//                keccak256(bytes(data.agreementUri)),
+//                data._metavestType,
+//                data.grantee,
+//                data.recipient,
+//                _hashAllocaiton(data.allocation),
+//                _hashMilestones(data.milestones)
+//            ))
+//        ));
+//    }
+//
+//    function _hashSignedAgreementData(metavestController.SignedAgreementData memory data) internal view returns (bytes32) {
+//        return keccak256(abi.encode(
+//            SIGNED_AGREEMENT_DATA_TYPEHASH,
+//            data.id,
+//            keccak256(bytes(data.agreementUri)),
+//            data._metavestType,
+//            data.grantee,
+//            data.recipient,
+//            _hashAllocaiton(data.allocation),
+//            _hashMilestones(data.milestones)
+//        ));
+//    }
+//
+//    function _hashAllocaiton(BaseAllocation.Allocation memory allocation) internal view returns (bytes32) {
+//        return keccak256(abi.encode(
+//            ALLOCATION_TYPEHASH,
+//            allocation.tokenContract,
+//            allocation.tokenStreamTotal,
+//            allocation.vestingCliffCredit,
+//            allocation.unlockingCliffCredit,
+//            allocation.vestingRate,
+//            allocation.vestingStartTime,
+//            allocation.unlockRate,
+//            allocation.unlockStartTime
+//        ));
+//    }
+//
+//    function _hashMilestones(BaseAllocation.Milestone[] memory milestones) internal view returns (bytes32) {
+//        bytes32[] memory hashes = new bytes32[](milestones.length);
+//        for (uint256 i = 0; i < milestones.length; i++) {
+//            hashes[i] = _hashMilestone(milestones[i]);
+//        }
+//        return keccak256(abi.encodePacked(hashes));
+//    }
+//
+//    function _hashMilestone(BaseAllocation.Milestone memory milestone) internal view returns (bytes32) {
+//        return keccak256(abi.encode(
+//            MILESTONE_TYPEHASH,
+//            milestone.milestoneAward,
+//            milestone.unlockOnCompletion,
+//            milestone.complete,
+//            keccak256(abi.encodePacked(milestone.conditionContracts))
+//        ));
+//    }
 }
