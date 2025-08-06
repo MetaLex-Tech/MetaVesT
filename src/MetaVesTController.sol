@@ -111,8 +111,6 @@ contract metavestController is SafeTransferLib {
     /// @notice granteeId => granteeData
     mapping(bytes32 => DealData) public deals;
 
-    mapping(address => Delegation) public delegations;
-
     ///
     /// EVENTS
     ///
@@ -182,7 +180,6 @@ contract metavestController is SafeTransferLib {
     error MetaVesTController_StringTooLong();
     error MetaVesTController_TypeNotSupported(metavestType _type);
     error MetaVesTController_DealAlreadyFinalized();
-    error MetaVesTController_SignatureVerificationFailed();
 
     ///
     /// FUNCTIONS
@@ -929,144 +926,4 @@ contract metavestController is SafeTransferLib {
     function getDeal(bytes32 agreementId) public view returns (DealData memory) {
         return deals[agreementId];
     }
-
-    function setDelegation(address delegate, uint256 expiry) external {
-        if (delegate == address(0)) revert("Cannot delegate to zero address");
-        if (delegate == msg.sender) revert("Cannot delegate to self");
-        if (expiry != 0 && expiry <= block.timestamp) revert("Expiry must be in the future");
-
-        delegations[msg.sender] = Delegation({delegate: delegate, expiry: expiry});
-        emit MetaVesTController_DelegationSet(msg.sender, delegate, expiry);
-    }
-
-    /**
-     * @dev Revoke delegation for the caller
-     */
-    function revokeDelegation() external {
-        address delegate = delegations[msg.sender].delegate;
-        delete delegations[msg.sender];
-        emit MetaVesTController_DelegationRevoked(msg.sender, delegate);
-    }
-
-    /**
-     * @dev Get delegation info for a given address
-     * @param delegator The address to check for delegation
-     * @return delegate The delegate address
-     * @return expiry The expiry timestamp (0 if no expiry)
-     */
-    function getDelegation(address delegator) external view returns (address delegate, uint256 expiry) {
-        Delegation storage delegation = delegations[delegator];
-        return (delegation.delegate, delegation.expiry);
-    }
-
-    /**
-     * @dev Check if a delegation is valid (not expired)
-     * @param delegator The delegator address
-     * @return True if delegation exists and is not expired
-     */
-    function isValidDelegation(address delegator) external view returns (bool) {
-        Delegation storage delegation = delegations[delegator];
-        return delegation.delegate != address(0) &&
-            (delegation.expiry == 0 || delegation.expiry > block.timestamp);
-    }
-
-    /**
-     * @dev Check if an address is a valid delegate for a given delegator
-     * @param delegator The delegator address
-     * @param delegate The delegate address to check
-     * @return True if the delegate is valid and not expired
-     */
-    function isValidDelegate(address delegator, address delegate) external view returns (bool) {
-        Delegation storage delegation = delegations[delegator];
-        return delegation.delegate == delegate &&
-            (delegation.expiry == 0 || delegation.expiry > block.timestamp);
-    }
-
-//    function _verifySignature(
-//        address signer,
-//        SignedAgreementData memory data,
-//        bytes memory signature
-//    ) internal view returns (bool) {
-//        // Hash the data (AgreementData) according to EIP-712
-//        bytes32 digest = _hashTypedDataV4(data);
-//
-//        // Recover the signer address
-//        address recoveredSigner = digest.recover(signature);
-//
-//        // Check direct signature
-//        if (recoveredSigner == signer) {
-//            return true;
-//        }
-//
-//        // Check delegation signature
-//        Delegation storage delegation = delegations[signer];
-//        if (delegation.delegate == recoveredSigner &&
-//            (delegation.expiry == 0 || delegation.expiry > block.timestamp)) {
-//            return true;
-//        }
-//
-//        return false;
-//    }
-//
-//    function _hashTypedDataV4(metavestController.SignedAgreementData memory data) internal view returns(bytes32) {
-//        return keccak256(abi.encodePacked(
-//            "\x19\x01",
-//            DOMAIN_SEPARATOR,
-//            keccak256(abi.encode(
-//                SIGNED_AGREEMENT_DATA_TYPEHASH,
-//                data.id,
-//                keccak256(bytes(data.agreementUri)),
-//                data._metavestType,
-//                data.grantee,
-//                data.recipient,
-//                _hashAllocaiton(data.allocation),
-//                _hashMilestones(data.milestones)
-//            ))
-//        ));
-//    }
-//
-//    function _hashSignedAgreementData(metavestController.SignedAgreementData memory data) internal view returns (bytes32) {
-//        return keccak256(abi.encode(
-//            SIGNED_AGREEMENT_DATA_TYPEHASH,
-//            data.id,
-//            keccak256(bytes(data.agreementUri)),
-//            data._metavestType,
-//            data.grantee,
-//            data.recipient,
-//            _hashAllocaiton(data.allocation),
-//            _hashMilestones(data.milestones)
-//        ));
-//    }
-//
-//    function _hashAllocaiton(BaseAllocation.Allocation memory allocation) internal view returns (bytes32) {
-//        return keccak256(abi.encode(
-//            ALLOCATION_TYPEHASH,
-//            allocation.tokenContract,
-//            allocation.tokenStreamTotal,
-//            allocation.vestingCliffCredit,
-//            allocation.unlockingCliffCredit,
-//            allocation.vestingRate,
-//            allocation.vestingStartTime,
-//            allocation.unlockRate,
-//            allocation.unlockStartTime
-//        ));
-//    }
-//
-//    function _hashMilestones(BaseAllocation.Milestone[] memory milestones) internal view returns (bytes32) {
-//        bytes32[] memory hashes = new bytes32[](milestones.length);
-//        for (uint256 i = 0; i < milestones.length; i++) {
-//            hashes[i] = _hashMilestone(milestones[i]);
-//        }
-//        return keccak256(abi.encodePacked(hashes));
-//    }
-//
-//    function _hashMilestone(BaseAllocation.Milestone memory milestone) internal view returns (bytes32) {
-//        return keccak256(abi.encode(
-//            MILESTONE_TYPEHASH,
-//            milestone.milestoneAward,
-//            milestone.unlockOnCompletion,
-//            milestone.complete,
-//            keccak256(abi.encodePacked(milestone.conditionContracts))
-//        ));
-//    }
 }

@@ -58,13 +58,11 @@ contract MetaVesTControllerTestBase is Test {
         uint256 granteePrivateKey,
         BaseAllocation.Allocation memory allocation,
         BaseAllocation.Milestone[] memory milestones,
-        string[] memory globalValues,
-        string[] memory partyValues,
-        bytes32 secretHash,
+        string memory partyName,
         uint256 expiry
     ) internal returns(bytes32) {
         return _proposeAndSignDeal(
-            templateId, authority, grantee, granteePrivateKey, allocation, milestones, globalValues, partyValues, secretHash, expiry,
+            templateId, authority, grantee, granteePrivateKey, allocation, milestones, partyName, expiry,
             "" // Not expecting revert
         );
     }
@@ -76,13 +74,33 @@ contract MetaVesTControllerTestBase is Test {
         uint256 granteePrivateKey,
         BaseAllocation.Allocation memory allocation,
         BaseAllocation.Milestone[] memory milestones,
-        string[] memory globalValues,
-        string[] memory partyValues,
-        bytes32 secretHash,
+        string memory partyName,
         uint256 expiry,
         bytes memory expectRevertData
     ) internal returns(bytes32) {
         uint256 contractSalt = block.timestamp;
+
+        string[] memory globalValues = new string[](13);
+        globalValues[0] = "test governingJurisdiction"; // TODO do we need this?
+        globalValues[1] = "test disputeResolution"; // TODO do we need this?
+        globalValues[2] = "0"; // metavestType: Vesting
+        globalValues[3] = vm.toString(grantee); // grantee
+        globalValues[4] = vm.toString(grantee); // recipient
+        globalValues[5] = vm.toString(allocation.tokenContract); // tokenContract
+        globalValues[6] = vm.toString(allocation.tokenStreamTotal); //tokenStreamTotal
+        globalValues[7] = vm.toString(allocation.vestingCliffCredit); // vestingCliffCredit
+        globalValues[8] = vm.toString(allocation.unlockingCliffCredit); // unlockingCliffCredit
+        globalValues[9] = vm.toString(allocation.vestingRate); // vestingRate
+        globalValues[10] = vm.toString(allocation.vestingStartTime); // vestingStartTime
+        globalValues[11] = vm.toString(allocation.unlockRate); // unlockRate
+        globalValues[12] = vm.toString(allocation.unlockStartTime); // unlockStartTime
+
+        string[] memory partyValues = new string[](5);
+        partyValues[0] = partyName;
+        partyValues[1] = vm.toString(grantee); // evmAddress
+        partyValues[2] = "email@company.com"; // TODO do we need this?
+        partyValues[3] = "individual"; // TODO do we need this?
+        partyValues[4] = "test granteeJurisdiction"; // TODO do we need this?
 
         address[] memory allParties = new address[](1);
         allParties[0] = grantee;
@@ -123,7 +141,7 @@ contract MetaVesTControllerTestBase is Test {
             globalValues,
             partyValues,
             signature,
-            secretHash,
+            bytes32(0), // no secrets
             expiry
         );
 
