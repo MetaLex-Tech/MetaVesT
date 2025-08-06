@@ -7,6 +7,8 @@ import "../src/interfaces/zk-governance/IZkCappedMinterV2.sol";
 import "../src/interfaces/zk-governance/IZkTokenV1.sol";
 import "./lib/MetaVesTUtils.sol";
 import "./lib/MetaVesTControllerTestBase.sol";
+import {CyberAgreementRegistry} from "cybercorps-contracts/CyberAgreementRegistry.sol";
+import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 
 // Test by forge test --zksync --via-ir
 contract ZkGuardianCompensationTest is MetaVesTControllerTestBase {
@@ -21,6 +23,17 @@ contract ZkGuardianCompensationTest is MetaVesTControllerTestBase {
         vm.warp(cappedMinterStartTime - 7 days);
 
         vm.startPrank(deployer);
+
+        // Deploy CyberAgreementRegistry
+        // TODO who should be the owner of auth?
+        auth = new BorgAuth{salt: salt}(deployer);
+        registry = CyberAgreementRegistry(address(new ERC1967Proxy{salt: salt}(
+            address(new CyberAgreementRegistry{salt: salt}()),
+            abi.encodeWithSelector(
+                CyberAgreementRegistry.initialize.selector,
+                address(auth)
+            )
+        )));
 
         // Deploy MetaVesT controller
 

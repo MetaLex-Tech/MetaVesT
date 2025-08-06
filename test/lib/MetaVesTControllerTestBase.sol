@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-pragma solidity 0.8.24;
+pragma solidity ^0.8.24;
 
 import "forge-std/Test.sol";
 import "../../src/MetaVesTController.sol";
 import "../../src/VestingAllocationFactory.sol";
 import "../../src/interfaces/zk-governance/IZkTokenV1.sol";
 import "./MetaVesTUtils.sol";
+import {BorgAuth} from "cybercorps-contracts/libs/auth.sol";
+import {CyberAgreementRegistry} from "cybercorps-contracts/CyberAgreementRegistry.sol";
 
 contract MetaVesTControllerTestBase is Test {
 //    // zkSync Era Sepolia @ 5576300
@@ -28,6 +30,9 @@ contract MetaVesTControllerTestBase is Test {
     address bob = vm.addr(bobPrivateKey);
     uint256 chadPrivateKey = 3;
     address chad = vm.addr(chadPrivateKey);
+
+    BorgAuth auth;
+    CyberAgreementRegistry registry;
 
     VestingAllocationFactory vestingAllocationFactory;
 

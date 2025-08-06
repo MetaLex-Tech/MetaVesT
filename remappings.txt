@@ -9,3 +9,4 @@ openzeppelin-contracts/=lib/zk-governance/l1-contracts/lib/openzeppelin-contract
 @openzeppelin/contracts/=lib/zk-governance/l2-contracts/lib/openzeppelin-contracts/contracts/
 solmate/=lib/zk-governance/l2-contracts/lib/flexible-voting/lib/solmate/src/
 zk-governance/=lib/zk-governance/
+cybercorps-contracts/=lib/cybercorps-contracts/src/

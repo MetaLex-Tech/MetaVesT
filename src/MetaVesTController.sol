@@ -6,7 +6,7 @@
                                      *************************************
                                                                         */
 
-pragma solidity 0.8.24;
+pragma solidity ^0.8.24;
 
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "./BaseAllocation.sol";

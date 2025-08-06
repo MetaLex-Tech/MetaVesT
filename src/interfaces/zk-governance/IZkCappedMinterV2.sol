@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.24;
+pragma solidity ^0.8.24;
 
 interface IZkCappedMinterV2 {
       error ZkCappedMinterV2__CapExceeded(address minter, uint256 amount);
