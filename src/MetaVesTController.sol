@@ -312,8 +312,8 @@ contract metavestController is SafeTransferLib {
     }
 
     function proposeAndSignDeal(
-        uint256 salt,
         bytes32 templateId,
+        uint256 salt,
         metavestType _metavestType,
         address grantee,
         address recipient,

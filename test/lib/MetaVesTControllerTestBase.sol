@@ -5,6 +5,7 @@ import "forge-std/Test.sol";
 import "../../src/MetaVesTController.sol";
 import "../../src/VestingAllocationFactory.sol";
 import "../../src/interfaces/zk-governance/IZkTokenV1.sol";
+import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {BorgAuth} from "cybercorps-contracts/src/libs/auth.sol";
 import {CyberAgreementRegistry} from "cybercorps-contracts/src/CyberAgreementRegistry.sol";
 import {CyberAgreementUtils} from "cybercorps-contracts/test/libs/CyberAgreementUtils.sol";
@@ -31,6 +32,9 @@ contract MetaVesTControllerTestBase is Test {
     uint256 chadPrivateKey = 3;
     address chad = vm.addr(chadPrivateKey);
 
+    bytes32 salt = keccak256("MetaVesTControllerTestBase");
+
+    bytes32 templateId = bytes32(uint256(123));
     string agreementUri = "ipfs.io/ipfs/[cid]";
     string[] globalFields;
     string[] partyFields;
@@ -41,6 +45,54 @@ contract MetaVesTControllerTestBase is Test {
     VestingAllocationFactory vestingAllocationFactory;
 
     metavestController controller;
+
+    function setUp() public virtual {
+        vm.startPrank(deployer);
+
+        // Deploy CyberAgreementRegistry and prepare templates
+
+        // TODO who should be the owner of auth?
+        auth = new BorgAuth{salt: salt}(deployer);
+        registry = CyberAgreementRegistry(address(new ERC1967Proxy{salt: salt}(
+            address(new CyberAgreementRegistry{salt: salt}()),
+            abi.encodeWithSelector(
+                CyberAgreementRegistry.initialize.selector,
+                address(auth)
+            )
+        )));
+
+        globalFields = new string[](13);
+        globalFields[0] = "governingJurisdiction"; // TODO do we need this?
+        globalFields[1] = "disputeResolution"; // TODO do we need this?
+        globalFields[2] = "metavestType";
+        globalFields[3] = "grantee";
+        globalFields[4] = "recipient";
+        globalFields[5] = "tokenContract";
+        globalFields[6] = "tokenStreamTotal";
+        globalFields[7] = "vestingCliffCredit";
+        globalFields[8] = "unlockingCliffCredit";
+        globalFields[9] = "vestingRate";
+        globalFields[10] = "vestingStartTime";
+        globalFields[11] = "unlockRate";
+        globalFields[12] = "unlockStartTime";
+
+        partyFields = new string[](5);
+        partyFields[0] = "name";
+        partyFields[1] = "evmAddress";
+        partyFields[2] = "contactDetails"; // TODO do we need this?
+        partyFields[3] = "granteeType"; // TODO do we need this?
+        partyFields[4] = "granteeJurisdiction"; // TODO do we need this?
+
+        registry.createTemplate(
+            templateId,
+            "ZkSyncGuardianCompensation",
+            agreementUri,
+            globalFields,
+            partyFields
+        );
+
+        vm.stopPrank();
+    }
 
     function _granteeWithdrawAndAsserts(VestingAllocation vestingAllocation, uint256 amount, string memory assertName) internal {
         address grantee = vestingAllocation.grantee();
@@ -53,6 +105,7 @@ contract MetaVesTControllerTestBase is Test {
 
     function _proposeAndSignDeal(
         bytes32 templateId,
+        uint256 agreementSalt,
         address authority,
         address grantee,
         uint256 granteePrivateKey,
@@ -62,13 +115,14 @@ contract MetaVesTControllerTestBase is Test {
         uint256 expiry
     ) internal returns(bytes32) {
         return _proposeAndSignDeal(
-            templateId, authority, grantee, granteePrivateKey, allocation, milestones, partyName, expiry,
+            templateId, agreementSalt, authority, grantee, granteePrivateKey, allocation, milestones, partyName, expiry,
             "" // Not expecting revert
         );
     }
 
     function _proposeAndSignDeal(
         bytes32 templateId,
+        uint256 agreementSalt,
         address authority,
         address grantee,
         uint256 granteePrivateKey,
@@ -78,8 +132,6 @@ contract MetaVesTControllerTestBase is Test {
         uint256 expiry,
         bytes memory expectRevertData
     ) internal returns(bytes32) {
-        uint256 contractSalt = block.timestamp;
-
         string[] memory globalValues = new string[](13);
         globalValues[0] = "test governingJurisdiction"; // TODO do we need this?
         globalValues[1] = "test disputeResolution"; // TODO do we need this?
@@ -95,6 +147,8 @@ contract MetaVesTControllerTestBase is Test {
         globalValues[11] = vm.toString(allocation.unlockRate); // unlockRate
         globalValues[12] = vm.toString(allocation.unlockStartTime); // unlockStartTime
 
+        // TODO what to do with milestones, which could be of dynamic lengths
+
         string[] memory partyValues = new string[](5);
         partyValues[0] = partyName;
         partyValues[1] = vm.toString(grantee); // evmAddress
@@ -107,7 +161,7 @@ contract MetaVesTControllerTestBase is Test {
         bytes32 expectedContractId = keccak256(
             abi.encode(
                 templateId,
-                contractSalt,
+                agreementSalt,
                 globalValues,
                 allParties
             )
@@ -131,8 +185,8 @@ contract MetaVesTControllerTestBase is Test {
         }
         vm.prank(authority);
         bytes32 contractId = controller.proposeAndSignDeal(
-            contractSalt,
             templateId,
+            agreementSalt,
             metavestController.metavestType.Vesting,
             grantee,
             grantee,

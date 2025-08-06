@@ -7,63 +7,21 @@ import "../src/interfaces/zk-governance/IZkCappedMinterV2.sol";
 import "../src/interfaces/zk-governance/IZkTokenV1.sol";
 import "./lib/MetaVesTControllerTestBase.sol";
 import {CyberAgreementRegistry} from "cybercorps-contracts/src/CyberAgreementRegistry.sol";
-import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 
 // Test by forge test --zksync --via-ir
 contract ZkGuardianCompensationTest is MetaVesTControllerTestBase {
     // Parameters
-    bytes32 templateId = bytes32(uint256(123));
-    bytes32 salt = keccak256("MetaLexZkSyncTest");
     uint256 cap = 1e6 ether; // 1M ZK
     uint48 cappedMinterStartTime = 1756684800; // 2025/9/1 UTC
     uint48 cappedMinterExpirationTime = cappedMinterStartTime + 365 days * 2; // Expect to vest over an year with a margin of an extra year for withdrawal
 
-    function setUp() public {
+    function setUp() public override {
         // Assume deployment 7 days before the vesting starts
         vm.warp(cappedMinterStartTime - 7 days);
 
+        MetaVesTControllerTestBase.setUp();
+
         vm.startPrank(deployer);
-
-        // Deploy CyberAgreementRegistry and prepare templates
-
-        // TODO who should be the owner of auth?
-        auth = new BorgAuth{salt: salt}(deployer);
-        registry = CyberAgreementRegistry(address(new ERC1967Proxy{salt: salt}(
-            address(new CyberAgreementRegistry{salt: salt}()),
-            abi.encodeWithSelector(
-                CyberAgreementRegistry.initialize.selector,
-                address(auth)
-            )
-        )));
-
-        globalFields = new string[](13);
-        globalFields[0] = "governingJurisdiction"; // TODO do we need this?
-        globalFields[1] = "disputeResolution"; // TODO do we need this?
-        globalFields[2] = "metavestType";
-        globalFields[3] = "grantee";
-        globalFields[4] = "recipient";
-        globalFields[5] = "tokenContract";
-        globalFields[6] = "tokenStreamTotal";
-        globalFields[7] = "vestingCliffCredit";
-        globalFields[8] = "unlockingCliffCredit";
-        globalFields[9] = "vestingRate";
-        globalFields[10] = "vestingStartTime";
-        globalFields[11] = "unlockRate";
-        globalFields[12] = "unlockStartTime";
-        partyFields = new string[](5);
-        partyFields[0] = "name";
-        partyFields[1] = "evmAddress";
-        partyFields[2] = "contactDetails"; // TODO do we need this?
-        partyFields[3] = "granteeType"; // TODO do we need this?
-        partyFields[4] = "granteeJurisdiction"; // TODO do we need this?
-
-        registry.createTemplate(
-            templateId,
-            "ZkSyncGuardianCompensation",
-            agreementUri,
-            globalFields,
-            partyFields
-        );
 
         // Deploy MetaVesT controller
 
@@ -148,6 +106,7 @@ contract ZkGuardianCompensationTest is MetaVesTControllerTestBase {
         // Add new grantee for admin/tooling compensation
         bytes32 contractIdChad = _proposeAndSignDeal(
             templateId,
+            block.timestamp, // salt
             guardianSafe,
             chad,
             chadPrivateKey,
@@ -174,6 +133,7 @@ contract ZkGuardianCompensationTest is MetaVesTControllerTestBase {
         // Non Guardian SAFE should not be able to accept agreement and create contract
         _proposeAndSignDeal(
             templateId,
+            block.timestamp, // salt
             deployer, // Not authority
             alice,
             alicePrivateKey,
@@ -198,6 +158,7 @@ contract ZkGuardianCompensationTest is MetaVesTControllerTestBase {
         // Register Alice with someone else's signature should fail
         _proposeAndSignDeal(
             templateId,
+            block.timestamp, // salt
             guardianSafe,
             alice,
             bobPrivateKey, // Use someone else to sign
@@ -227,6 +188,7 @@ contract ZkGuardianCompensationTest is MetaVesTControllerTestBase {
         // Bob should be able to sign for Alice now
         bytes32 agreementId = _proposeAndSignDeal(
             templateId,
+            block.timestamp, // salt
             guardianSafe,
             alice,
             bobPrivateKey, // Use Bob to sign
@@ -254,6 +216,7 @@ contract ZkGuardianCompensationTest is MetaVesTControllerTestBase {
         assertFalse(registry.isValidDelegate(alice, bob), "Bob should no longer be Alice's delegate");
         _proposeAndSignDeal(
             templateId,
+            block.timestamp, // salt
             guardianSafe,
             alice,
             bobPrivateKey, // Use Bob to sign
@@ -279,6 +242,7 @@ contract ZkGuardianCompensationTest is MetaVesTControllerTestBase {
 
         bytes32 contractIdAlice = _proposeAndSignDeal(
             templateId,
+            block.timestamp, // salt
             guardianSafe,
             alice,
             alicePrivateKey,
@@ -300,6 +264,7 @@ contract ZkGuardianCompensationTest is MetaVesTControllerTestBase {
 
         bytes32 contractIdBob = _proposeAndSignDeal(
             templateId,
+            block.timestamp, // salt
             guardianSafe,
             bob,
             bobPrivateKey,

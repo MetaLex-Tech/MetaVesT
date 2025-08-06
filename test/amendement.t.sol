@@ -17,14 +17,17 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
     address public dao = guardianSafe;
     address public grantee = alice;
 
-    bytes32 salt = keccak256("MetaVestControllerTest");
     uint256 cap = 2000 ether;
     uint48 cappedMinterStartTime = uint48(block.timestamp); // Minter start now
     uint48 cappedMinterExpirationTime = uint48(cappedMinterStartTime + 1600); // Minter expired 1600 seconds after start
 
     address public vestingAllocation;
 
-    function setUp() public {
+    uint256 agreementSaltCounter = 0;
+
+    function setUp() public override {
+        MetaVesTControllerTestBase.setUp();
+        
         vm.startPrank(deployer);
 
         // Deploy MetaVesT controller
@@ -34,6 +37,7 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
         controller = new metavestController{salt: salt}(
             guardianSafe,
             guardianSafe,
+            address(registry),
             address(vestingAllocationFactory)
         );
 
@@ -360,11 +364,12 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
         });
 
         // Guardians to sign agreements and register on MetaVesTController
-        bytes32 contractIdAlice = _signAndCreateContract(
+        bytes32 contractIdAlice = _proposeAndSignDeal(
+            templateId,
+            agreementSaltCounter++,
             guardianSafe,
             alice, // = grantee
             alicePrivateKey,
-            "ipfs.io/ipfs/[cid]",
             BaseAllocation.Allocation({
                 tokenContract: address(zkToken),
                 tokenStreamTotal: 1000 ether,
@@ -375,7 +380,9 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
                 unlockRate: 10 ether,
                 unlockStartTime: uint48(block.timestamp)
             }),
-            milestones
+            milestones,
+            "Alice",
+            cappedMinterExpirationTime // Same expiry as the minter so grantee can defer vesting contract creation as much as possible
         );
 
         // TPP to review agreements and on-chain parameters, then approve by granting our ZkCappedMinter permissions
