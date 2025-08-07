@@ -122,7 +122,7 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
 
         vm.startPrank(grantee);
         //log the current withdrawable
-        console.log(TokenOptionAllocation(mockAllocation2).getAmountWithdrawable());
+        console.log(VestingAllocation(mockAllocation2).getAmountWithdrawable());
 
         controller.voteOnMetavestAmendment(mockAllocation2, "testSet", msgSig, true);
 

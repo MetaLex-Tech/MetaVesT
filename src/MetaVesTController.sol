@@ -378,8 +378,7 @@ contract metavestController is SafeTransferLib {
         address newMetavest;
         if(deal._metavestType == metavestType.Vesting)
         {
-            // TODO WIP: must support recipient
-            newMetavest = createVestingAllocation(deal.grantee, deal.allocation, deal.milestones);
+            newMetavest = createVestingAllocation(deal.grantee, deal.recipient, deal.allocation, deal.milestones);
         }
         else if(deal._metavestType == metavestType.TokenOption)
         {
@@ -411,11 +410,12 @@ contract metavestController is SafeTransferLib {
 
     function validateInputParameters(
         address _grantee,
+        address _recipient,
         address _paymentToken,
         uint256 _exercisePrice,
         VestingAllocation.Allocation memory _allocation
     ) internal pure {
-        if (_grantee == address(0) || _allocation.tokenContract == address(0) || _paymentToken == address(0) || _exercisePrice == 0)
+        if (_grantee == address(0) || _recipient == address(0) || _allocation.tokenContract == address(0) || _paymentToken == address(0) || _exercisePrice == 0)
             revert MetaVesTController_ZeroAddress();
     }
 
@@ -488,9 +488,9 @@ contract metavestController is SafeTransferLib {
 //        }
 
 
-    function createVestingAllocation(address _grantee, VestingAllocation.Allocation memory _allocation, VestingAllocation.Milestone[] memory _milestones) internal returns (address){
+    function createVestingAllocation(address _grantee, address _recipient, VestingAllocation.Allocation memory _allocation, VestingAllocation.Milestone[] memory _milestones) internal returns (address){
         //hard code values not to trigger the failure for the 2 parameters that don't matter for this type of allocation
-        validateInputParameters(_grantee, address(this), 1, _allocation);
+        validateInputParameters(_grantee, _recipient, address(this), 1, _allocation);
         validateAllocation(_allocation);
         uint256 _milestoneTotal = validateAndCalculateMilestones(_milestones);
 
@@ -501,6 +501,7 @@ contract metavestController is SafeTransferLib {
         address vestingAllocation = IAllocationFactory(vestingFactory).createAllocation(
             IAllocationFactory.AllocationType.Vesting,
             _grantee,
+            _recipient,
             address(this),
             _allocation,
             _milestones,

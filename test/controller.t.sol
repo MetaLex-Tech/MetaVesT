@@ -940,10 +940,10 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
 //    function testConfirmingMilestoneRestrictedTokenAllocation() public {
 //        address vestingAllocation = createDummyRestrictedTokenAward();
 //        uint256 snapshot = token.balanceOf(authority);
-//        RestrictedTokenAward(vestingAllocation).confirmMilestone(0);
+//        VestingAllocation(vestingAllocation).confirmMilestone(0);
 //        vm.warp(block.timestamp + 50 seconds);
 //        vm.startPrank(grantee);
-//        RestrictedTokenAward(vestingAllocation).withdraw(VestingAllocation(vestingAllocation).getAmountWithdrawable());
+//        VestingAllocation(vestingAllocation).withdraw(VestingAllocation(vestingAllocation).getAmountWithdrawable());
 //        vm.stopPrank();
 //    }
 //
@@ -1098,7 +1098,7 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
         address vestingAllocation = createDummyVestingAllocation();
         vm.warp(block.timestamp + 15 seconds);
         vm.startPrank(grantee);
-        RestrictedTokenAward(vestingAllocation).withdraw(RestrictedTokenAward(vestingAllocation).getAmountWithdrawable());
+        VestingAllocation(vestingAllocation).withdraw(VestingAllocation(vestingAllocation).getAmountWithdrawable());
         vm.stopPrank();
         //create call data to propose setting vesting to 0
         bytes4 msgSig = bytes4(keccak256("updateMetavestVestingRate(address,uint160)"));
@@ -1122,7 +1122,7 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
         address vestingAllocation = createDummyVestingAllocation();
         vm.warp(block.timestamp + 5 seconds);
         vm.startPrank(grantee);
-        RestrictedTokenAward(vestingAllocation).withdraw(RestrictedTokenAward(vestingAllocation).getAmountWithdrawable());
+        VestingAllocation(vestingAllocation).withdraw(VestingAllocation(vestingAllocation).getAmountWithdrawable());
         vm.stopPrank();
         //create call data to propose setting vesting to 0
         bytes4 msgSig = bytes4(keccak256("updateMetavestVestingRate(address,uint160)"));
@@ -1142,7 +1142,7 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
         vm.stopPrank();
         vm.warp(block.timestamp + 155 seconds);
         vm.startPrank(grantee);
-        RestrictedTokenAward(vestingAllocation).withdraw(RestrictedTokenAward(vestingAllocation).getAmountWithdrawable());
+        VestingAllocation(vestingAllocation).withdraw(VestingAllocation(vestingAllocation).getAmountWithdrawable());
         vm.stopPrank();
     }
 
@@ -1150,7 +1150,7 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
         address vestingAllocation = createDummyVestingAllocation();
         vm.warp(block.timestamp + 5 seconds);
         vm.startPrank(grantee);
-        RestrictedTokenAward(vestingAllocation).withdraw(RestrictedTokenAward(vestingAllocation).getAmountWithdrawable());
+        VestingAllocation(vestingAllocation).withdraw(VestingAllocation(vestingAllocation).getAmountWithdrawable());
         vm.stopPrank();
         //create call data to propose setting vesting to 0
         bytes4 msgSig = bytes4(keccak256("updateMetavestVestingRate(address,uint160)"));
@@ -1170,7 +1170,7 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
         vm.stopPrank();
         vm.warp(block.timestamp + 155 seconds);
         vm.startPrank(grantee);
-        RestrictedTokenAward(vestingAllocation).withdraw(RestrictedTokenAward(vestingAllocation).getAmountWithdrawable());
+        VestingAllocation(vestingAllocation).withdraw(VestingAllocation(vestingAllocation).getAmountWithdrawable());
         vm.stopPrank();
     }
 

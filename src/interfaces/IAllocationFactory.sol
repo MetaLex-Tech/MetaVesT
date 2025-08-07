@@ -14,6 +14,7 @@ interface IAllocationFactory {
     function createAllocation(
         AllocationType _allocationType,
         address _grantee,
+        address _recipient,
         address _controller,
         VestingAllocation.Allocation memory _allocation,
         VestingAllocation.Milestone[] memory _milestones,
