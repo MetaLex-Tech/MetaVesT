@@ -913,6 +913,18 @@ contract metavestController is SafeTransferLib {
         emit MetaVesTController_ZkCappedMinterUpdated(zkCappedMinter);
     }
 
+    function pauseZkCappedMinter() external onlyAuthority {
+        IZkCappedMinterV2(zkCappedMinter).pause();
+    }
+
+    function unpauseZkCappedMinter() external onlyAuthority {
+        IZkCappedMinterV2(zkCappedMinter).unpause();
+    }
+
+    function closeZkCappedMinter() external onlyAuthority {
+        IZkCappedMinterV2(zkCappedMinter).close();
+    }
+
     function computeContractId(
         uint256 salt,
         string memory agreementUri,

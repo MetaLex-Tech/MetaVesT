@@ -1505,4 +1505,56 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
             abi.encodeWithSelector(CyberAgreementRegistry.SignatureVerificationFailed.selector) // Expected revert
         );
     }
+
+    function test_TogglePauseMinting() public {
+        assertFalse(zkCappedMinter.paused(), "minter should not be paused yet");
+
+        // Authority should be able to pause minting through controller
+        vm.prank(authority);
+        controller.pauseZkCappedMinter();
+        assertTrue(zkCappedMinter.paused(), "minter should be paused now");
+
+        vm.prank(authority);
+        controller.unpauseZkCappedMinter();
+        assertFalse(zkCappedMinter.paused(), "minter should be unpaused now");
+    }
+
+    function test_RevertIf_PauseMintingNonGuardianSafe() public {
+        // Non-authority should not be able to pause minting through controller
+        vm.expectRevert(abi.encodeWithSelector(metavestController.MetaVesTController_OnlyAuthority.selector));
+        controller.pauseZkCappedMinter();
+
+        // Non-controller should not be able to pause minting directly
+        vm.expectRevert(abi.encodePacked(
+            "AccessControl: account ",
+            Strings.toHexString(address(this)),
+            " is missing role ",
+            Strings.toHexString(uint256(zkCappedMinter.PAUSER_ROLE()), 32)
+        ));
+        zkCappedMinter.pause();
+    }
+
+    function test_CloseMinting() public {
+        assertFalse(zkCappedMinter.closed(), "minter should not be closed yet");
+
+        // Authority should be able to close minting through controller
+        vm.prank(authority);
+        controller.closeZkCappedMinter();
+        assertTrue(zkCappedMinter.closed(), "minter should be closed now");
+    }
+
+    function test_RevertIf_CloseMintingNonGuardianSafe() public {
+        // Non-authority should not be able to close minting through controller
+        vm.expectRevert(abi.encodeWithSelector(metavestController.MetaVesTController_OnlyAuthority.selector));
+        controller.closeZkCappedMinter();
+
+        // Non-controller should not be able to close minting directly
+        vm.expectRevert(abi.encodePacked(
+            "AccessControl: account ",
+            Strings.toHexString(address(this)),
+            " is missing role ",
+            Strings.toHexString(uint256(zkCappedMinter.DEFAULT_ADMIN_ROLE()), 32)
+        ));
+        zkCappedMinter.close();
+    }
 }

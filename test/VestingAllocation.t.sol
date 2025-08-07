@@ -2,24 +2,21 @@
 pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
-//import {ERC20} from "openzeppelin-contracts/contracts/token/ERC20/ERC20.sol";
 import {ZkCappedMinterV2, IMintable} from "zk-governance/l2-contracts/src/ZkCappedMinterV2.sol";
 import {ZkTokenV1} from "zk-governance/l2-contracts/src/ZkTokenV1.sol";
 import {BaseAllocation} from "../src/BaseAllocation.sol";
 import {VestingAllocation} from "../src/VestingAllocation.sol";
+import {metavestController} from "../src/MetaVesTController.sol";
 
-//contract TestToken is ERC20 {
-//    uint8 _decimals;
-//
-//    constructor(uint256 initialSupply, uint8 __decimals) ERC20("Test Token", "TestUSDC") {
-//        _decimals = __decimals;
-//        _mint(msg.sender, initialSupply);
-//    }
-//
-//    function decimals() public view override returns (uint8) {
-//        return _decimals;
-//    }
-//}
+contract MockMetaVesTController {
+    address public authority;
+
+    constructor(
+        address _authority
+    ) {
+        authority = _authority;
+    }
+}
 
 contract VestingAllocationTest is Test {
 
@@ -29,11 +26,14 @@ contract VestingAllocationTest is Test {
 
     ZkTokenV1 zkToken;
 
+    MockMetaVesTController mockController;
     VestingAllocation vestingAllocation;
 
     function setUp() public {
         zkToken = new ZkTokenV1();
         zkToken.initialize(address(this), address(this), 0 ether);
+
+        mockController = new MockMetaVesTController(address(this));
 
         BaseAllocation.Milestone[] memory milestones = new BaseAllocation.Milestone[](1);
         milestones[0] = BaseAllocation.Milestone({
@@ -46,7 +46,7 @@ contract VestingAllocationTest is Test {
         vestingAllocation = new VestingAllocation(
             grantee,
             recipient,
-            address(this),
+            address(mockController),
             BaseAllocation.Allocation({
                 tokenContract: address(zkToken),
                 tokenStreamTotal: 1000 ether,
@@ -78,15 +78,16 @@ contract VestingAllocationTest is Test {
             zkCappedMinter.MINTER_ROLE(),
             address(vestingAllocation)
         );
+        vm.prank(address(mockController));
         vestingAllocation.setZkCappedMinterAddress(address(zkCappedMinter));
     }
 
-    function test_metadata() public {
+    function test_Metadata() public {
         assertEq(vestingAllocation.grantee(), grantee, "Unexpected grantee");
         assertEq(vestingAllocation.recipient(), recipient, "Unexpected recipient");
     }
 
-    function test_withdraw() public {
+    function test_Withdraw() public {
         // Should withdraw to recipient by default
         uint256 balanceBefore = zkToken.balanceOf(recipient);
 
@@ -112,8 +113,23 @@ contract VestingAllocationTest is Test {
         assertEq(zkToken.balanceOf(newRecipient), balanceBefore + 100 ether);
     }
 
-    function test_RevertIf_NonGranteeUpdateRecipient() public {
+    function test_RevertIf_UpdateRecipientNonGrantee() public {
         vm.expectRevert(abi.encodeWithSelector(BaseAllocation.MetaVesT_OnlyGrantee.selector));
         VestingAllocation(vestingAllocation).updateRecipient(newRecipient);
+    }
+
+    function test_Terminate() public {
+        // Controller should be able to terminate it
+        assertFalse(vestingAllocation.terminated(), "vesting contract should not be terminated yet");
+        vm.prank(address(mockController));
+        vm.expectEmit(true, true, true, true);
+        emit BaseAllocation.MetaVesT_Terminated(grantee, 0); // No token recovered because it is mint-on-demand
+        vestingAllocation.terminate();
+        assertTrue(vestingAllocation.terminated(), "vesting contract should be terminated");
+    }
+
+    function test_RevertIf_TerminateNonController() public {
+        vm.expectRevert(abi.encodeWithSelector(BaseAllocation.MetaVesT_OnlyController.selector));
+        vestingAllocation.terminate();
     }
 }
