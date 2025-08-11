@@ -61,27 +61,24 @@ contract MetaVesTControllerTestBase is Test {
             )
         )));
 
-        globalFields = new string[](13);
-        globalFields[0] = "governingJurisdiction"; // TODO do we need this?
-        globalFields[1] = "disputeResolution"; // TODO do we need this?
-        globalFields[2] = "metavestType";
-        globalFields[3] = "grantee";
-        globalFields[4] = "recipient";
-        globalFields[5] = "tokenContract";
-        globalFields[6] = "tokenStreamTotal";
-        globalFields[7] = "vestingCliffCredit";
-        globalFields[8] = "unlockingCliffCredit";
-        globalFields[9] = "vestingRate";
-        globalFields[10] = "vestingStartTime";
-        globalFields[11] = "unlockRate";
-        globalFields[12] = "unlockStartTime";
+        globalFields = new string[](11);
+        globalFields[0] = "metavestType";
+        globalFields[1] = "grantee";
+        globalFields[2] = "recipient";
+        globalFields[3] = "tokenContract";
+        globalFields[4] = "tokenStreamTotal";
+        globalFields[5] = "vestingCliffCredit";
+        globalFields[6] = "unlockingCliffCredit";
+        globalFields[7] = "vestingRate";
+        globalFields[8] = "vestingStartTime";
+        globalFields[9] = "unlockRate";
+        globalFields[10] = "unlockStartTime";
 
-        partyFields = new string[](5);
+        partyFields = new string[](4);
         partyFields[0] = "name";
         partyFields[1] = "evmAddress";
-        partyFields[2] = "contactDetails"; // TODO do we need this?
-        partyFields[3] = "granteeType"; // TODO do we need this?
-        partyFields[4] = "granteeJurisdiction"; // TODO do we need this?
+        partyFields[2] = "contactDetails";
+        partyFields[3] = "granteeType";
 
         registry.createTemplate(
             templateId,
@@ -132,29 +129,26 @@ contract MetaVesTControllerTestBase is Test {
         uint256 expiry,
         bytes memory expectRevertData
     ) internal returns(bytes32) {
-        string[] memory globalValues = new string[](13);
-        globalValues[0] = "test governingJurisdiction"; // TODO do we need this?
-        globalValues[1] = "test disputeResolution"; // TODO do we need this?
-        globalValues[2] = "0"; // metavestType: Vesting
-        globalValues[3] = vm.toString(grantee); // grantee
-        globalValues[4] = vm.toString(grantee); // recipient
-        globalValues[5] = vm.toString(allocation.tokenContract); // tokenContract
-        globalValues[6] = vm.toString(allocation.tokenStreamTotal); //tokenStreamTotal
-        globalValues[7] = vm.toString(allocation.vestingCliffCredit); // vestingCliffCredit
-        globalValues[8] = vm.toString(allocation.unlockingCliffCredit); // unlockingCliffCredit
-        globalValues[9] = vm.toString(allocation.vestingRate); // vestingRate
-        globalValues[10] = vm.toString(allocation.vestingStartTime); // vestingStartTime
-        globalValues[11] = vm.toString(allocation.unlockRate); // unlockRate
-        globalValues[12] = vm.toString(allocation.unlockStartTime); // unlockStartTime
+        string[] memory globalValues = new string[](11);
+        globalValues[0] = "0"; // metavestType: Vesting
+        globalValues[1] = vm.toString(grantee); // grantee
+        globalValues[2] = vm.toString(grantee); // recipient
+        globalValues[3] = vm.toString(allocation.tokenContract); // tokenContract
+        globalValues[4] = vm.toString(allocation.tokenStreamTotal); //tokenStreamTotal
+        globalValues[5] = vm.toString(allocation.vestingCliffCredit); // vestingCliffCredit
+        globalValues[6] = vm.toString(allocation.unlockingCliffCredit); // unlockingCliffCredit
+        globalValues[7] = vm.toString(allocation.vestingRate); // vestingRate
+        globalValues[8] = vm.toString(allocation.vestingStartTime); // vestingStartTime
+        globalValues[9] = vm.toString(allocation.unlockRate); // unlockRate
+        globalValues[10] = vm.toString(allocation.unlockStartTime); // unlockStartTime
 
         // TODO what to do with milestones, which could be of dynamic lengths
 
-        string[] memory partyValues = new string[](5);
+        string[] memory partyValues = new string[](4);
         partyValues[0] = partyName;
         partyValues[1] = vm.toString(grantee); // evmAddress
-        partyValues[2] = "email@company.com"; // TODO do we need this?
-        partyValues[3] = "individual"; // TODO do we need this?
-        partyValues[4] = "test granteeJurisdiction"; // TODO do we need this?
+        partyValues[2] = "email@company.com";
+        partyValues[3] = "individual";
 
         address[] memory allParties = new address[](1);
         allParties[0] = grantee;
