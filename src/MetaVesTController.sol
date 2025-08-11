@@ -8,10 +8,9 @@
 
 pragma solidity ^0.8.24;
 
-import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import {ICyberAgreementRegistry} from "cybercorps-contracts/src/interfaces/ICyberAgreementRegistry.sol";
 import "./BaseAllocation.sol";
-import "./RestrictedTokenAllocation.sol";
+//import "./RestrictedTokenAllocation.sol";
 import "./interfaces/IAllocationFactory.sol";
 import "./interfaces/IPriceAllocation.sol";
 import "./interfaces/zk-governance/IZkCappedMinterV2.sol";
@@ -28,23 +27,11 @@ import "./lib/EnumberableSet.sol";
  *             by an applicable affected grantee or a majority-in-governing power of similar token grantees
  **/
 contract metavestController is SafeTransferLib {
-    using ECDSA for bytes32;
     using EnumerableSet for EnumerableSet.AddressSet;
     using EnumerableSet for EnumerableSet.Bytes32Set;
-
-    // Domain information
-    string public constant name = "metavestController";
-    string public version;
-    bytes32 public DOMAIN_SEPARATOR;
-    // Type hash for SignedAgreementData
-    bytes32 public SIGNED_AGREEMENT_DATA_TYPEHASH;
-    bytes32 public ALLOCATION_TYPEHASH;
-    bytes32 public MILESTONE_TYPEHASH;
-
     /// @dev opinionated time limit for a MetaVesT amendment, one calendar week in seconds
     uint256 internal constant AMENDMENT_TIME_LIMIT = 604800;
     uint256 internal constant ARRAY_LENGTH_LIMIT = 20;
-
 
     mapping(bytes32 => EnumerableSet.AddressSet) private sets;
     EnumerableSet.Bytes32Set private setNames;
@@ -59,7 +46,6 @@ contract metavestController is SafeTransferLib {
     address public ZkTokenAddress;
     address internal _pendingAuthority;
     address internal _pendingDao;
-    uint256 public metavestCounter;
 
     struct AmendmentProposal {
         bool isPending;
@@ -85,11 +71,6 @@ contract metavestController is SafeTransferLib {
         address recipient;
         BaseAllocation.Allocation allocation;
         BaseAllocation.Milestone[] milestones;
-    }
-
-    struct Delegation {
-        address delegate;
-        uint256 expiry;
     }
 
     enum metavestType { Vesting, TokenOption, RestrictedTokenAward }
@@ -126,7 +107,6 @@ contract metavestController is SafeTransferLib {
     event MetaVesTController_SetRemoved(string indexed set);
     event MetaVesTController_AddressAddedToSet(string set, address indexed grantee);
     event MetaVesTController_AddressRemovedFromSet(string set, address indexed grantee);
-    event MetaVesTController_MetaVestCreated(address indexed metavest, bytes32 agreementId);
     event MetaVesTController_ZkCappedMinterUpdated(address zkCappedMinter);
     event MetaVesTController_DealProposed(
         bytes32 indexed agreementId,
@@ -142,8 +122,6 @@ contract metavestController is SafeTransferLib {
         bytes32 indexed agreementId,
         address metavest
     );
-    event MetaVesTController_DelegationSet(address indexed delegator, address indexed delegate, uint256 expiry);
-    event MetaVesTController_DelegationRevoked(address indexed delegator, address indexed delegate);
 
     ///
     /// ERRORS
@@ -244,31 +222,6 @@ contract metavestController is SafeTransferLib {
 //        tokenOptionFactory = _tokenOptionFactory;
 //        restrictedTokenFactory = _restrictedTokenFactory;
         dao = _dao;
-
-        version = "1";
-        DOMAIN_SEPARATOR = keccak256(
-            abi.encode(
-                keccak256(
-                    "EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"
-                ),
-                keccak256(bytes(name)),
-                keccak256(bytes(version)),
-                block.chainid,
-                address(this)
-            )
-        );
-
-        SIGNED_AGREEMENT_DATA_TYPEHASH = keccak256(
-            "SignedAgreementData(bytes32 id,string agreementUri,metavestType _metavestType,address grantee,address recipient,Allocation allocation,Milestone[] milestones)"
-        );
-
-        ALLOCATION_TYPEHASH = keccak256(
-            "Allocation(uint256 tokenStreamTotal,uint128 vestingCliffCredit,uint128 unlockingCliffCredit,uint160 vestingRate,uint48 vestingStartTime,uint160 unlockRate,uint48 unlockStartTime,address tokenContract)"
-        );
-
-        MILESTONE_TYPEHASH = keccak256(
-            "Milestone(uint256 milestoneAward,bool unlockOnCompletion,bool complete,address[] conditionContracts)"
-        );
     }
 
     /// @notice for a grantee to consent to an update to one of their metavestDetails by 'authority' corresponding to the applicable function in this controller
@@ -440,13 +393,6 @@ contract metavestController is SafeTransferLib {
         }
     }
 
-    function validateTokenApprovalAndBalance(address tokenContract, uint256 total) internal view {
-        if (
-            IERC20M(tokenContract).allowance(authority, address(this)) < total ||
-            IERC20M(tokenContract).balanceOf(authority) < total
-        ) revert MetaVesTController_AmountNotApprovedForTransferFrom();
-    }
-
 //     function createAndInitializeTokenOptionAllocation(
 //            address _grantee,
 //            address _paymentToken,
@@ -496,7 +442,6 @@ contract metavestController is SafeTransferLib {
 
         uint256 _total = _allocation.tokenStreamTotal + _milestoneTotal;
         if (_total == 0) revert MetaVesTController_ZeroAmount();
-        //validateTokenApprovalAndBalance(_allocation.tokenContract, _total);
 
         address vestingAllocation = IAllocationFactory(vestingFactory).createAllocation(
             IAllocationFactory.AllocationType.Vesting,
@@ -509,7 +454,6 @@ contract metavestController is SafeTransferLib {
             0,
             0
         );
-        //safeTransferFrom(_allocation.tokenContract, authority, vestingAllocation, _total);
 
         return vestingAllocation;
     }
