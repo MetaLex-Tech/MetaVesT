@@ -1,0 +1,11 @@
+ds-test/=lib/zk-governance/l2-contracts/lib/forge-std/lib/ds-test/src/
+erc4626-tests/=lib/zk-governance/l1-contracts/lib/openzeppelin-contracts/lib/erc4626-tests/
+flexible-voting/=lib/zk-governance/l2-contracts/lib/flexible-voting/
+forge-std/=lib/forge-std/src/
+murky/=lib/zk-governance/l2-contracts/lib/murky/
+openzeppelin-contracts-upgradeable/=lib/zk-governance/l2-contracts/lib/openzeppelin-contracts-upgradeable/
+openzeppelin-contracts/=lib/zk-governance/l1-contracts/lib/openzeppelin-contracts/
+@openzeppelin/contracts-upgradeable=lib/zk-governance/l2-contracts/lib/openzeppelin-contracts-upgradeable/contracts
+@openzeppelin/contracts/=lib/zk-governance/l2-contracts/lib/openzeppelin-contracts/contracts/
+solmate/=lib/zk-governance/l2-contracts/lib/flexible-voting/lib/solmate/src/
+zk-governance/=lib/zk-governance/

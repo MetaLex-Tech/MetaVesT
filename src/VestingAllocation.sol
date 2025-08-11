@@ -1,28 +1,32 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import "./BaseAllocation.sol";
 
-pragma solidity 0.8.20;
+pragma solidity ^0.8.24;
 
 contract VestingAllocation is BaseAllocation {
 
     /// @notice constructor for VestingAllocation
     /// @param _grantee address of the grantee
+    /// @param _recipient address of the fund recipient
     /// @param _controller address of the controller
     /// @param _allocation Allocation struct containing token contract
     /// @param _milestones array of Milestone structs with conditions and awards
     constructor (
         address _grantee,
+        address _recipient,
         address _controller,
         Allocation memory _allocation,
         Milestone[] memory _milestones
     ) BaseAllocation(
-         _grantee,
-         _controller
+        _grantee,
+        _recipient,
+        _controller
     ) {
         //perform input validation
         if (_allocation.tokenContract == address(0)) revert MetaVesT_ZeroAddress();
         if (_allocation.tokenStreamTotal == 0) revert MetaVesT_ZeroAmount();
         if (_grantee == address(0)) revert MetaVesT_ZeroAddress();
+        if (_recipient == address(0)) revert MetaVesT_ZeroAddress();
         if (_allocation.vestingRate >  1000*1e18 || _allocation.unlockRate > 1000*1e18) revert MetaVesT_RateTooHigh();
 
         //set vesting allocation variables
