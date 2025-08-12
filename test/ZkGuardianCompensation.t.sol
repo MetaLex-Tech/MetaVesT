@@ -27,12 +27,16 @@ contract ZkGuardianCompensationTest is MetaVesTControllerTestBase {
 
         vestingAllocationFactory = new VestingAllocationFactory();
 
-        controller = new metavestController{salt: salt}(
-            guardianSafe,
-            guardianSafe,
-            address(registry),
-            address(vestingAllocationFactory)
-        );
+        controller = metavestController(address(new ERC1967Proxy{salt: salt}(
+            address(new metavestController{salt: salt}()),
+            abi.encodeWithSelector(
+                metavestController.initialize.selector,
+                guardianSafe,
+                guardianSafe,
+                address(registry),
+                address(vestingAllocationFactory)
+            )
+        )));
 
         // Deploy ZK Capped Minter v2
 

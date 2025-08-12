@@ -9,6 +9,7 @@
 pragma solidity ^0.8.24;
 
 import {ICyberAgreementRegistry} from "cybercorps-contracts/src/interfaces/ICyberAgreementRegistry.sol";
+import {UUPSUpgradeable} from "zk-governance/l2-contracts/lib/openzeppelin-contracts-upgradeable/contracts/proxy/utils/UUPSUpgradeable.sol";
 import "./BaseAllocation.sol";
 //import "./RestrictedTokenAllocation.sol";
 import "./interfaces/IAllocationFactory.sol";
@@ -26,8 +27,7 @@ import "./lib/EnumberableSet.sol";
  *             other permissioned functions, with some powers checked by the applicable 'dao' or subject to consent
  *             by an applicable affected grantee or a majority-in-governing power of similar token grantees
  **/
-// TODO make it upgradeable
-contract metavestController is SafeTransferLib {
+contract metavestController is UUPSUpgradeable, SafeTransferLib {
     using EnumerableSet for EnumerableSet.AddressSet;
     using EnumerableSet for EnumerableSet.Bytes32Set;
     /// @dev opinionated time limit for a MetaVesT amendment, one calendar week in seconds
@@ -217,14 +217,16 @@ contract metavestController is SafeTransferLib {
     /// @param _authority address of the authority who can call the functions in this contract and update each MetaVesT in '_metavest', such as a BORG
     /// @param _dao DAO governance contract address which exercises control over ability of 'authority' to call certain functions via imposing
     /// conditions through 'updateFunctionCondition'.
-    constructor(
+    function initialize(
         address _authority,
         address _dao,
         address _registry,
         address _vestingFactory
 //        address _tokenOptionFactory,
 //        address _restrictedTokenFactory
-    ) {
+    ) public initializer {
+        __UUPSUpgradeable_init();
+
         if (_authority == address(0)) revert MetaVesTController_ZeroAddress();
         authority = _authority;
         registry = _registry;
@@ -914,4 +916,11 @@ contract metavestController is SafeTransferLib {
     function getDealId(uint256 index) public view returns(bytes32) {
         return dealIds[index];
     }
+
+    function _authorizeUpgrade(
+        address newImplementation
+    ) internal virtual override onlyAuthority {}
+
+    // Avoid "Address: low-level delegate call failed" due to `UUPSUpgradeable.upgradeToAndCall()` runs with `forceCall=true`
+    fallback() external {}
 }

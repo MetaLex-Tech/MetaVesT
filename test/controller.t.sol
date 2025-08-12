@@ -12,8 +12,11 @@ import "../src/interfaces/zk-governance/IZkTokenV1.sol";
 import "./lib/MetaVesTControllerTestBase.sol";
 import "./mocks/MockCondition.sol";
 import {Strings} from "zk-governance/l2-contracts/lib/openzeppelin-contracts/contracts/utils/Strings.sol";
+import {ERC1967ProxyLib} from "./lib/ERC1967ProxyLib.sol";
 
 contract MetaVestControllerTest is MetaVesTControllerTestBase {
+    using ERC1967ProxyLib for address;
+    
     address authority = guardianSafe;
     address dao = guardianSafe;
     address grantee = alice;
@@ -33,12 +36,16 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
 
         vestingAllocationFactory = new VestingAllocationFactory();
 
-        controller = new metavestController{salt: salt}(
-            guardianSafe,
-            guardianSafe,
-            address(registry),
-            address(vestingAllocationFactory)
-        );
+        controller = metavestController(address(new ERC1967Proxy{salt: salt}(
+            address(new metavestController{salt: salt}()),
+            abi.encodeWithSelector(
+                metavestController.initialize.selector,
+                guardianSafe,
+                guardianSafe,
+                address(registry),
+                address(vestingAllocationFactory)
+            )
+        )));
 
         // Deploy ZK Capped Minter v2
 
@@ -1559,5 +1566,53 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
             Strings.toHexString(uint256(zkCappedMinter.DEFAULT_ADMIN_ROLE()), 32)
         ));
         zkCappedMinter.close();
+    }
+
+    function test_UpgradeMetaVesTController() public {
+        // Deploy new implementation
+        address newImplementation = address(new metavestController());
+
+        // Upgrade to new implementation without initialization data
+
+        // Non-owner should not be able to upgrade it
+        vm.expectRevert(abi.encodeWithSelector(metavestController.MetaVesTController_OnlyAuthority.selector));
+        controller.upgradeToAndCall(newImplementation, "");
+
+        // Owner should be able to upgrade it
+        vm.prank(guardianSafe);
+        controller.upgradeToAndCall(newImplementation, "");
+        assertEq(address(controller).getErc1967Implementation(vm), newImplementation);
+
+        // Verify the controller still works
+
+        bytes32 contractIdAlice = _proposeAndSignDeal(
+            templateId,
+            block.timestamp, // salt
+            delegatePrivateKey,
+            alice,
+            BaseAllocation.Allocation({
+                tokenContract: address(zkToken),
+                // 100k ZK total, the first half unlocks with a cliff and the second half unlocks over an year
+                tokenStreamTotal: 60 ether,
+                vestingCliffCredit: 30 ether,
+                unlockingCliffCredit: 30 ether,
+                vestingRate: 1 ether,
+                vestingStartTime: zkCappedMinter.START_TIME(), // start along with capped minter
+                unlockRate: 1 ether,
+                unlockStartTime: zkCappedMinter.START_TIME() // start along with capped minter
+            }),
+            new BaseAllocation.Milestone[](0),
+            "Alice",
+            cappedMinterExpirationTime // Same expiry as the minter so grantee can defer vesting contract creation as much as possible
+        );
+
+        VestingAllocation vestingAllocationAlice = VestingAllocation(_granteeSignDeal(
+            contractIdAlice,
+            alice, // grantee
+            alice, // recipient
+            alicePrivateKey,
+            "Alice"
+        ));
+        assertEq(vestingAllocationAlice.grantee(), alice);
     }
 }
