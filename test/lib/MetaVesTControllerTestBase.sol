@@ -31,6 +31,8 @@ contract MetaVesTControllerTestBase is Test {
     address bob = vm.addr(bobPrivateKey);
     uint256 chadPrivateKey = 3;
     address chad = vm.addr(chadPrivateKey);
+    uint256 delegatePrivateKey = 4;
+    address delegate = vm.addr(delegatePrivateKey);
 
     bytes32 salt = keccak256("MetaVesTControllerTestBase");
 
@@ -103,16 +105,15 @@ contract MetaVesTControllerTestBase is Test {
     function _proposeAndSignDeal(
         bytes32 templateId,
         uint256 agreementSalt,
-        address authority,
+        uint256 grantorOrDelegatePrivateKey,
         address grantee,
-        uint256 granteePrivateKey,
         BaseAllocation.Allocation memory allocation,
         BaseAllocation.Milestone[] memory milestones,
         string memory partyName,
         uint256 expiry
     ) internal returns(bytes32) {
         return _proposeAndSignDeal(
-            templateId, agreementSalt, authority, grantee, granteePrivateKey, allocation, milestones, partyName, expiry,
+            templateId, agreementSalt, grantorOrDelegatePrivateKey, grantee, allocation, milestones, partyName, expiry,
             "" // Not expecting revert
         );
     }
@@ -120,9 +121,8 @@ contract MetaVesTControllerTestBase is Test {
     function _proposeAndSignDeal(
         bytes32 templateId,
         uint256 agreementSalt,
-        address authority,
+        uint256 grantorOrDelegatePrivateKey,
         address grantee,
-        uint256 granteePrivateKey,
         BaseAllocation.Allocation memory allocation,
         BaseAllocation.Milestone[] memory milestones,
         string memory partyName,
@@ -144,20 +144,27 @@ contract MetaVesTControllerTestBase is Test {
 
         // TODO what to do with milestones, which could be of dynamic lengths
 
-        string[] memory partyValues = new string[](4);
-        partyValues[0] = partyName;
-        partyValues[1] = vm.toString(grantee); // evmAddress
-        partyValues[2] = "email@company.com";
-        partyValues[3] = "individual";
+        string[][] memory partyValues = new string[][](2);
+        partyValues[0] = new string[](4);
+        partyValues[0][0] = "Guardian BORG";
+        partyValues[0][1] = vm.toString(address(guardianSafe));
+        partyValues[0][2] = "guardian-safe@company.com";
+        partyValues[0][3] = "Foundation";
+        partyValues[1] = new string[](4);
+        partyValues[1][0] = partyName;
+        partyValues[1][1] = vm.toString(grantee); // evmAddress
+        partyValues[1][2] = "email@company.com";
+        partyValues[1][3] = "individual";
 
-        address[] memory allParties = new address[](1);
-        allParties[0] = grantee;
+        address[] memory parties = new address[](2);
+        parties[0] = address(guardianSafe);
+        parties[1] = grantee;
         bytes32 expectedContractId = keccak256(
             abi.encode(
                 templateId,
                 agreementSalt,
                 globalValues,
-                allParties
+                parties
             )
         );
 
@@ -170,23 +177,22 @@ contract MetaVesTControllerTestBase is Test {
             globalFields,
             partyFields,
             globalValues,
-            partyValues,
-            granteePrivateKey
+            partyValues[0],
+            grantorOrDelegatePrivateKey
         );
 
         if (expectRevertData.length > 0) {
             vm.expectRevert(expectRevertData);
         }
-        vm.prank(authority);
         bytes32 contractId = controller.proposeAndSignDeal(
             templateId,
             agreementSalt,
             metavestController.metavestType.Vesting,
             grantee,
-            grantee,
             allocation,
             milestones,
             globalValues,
+            parties,
             partyValues,
             signature,
             bytes32(0), // no secrets
@@ -198,6 +204,80 @@ contract MetaVesTControllerTestBase is Test {
             return contractId;
         } else {
             return 0;
+        }
+    }
+
+    function _granteeSignDeal(
+        bytes32 contractId,
+        address grantee,
+        address recipient,
+        uint256 granteePrivateKey,
+        string memory partyName
+    ) internal returns(address) {
+        return _granteeSignDeal(
+            contractId, grantee, recipient, granteePrivateKey, partyName,
+            "" // Not expecting revert
+        );
+    }
+
+    function _granteeSignDeal(
+        bytes32 contractId,
+        address grantee,
+        address recipient,
+        uint256 granteePrivateKey,
+        string memory partyName,
+        bytes memory expectRevertData
+    ) internal returns(address) {
+        metavestController.DealData memory deal = controller.getDeal(contractId);
+
+        string[] memory globalValues = new string[](11);
+        globalValues[0] = "0"; // metavestType: Vesting
+        globalValues[1] = vm.toString(grantee); // grantee
+        globalValues[2] = vm.toString(grantee); // recipient
+        globalValues[3] = vm.toString(deal.allocation.tokenContract); // tokenContract
+        globalValues[4] = vm.toString(deal.allocation.tokenStreamTotal); //tokenStreamTotal
+        globalValues[5] = vm.toString(deal.allocation.vestingCliffCredit); // vestingCliffCredit
+        globalValues[6] = vm.toString(deal.allocation.unlockingCliffCredit); // unlockingCliffCredit
+        globalValues[7] = vm.toString(deal.allocation.vestingRate); // vestingRate
+        globalValues[8] = vm.toString(deal.allocation.vestingStartTime); // vestingStartTime
+        globalValues[9] = vm.toString(deal.allocation.unlockRate); // unlockRate
+        globalValues[10] = vm.toString(deal.allocation.unlockStartTime); // unlockStartTime
+
+        string[] memory partyValues = new string[](4);
+        partyValues[0] = partyName;
+        partyValues[1] = vm.toString(grantee); // evmAddress
+        partyValues[2] = "email@company.com"; // Make sure it matches the proposed deal
+        partyValues[3] = "individual"; // Make sure it matches the proposed deal
+
+        bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
+            registry.DOMAIN_SEPARATOR(),
+            registry.SIGNATUREDATA_TYPEHASH(),
+            contractId,
+            agreementUri,
+            globalFields,
+            partyFields,
+            globalValues,
+            partyValues,
+            granteePrivateKey
+        );
+
+        if (expectRevertData.length > 0) {
+            vm.expectRevert(expectRevertData);
+        }
+        address metavest = controller.signDealAndCreateMetavest(
+            grantee,
+            recipient,
+            contractId,
+            partyValues,
+            signature,
+            "" // no secrets
+        );
+
+        if (expectRevertData.length == 0) {
+            return metavest;
+        } else {
+            return address(0);
         }
     }
 }

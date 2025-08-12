@@ -57,15 +57,24 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
         controller.setZkCappedMinter(address(zkCappedMinter));
         controller.createSet("testSet");
         vm.stopPrank();
+
+        // TPP to review agreements and on-chain parameters, then approve by granting our ZkCappedMinter permissions
+        bytes32 minterRole = zkToken.MINTER_ROLE();
+        vm.prank(zkTokenAdmin);
+        zkToken.grantRole(minterRole, address(zkCappedMinter));
+
+        // Guardian SAFE to delegate signing to an EOA
+        vm.prank(guardianSafe);
+        registry.setDelegation(delegate, block.timestamp + 365 days * 3); // This is a hack. One should not delegate signing for this long
+        assertTrue(registry.isValidDelegate(guardianSafe, delegate), "delegate should be Guardian SAFE's delegate");
     }
 
     function testCreateVestingAllocation() public {
         bytes32 contractIdAlice = _proposeAndSignDeal(
             templateId,
             block.timestamp, // salt
-            guardianSafe,
+            delegatePrivateKey,
             alice,
-            alicePrivateKey,
             BaseAllocation.Allocation({
                 tokenContract: address(zkToken),
                 // 100k ZK total, the first half unlocks with a cliff and the second half unlocks over an year
@@ -82,14 +91,14 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
             cappedMinterExpirationTime // Same expiry as the minter so grantee can defer vesting contract creation as much as possible
         );
 
-        // TPP to review agreements and on-chain parameters, then approve by granting our ZkCappedMinter permissions
-
-        bytes32 minterRole = zkToken.MINTER_ROLE();
-        vm.prank(zkTokenAdmin);
-        zkToken.grantRole(minterRole, address(zkCappedMinter));
-
         // Anyone can create MetaVesT (per agreements) to start vesting
-        VestingAllocation vestingAllocationAlice = VestingAllocation(controller.createMetavest(contractIdAlice));
+        VestingAllocation vestingAllocationAlice = VestingAllocation(_granteeSignDeal(
+            contractIdAlice,
+            alice, // grantee
+            alice, // recipient
+            alicePrivateKey,
+            "Alice"
+        ));
 
         // Grantees should be able to withdraw all remaining tokens after sufficient time passed
         skip(61);
@@ -543,9 +552,8 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
         bytes32 contractIdAlice = _proposeAndSignDeal(
             templateId,
             block.timestamp, // salt
-            guardianSafe,
+            delegatePrivateKey,
             alice, // = grantee
-            alicePrivateKey,
             BaseAllocation.Allocation({
                 tokenContract: address(zkToken),
                 tokenStreamTotal: 1000 ether,
@@ -561,15 +569,14 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
             cappedMinterExpirationTime // Same expiry as the minter so grantee can defer vesting contract creation as much as possible
         );
 
-        // TPP to review agreements and on-chain parameters, then approve by granting our ZkCappedMinter permissions
-        bytes32 minterRole = zkToken.MINTER_ROLE();
-        vm.prank(zkTokenAdmin);
-        zkToken.grantRole(minterRole, address(zkCappedMinter));
-
-        if (expectRevertData.length > 0) {
-            vm.expectRevert(expectRevertData);
-        }
-        return controller.createMetavest(contractIdAlice);
+        return _granteeSignDeal(
+            contractIdAlice,
+            alice, // grantee
+            alice, // recipient
+            alicePrivateKey,
+            "Alice",
+            expectRevertData
+        );
     }
 
     // Helper functions to create dummy allocations for testing
@@ -586,9 +593,8 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
         bytes32 contractIdAlice = _proposeAndSignDeal(
             templateId,
             block.timestamp, // salt
-            guardianSafe,
+            delegatePrivateKey,
             alice, // = grantee
-            alicePrivateKey,
             BaseAllocation.Allocation({
                 tokenContract: address(zkToken),
                 tokenStreamTotal: 1000 ether,
@@ -604,12 +610,13 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
             cappedMinterExpirationTime // Same expiry as the minter so grantee can defer vesting contract creation as much as possible
         );
 
-        // TPP to review agreements and on-chain parameters, then approve by granting our ZkCappedMinter permissions
-        bytes32 minterRole = zkToken.MINTER_ROLE();
-        vm.prank(zkTokenAdmin);
-        zkToken.grantRole(minterRole, address(zkCappedMinter));
-
-        return controller.createMetavest(contractIdAlice);
+        return _granteeSignDeal(
+            contractIdAlice,
+            alice, // grantee
+            alice, // recipient
+            alicePrivateKey,
+            "Alice"
+        );
     }
 
     // Helper functions to create dummy allocations for testing
@@ -626,9 +633,8 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
         bytes32 contractIdAlice = _proposeAndSignDeal(
             templateId,
             block.timestamp, // salt
-            guardianSafe,
+            delegatePrivateKey,
             alice, // = grantee
-            alicePrivateKey,
             BaseAllocation.Allocation({
                 tokenContract: address(zkToken),
                 tokenStreamTotal: 1000 ether,
@@ -644,12 +650,13 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
             cappedMinterExpirationTime // Same expiry as the minter so grantee can defer vesting contract creation as much as possible
         );
 
-        // TPP to review agreements and on-chain parameters, then approve by granting our ZkCappedMinter permissions
-        bytes32 minterRole = zkToken.MINTER_ROLE();
-        vm.prank(zkTokenAdmin);
-        zkToken.grantRole(minterRole, address(zkCappedMinter));
-
-        return controller.createMetavest(contractIdAlice);
+        return _granteeSignDeal(
+            contractIdAlice,
+            alice, // grantee
+            alice, // recipient
+            alicePrivateKey,
+            "Alice"
+        );
     }
 
     // Helper functions to create dummy allocations for testing
@@ -660,9 +667,8 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
         bytes32 contractIdAlice = _proposeAndSignDeal(
             templateId,
             block.timestamp, // salt
-            guardianSafe,
+            delegatePrivateKey,
             alice, // = grantee
-            alicePrivateKey,
             BaseAllocation.Allocation({
                 tokenContract: address(zkToken),
                 tokenStreamTotal: 1000 ether,
@@ -678,12 +684,13 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
             cappedMinterExpirationTime // Same expiry as the minter so grantee can defer vesting contract creation as much as possible
         );
 
-        // TPP to review agreements and on-chain parameters, then approve by granting our ZkCappedMinter permissions
-        bytes32 minterRole = zkToken.MINTER_ROLE();
-        vm.prank(zkTokenAdmin);
-        zkToken.grantRole(minterRole, address(zkCappedMinter));
-
-        return controller.createMetavest(contractIdAlice);
+        return _granteeSignDeal(
+            contractIdAlice,
+            alice, // grantee
+            alice, // recipient
+            alicePrivateKey,
+            "Alice"
+        );
     }
 
     // Helper functions to create dummy allocations for testing
@@ -694,9 +701,8 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
         bytes32 contractIdAlice = _proposeAndSignDeal(
             templateId,
             block.timestamp, // salt
-            guardianSafe,
+            delegatePrivateKey,
             alice, // = grantee
-            alicePrivateKey,
             BaseAllocation.Allocation({
                 tokenContract: address(zkToken),
                 tokenStreamTotal: 1000 ether,
@@ -712,12 +718,13 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
             cappedMinterExpirationTime // Same expiry as the minter so grantee can defer vesting contract creation as much as possible
         );
 
-        // TPP to review agreements and on-chain parameters, then approve by granting our ZkCappedMinter permissions
-        bytes32 minterRole = zkToken.MINTER_ROLE();
-        vm.prank(zkTokenAdmin);
-        zkToken.grantRole(minterRole, address(zkCappedMinter));
-
-        return controller.createMetavest(contractIdAlice);
+        return _granteeSignDeal(
+            contractIdAlice,
+            alice, // grantee
+            alice, // recipient
+            alicePrivateKey,
+            "Alice"
+        );
     }
 
 //    function createDummyTokenOptionAllocation() internal returns (address) {
@@ -855,11 +862,10 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
         bytes32 contractIdAlice = _proposeAndSignDeal(
             templateId,
             block.timestamp, // salt
-            guardianSafe,
+            delegatePrivateKey,
             alice, // = grantee
-            alicePrivateKey,
             BaseAllocation.Allocation({
-                tokenContract: address(0),
+                tokenContract: address(0), // zero address
                 tokenStreamTotal: 1000 ether,
                 vestingCliffCredit: 100 ether,
                 unlockingCliffCredit: 100 ether,
@@ -873,13 +879,14 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
             cappedMinterExpirationTime // Same expiry as the minter so grantee can defer vesting contract creation as much as possible
         );
 
-        // TPP to review agreements and on-chain parameters, then approve by granting our ZkCappedMinter permissions
-        bytes32 minterRole = zkToken.MINTER_ROLE();
-        vm.prank(zkTokenAdmin);
-        zkToken.grantRole(minterRole, address(zkCappedMinter));
-
-        vm.expectRevert(abi.encodeWithSelector(metavestController.MetaVesTController_ZeroAddress.selector));
-        controller.createMetavest(contractIdAlice);
+        _granteeSignDeal(
+            contractIdAlice,
+            alice, // grantee
+            alice, // recipient
+            alicePrivateKey,
+            "Alice",
+            abi.encodeWithSelector(metavestController.MetaVesTController_ZeroAddress.selector)
+        );
     }
 
     function testTerminateVestAndRecovers() public {
@@ -1330,7 +1337,7 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
     }
 
     function test_RevertIf_CheckFunctionCondition() public {
-        bytes4 functionSig = bytes4(keccak256("createMetavest(bytes32)"));
+        bytes4 functionSig = bytes4(keccak256("signDealAndCreateMetavest(address,address,bytes32,string[],bytes,string)"));
       /*      constructor(
         address[] memory _signers,
         uint256 _threshold,
@@ -1375,9 +1382,8 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
         bytes32 contractIdChad = _proposeAndSignDeal(
             templateId,
             block.timestamp, // salt
-            guardianSafe,
+            delegatePrivateKey,
             chad,
-            chadPrivateKey,
             BaseAllocation.Allocation({
                 tokenContract: address(zkToken),
                 tokenStreamTotal: 2001 ether,
@@ -1392,21 +1398,26 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
             "Chad",
             cappedMinterExpirationTime // Same expiry as the minter so grantee can defer vesting contract creation as much as possible
         );
-        VestingAllocation vestingAllocationChad = VestingAllocation(controller.createMetavest(contractIdChad));
+        VestingAllocation vestingAllocationChad = VestingAllocation(_granteeSignDeal(
+            contractIdChad,
+            chad, // grantee
+            chad, // recipient
+            chadPrivateKey,
+            "Chad"
+        ));
 
         vm.prank(chad);
         vm.expectRevert(abi.encodeWithSelector(IZkCappedMinterV2.ZkCappedMinterV2__CapExceeded.selector, address(vestingAllocationChad), 2001 ether));
         vestingAllocationChad.withdraw(2001 ether);
     }
 
-    function test_RevertIf_NotAuthority() public {
-        // Non Guardian SAFE should not be able to accept agreement and create contract
+    function test_RevertIf_IncorrectGrantorSignature() public {
+        // Should not be able to propose a deal without grantor's authorization
         _proposeAndSignDeal(
             templateId,
             block.timestamp, // salt
-            deployer, // Not authority
-            alice,
-            alicePrivateKey,
+            alicePrivateKey, // Should fail because Alice is not delegated by the grantor
+            alice, // grantee
             BaseAllocation.Allocation({
                 tokenContract: address(zkToken),
                 tokenStreamTotal: 100 ether,
@@ -1419,37 +1430,44 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
             }),
             new BaseAllocation.Milestone[](0),
             "Alice",
-            cappedMinterExpirationTime, // Same expiry as the minter so grantee can defer vesting contract creation as much as possible
-            abi.encodeWithSelector(metavestController.MetaVesTController_OnlyAuthority.selector) // Expected revert
-        );
-    }
-
-    function test_RevertIf_IncorrectAgreementSignature() public {
-        // Register Alice with someone else's signature should fail
-        _proposeAndSignDeal(
-            templateId,
-            block.timestamp, // salt
-            guardianSafe,
-            alice,
-            bobPrivateKey, // Use someone else to sign
-            BaseAllocation.Allocation({
-                tokenContract: address(zkToken),
-                tokenStreamTotal: 100 ether,
-                vestingCliffCredit: 10 ether,
-                unlockingCliffCredit: 10 ether,
-                vestingRate: 1 ether,
-                vestingStartTime: zkCappedMinter.START_TIME(), // start along with capped minter
-                unlockRate: 1 ether,
-                unlockStartTime: zkCappedMinter.START_TIME() // start along with capped minter
-            }),
-            new BaseAllocation.Milestone[](0),
-            "Alice",
-            cappedMinterExpirationTime, // Same expiry as the minter so grantee can defer vesting contract creation as much as possible
+            block.timestamp + 7 days,
             abi.encodeWithSelector(CyberAgreementRegistry.SignatureVerificationFailed.selector) // Expected revert
         );
     }
 
-    function test_DelegateSignature() public {
+    function test_RevertIf_IncorrectGranteeSignature() public {
+        bytes32 contractIdAlice = _proposeAndSignDeal(
+            templateId,
+            block.timestamp, // salt
+            delegatePrivateKey,
+            alice,
+            BaseAllocation.Allocation({
+                tokenContract: address(zkToken),
+                tokenStreamTotal: 100 ether,
+                vestingCliffCredit: 10 ether,
+                unlockingCliffCredit: 10 ether,
+                vestingRate: 1 ether,
+                vestingStartTime: zkCappedMinter.START_TIME(), // start along with capped minter
+                unlockRate: 1 ether,
+                unlockStartTime: zkCappedMinter.START_TIME() // start along with capped minter
+            }),
+            new BaseAllocation.Milestone[](0),
+            "Alice",
+            block.timestamp + 7 days
+        );
+
+        // Should not be able to sign Alice's agreement with other's signature
+        _granteeSignDeal(
+            contractIdAlice,
+            alice,
+            alice,
+            bobPrivateKey, // Wrong signer
+            "Alice",
+            abi.encodeWithSelector(CyberAgreementRegistry.SignatureVerificationFailed.selector) // Expected revert
+        );
+    }
+
+    function test_GranteeDelegateSignature() public {
         // Alice to delegate to Bob
         vm.prank(alice);
         registry.setDelegation(bob, block.timestamp + 60);
@@ -1459,9 +1477,8 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
         bytes32 contractId = _proposeAndSignDeal(
             templateId,
             block.timestamp, // salt
-            guardianSafe,
+            delegatePrivateKey,
             alice,
-            bobPrivateKey, // Use Bob to sign
             BaseAllocation.Allocation({
                 tokenContract: address(zkToken),
                 tokenStreamTotal: 100 ether,
@@ -1476,35 +1493,20 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
             "Alice",
             cappedMinterExpirationTime // Same expiry as the minter so grantee can defer vesting contract creation as much as possible
         );
-        metavestController.DealData memory deal = controller.getDeal(contractId);
-        assertEq(deal.grantee, alice, "Alice should be the grantee");
+        VestingAllocation vestingAllocation = VestingAllocation(_granteeSignDeal(
+            contractId,
+            alice,
+            alice,
+            bobPrivateKey, // Use Bob to sign
+            "Alice"
+        ));
+        assertEq(vestingAllocation.grantee(), alice, "Alice should be the grantee");
 
         // Wait until expiry
         skip(61);
 
         // Bob should no longer be able to sign for Alice
         assertFalse(registry.isValidDelegate(alice, bob), "Bob should no longer be Alice's delegate");
-        _proposeAndSignDeal(
-            templateId,
-            block.timestamp, // salt
-            guardianSafe,
-            alice,
-            bobPrivateKey, // Use Bob to sign
-            BaseAllocation.Allocation({
-                tokenContract: address(zkToken),
-                tokenStreamTotal: 100 ether,
-                vestingCliffCredit: 10 ether,
-                unlockingCliffCredit: 10 ether,
-                vestingRate: 1 ether,
-                vestingStartTime: zkCappedMinter.START_TIME(), // start along with capped minter
-                unlockRate: 1 ether,
-                unlockStartTime: zkCappedMinter.START_TIME() // start along with capped minter
-            }),
-            new BaseAllocation.Milestone[](0),
-            "Alice",
-            cappedMinterExpirationTime, // Same expiry as the minter so grantee can defer vesting contract creation as much as possible
-            abi.encodeWithSelector(CyberAgreementRegistry.SignatureVerificationFailed.selector) // Expected revert
-        );
     }
 
     function test_TogglePauseMinting() public {

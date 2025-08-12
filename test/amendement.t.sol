@@ -55,8 +55,14 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
         vm.stopPrank();
 
         vm.startPrank(guardianSafe);
+
         controller.setZkCappedMinter(address(zkCappedMinter));
         controller.createSet("testSet");
+
+        // Guardian SAFE to delegate signing to an EOA
+        registry.setDelegation(delegate, block.timestamp + 365 days * 3); // This is a hack. One should not delegate signing for this long
+        assertTrue(registry.isValidDelegate(guardianSafe, delegate), "delegate should be Guardian SAFE's delegate");
+
         vm.stopPrank();
 
         vestingAllocation = createDummyVestingAllocation();
@@ -367,9 +373,8 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
         bytes32 contractIdAlice = _proposeAndSignDeal(
             templateId,
             agreementSaltCounter++,
-            guardianSafe,
+            delegatePrivateKey,
             alice, // = grantee
-            alicePrivateKey,
             BaseAllocation.Allocation({
                 tokenContract: address(zkToken),
                 tokenStreamTotal: 1000 ether,
@@ -390,10 +395,14 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
         vm.prank(zkTokenAdmin);
         zkToken.grantRole(minterRole, address(zkCappedMinter));
 
-        if (expectRevertData.length > 0) {
-            vm.expectRevert(expectRevertData);
-        }
-        return controller.createMetavest(contractIdAlice);
+        return _granteeSignDeal(
+            contractIdAlice,
+            alice, // grantee
+            alice, // recipient
+            alicePrivateKey,
+            "Alice",
+            expectRevertData
+        );
     }
 
 //    function createDummyTokenOptionAllocation() internal returns (address) {
