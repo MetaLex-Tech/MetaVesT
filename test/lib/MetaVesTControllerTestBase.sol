@@ -65,8 +65,8 @@ contract MetaVesTControllerTestBase is Test {
 
         globalFields = new string[](11);
         globalFields[0] = "metavestType";
-        globalFields[1] = "grantee";
-        globalFields[2] = "recipient";
+        globalFields[1] = "grantor";
+        globalFields[2] = "grantee";
         globalFields[3] = "tokenContract";
         globalFields[4] = "tokenStreamTotal";
         globalFields[5] = "vestingCliffCredit";
@@ -80,7 +80,7 @@ contract MetaVesTControllerTestBase is Test {
         partyFields[0] = "name";
         partyFields[1] = "evmAddress";
         partyFields[2] = "contactDetails";
-        partyFields[3] = "granteeType";
+        partyFields[3] = "type";
 
         registry.createTemplate(
             templateId,
@@ -131,15 +131,15 @@ contract MetaVesTControllerTestBase is Test {
     ) internal returns(bytes32) {
         string[] memory globalValues = new string[](11);
         globalValues[0] = "0"; // metavestType: Vesting
-        globalValues[1] = vm.toString(grantee); // grantee
-        globalValues[2] = vm.toString(grantee); // recipient
+        globalValues[1] = vm.toString(address(guardianSafe)); // grantor
+        globalValues[2] = vm.toString(grantee); // grantee
         globalValues[3] = vm.toString(allocation.tokenContract); // tokenContract
-        globalValues[4] = vm.toString(allocation.tokenStreamTotal); //tokenStreamTotal
-        globalValues[5] = vm.toString(allocation.vestingCliffCredit); // vestingCliffCredit
-        globalValues[6] = vm.toString(allocation.unlockingCliffCredit); // unlockingCliffCredit
-        globalValues[7] = vm.toString(allocation.vestingRate); // vestingRate
+        globalValues[4] = vm.toString(allocation.tokenStreamTotal / 1 ether); //tokenStreamTotal (human-readable)
+        globalValues[5] = vm.toString(allocation.vestingCliffCredit / 1 ether); // vestingCliffCredit (human-readable)
+        globalValues[6] = vm.toString(allocation.unlockingCliffCredit / 1 ether); // unlockingCliffCredit (human-readable)
+        globalValues[7] = vm.toString(allocation.vestingRate * 365 days / 1 ether); // vestingRate (annually) (human-readable)
         globalValues[8] = vm.toString(allocation.vestingStartTime); // vestingStartTime
-        globalValues[9] = vm.toString(allocation.unlockRate); // unlockRate
+        globalValues[9] = vm.toString(allocation.unlockRate * 365 days / 1 ether); // unlockRate (annually) (human-readable)
         globalValues[10] = vm.toString(allocation.unlockStartTime); // unlockStartTime
 
         // TODO what to do with milestones, which could be of dynamic lengths
@@ -232,15 +232,15 @@ contract MetaVesTControllerTestBase is Test {
 
         string[] memory globalValues = new string[](11);
         globalValues[0] = "0"; // metavestType: Vesting
-        globalValues[1] = vm.toString(grantee); // grantee
-        globalValues[2] = vm.toString(grantee); // recipient
+        globalValues[1] = vm.toString(address(guardianSafe)); // grantor
+        globalValues[2] = vm.toString(grantee); // grantee
         globalValues[3] = vm.toString(deal.allocation.tokenContract); // tokenContract
-        globalValues[4] = vm.toString(deal.allocation.tokenStreamTotal); //tokenStreamTotal
-        globalValues[5] = vm.toString(deal.allocation.vestingCliffCredit); // vestingCliffCredit
-        globalValues[6] = vm.toString(deal.allocation.unlockingCliffCredit); // unlockingCliffCredit
-        globalValues[7] = vm.toString(deal.allocation.vestingRate); // vestingRate
+        globalValues[4] = vm.toString(deal.allocation.tokenStreamTotal / 1 ether); //tokenStreamTotal (human-readable)
+        globalValues[5] = vm.toString(deal.allocation.vestingCliffCredit / 1 ether); // vestingCliffCredit (human-readable)
+        globalValues[6] = vm.toString(deal.allocation.unlockingCliffCredit / 1 ether); // unlockingCliffCredit (human-readable)
+        globalValues[7] = vm.toString(deal.allocation.vestingRate * 365 days / 1 ether); // vestingRate (annually) (human-readable)
         globalValues[8] = vm.toString(deal.allocation.vestingStartTime); // vestingStartTime
-        globalValues[9] = vm.toString(deal.allocation.unlockRate); // unlockRate
+        globalValues[9] = vm.toString(deal.allocation.unlockRate * 365 days / 1 ether); // unlockRate (annually) (human-readable)
         globalValues[10] = vm.toString(deal.allocation.unlockStartTime); // unlockStartTime
 
         string[] memory partyValues = new string[](4);
