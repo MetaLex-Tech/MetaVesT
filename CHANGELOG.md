@@ -23,10 +23,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Added `recipient` so the grantee can change withdrawal destinations
 
 - src/MetaVesTController.sol
+  - Become `UUPSUpgradeable`
   - Integrated agreement-signing with `CyberAgreementRegistry`
   - Added `deals` to handle agreement signing process and store MetaVesT parameters for each grantee
-  - Added `proposeAndSignDeal()` for Guardian SAFE to propose deal signed by the grantee
-  - Updated `createMetavest()` to create MetaVesT contract per signed deals
+  - Added `proposeAndSignDeal()` for Guardian SAFE to propose deal for grantee
+  - Combined grantee deal-signing and MetaVesT contract deployment into `signDealAndCreateMetavest()`
   - Added `zkCappedMinter` provisioning for each MetaVesT contract so it can mint tokens on-demand (instead of escrow)
   - Temporarily disabled unsupported MetaVesT types until future integration: `TokenOption` and `RestrictedTokenAward`
 
