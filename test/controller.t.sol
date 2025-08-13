@@ -98,7 +98,6 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
             cappedMinterExpirationTime // Same expiry as the minter so grantee can defer vesting contract creation as much as possible
         );
 
-        // Anyone can create MetaVesT (per agreements) to start vesting
         VestingAllocation vestingAllocationAlice = VestingAllocation(_granteeSignDeal(
             contractIdAlice,
             alice, // grantee
@@ -106,6 +105,8 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
             alicePrivateKey,
             "Alice"
         ));
+
+        assertEq(controller.getDeal(contractIdAlice).metavest, address(vestingAllocationAlice), "deal data should be updated with MetaVesT address");
 
         // Grantees should be able to withdraw all remaining tokens after sufficient time passed
         skip(61);

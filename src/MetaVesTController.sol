@@ -74,6 +74,7 @@ contract metavestController is UUPSUpgradeable, SafeTransferLib {
         address grantee;
         BaseAllocation.Allocation allocation;
         BaseAllocation.Milestone[] milestones;
+        address metavest;
     }
 
     enum metavestType { Vesting, TokenOption, RestrictedTokenAward }
@@ -321,7 +322,8 @@ contract metavestController is UUPSUpgradeable, SafeTransferLib {
             _metavestType: _metavestType,
             grantee: grantee,
             allocation: allocation,
-            milestones: milestones
+            milestones: milestones,
+            metavest: address(0) // Not deployed yet
         });
         dealIds.push(agreementId);
 
@@ -365,10 +367,9 @@ contract metavestController is UUPSUpgradeable, SafeTransferLib {
     function _createMetavest(bytes32 agreementId, address recipient) internal returns (address) {
         DealData storage deal = deals[agreementId];
 
-        address newMetavest;
         if(deal._metavestType == metavestType.Vesting)
         {
-            newMetavest = createVestingAllocation(deal.grantee, recipient, deal.allocation, deal.milestones);
+            deal.metavest = createVestingAllocation(deal.grantee, recipient, deal.allocation, deal.milestones);
         }
         else if(deal._metavestType == metavestType.TokenOption)
         {
@@ -387,11 +388,11 @@ contract metavestController is UUPSUpgradeable, SafeTransferLib {
         // Grant MetaVesT minter privilege
         IZkCappedMinterV2(zkCappedMinter).grantRole(
             IZkCappedMinterV2(zkCappedMinter).MINTER_ROLE(),
-            newMetavest
+            deal.metavest
         );
-        BaseAllocation(newMetavest).setZkCappedMinterAddress(address(zkCappedMinter));
+        BaseAllocation(deal.metavest).setZkCappedMinterAddress(address(zkCappedMinter));
 
-        return newMetavest;
+        return deal.metavest;
     }
     
 
