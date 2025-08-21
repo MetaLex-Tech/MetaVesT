@@ -1,6 +1,7 @@
 cache/
 out/
 .env
+.env.*
 test-command.txt
 broadcast/
 .DS_Store
