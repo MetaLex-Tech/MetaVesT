@@ -9,7 +9,7 @@ import "./lib/MetaVesTControllerTestBase.sol";
 import {CyberAgreementRegistry} from "cybercorps-contracts/src/CyberAgreementRegistry.sol";
 
 // Test by forge test --zksync --via-ir
-contract ZkGuardianCompensationTest is MetaVesTControllerTestBase {
+contract ZkSyncGuardianCompensationTest is MetaVesTControllerTestBase {
     // Parameters
     uint256 cap = 1e6 ether; // 1M ZK
     uint48 cappedMinterStartTime = 1756684800; // 2025/9/1 UTC

@@ -12,7 +12,7 @@ import {Script} from "forge-std/Script.sol";
 import {VestingAllocationFactory} from "../src/VestingAllocationFactory.sol";
 import {ZkCappedMinterV2} from "zk-governance/l2-contracts/src/ZkCappedMinterV2.sol";
 import {ZkTokenV2} from "zk-governance/l2-contracts/src/ZkTokenV2.sol";
-import {console} from "forge-std/console.sol";
+import {console2} from "forge-std/console2.sol";
 import {metavestController} from "../src/MetaVesTController.sol";
 
 contract DeployZkSyncGuardianCompensationScript is ZkSyncGuardianCompConfig, SafeTxHelper, Script {
@@ -21,8 +21,6 @@ contract DeployZkSyncGuardianCompensationScript is ZkSyncGuardianCompConfig, Saf
     function run() public {
         uint256 deployerPrivateKey = vm.envUint("DEPLOYER_PRIVATE_KEY");
         address deployer = vm.addr(deployerPrivateKey);
-
-        console.log(deployer.balance);
 
         bytes32 salt = keccak256("MetaLexMetaVestZkSyncGuardianCompensationLaunchV1.0");
 
@@ -40,6 +38,11 @@ contract DeployZkSyncGuardianCompensationScript is ZkSyncGuardianCompConfig, Saf
                 address(auth)
             )
         )));
+
+        // TODO do it when metalexSafe is deployed
+//        // Transfer CyberAgreementRegistry ownership to MetaLeX SAFE
+//        auth.updateRole(address(metalexSafe), auth.OWNER_ROLE());
+//        auth.zeroOwner();
 
         // Create zkSync Guardian Compensation Agreement template
         registry.createTemplate(
@@ -98,28 +101,28 @@ contract DeployZkSyncGuardianCompensationScript is ZkSyncGuardianCompConfig, Saf
 
         vm.stopBroadcast();
 
-        console.log("Deployer: ", deployer);
-        console.log("Guardian Safe: ", address(guardianSafe));
-        console.log("ZK token: ", address(zkToken));
-        console.log("ZkCappedMinterFactoryV2: ", address(zkCappedMinterFactory));
-        console.log("");
+        console2.log("Deployer: ", deployer);
+        console2.log("Guardian Safe: ", address(guardianSafe));
+        console2.log("ZK token: ", address(zkToken));
+        console2.log("ZkCappedMinterFactoryV2: ", address(zkCappedMinterFactory));
+        console2.log("");
 
-        console.log("Deployed addresses:");
-        console.log("  BorgAuth: ", address(auth));
-        console.log("  CyberAgreementRegistry: ", address(registry));
-        console.log("  VestingAllocationFactory: ", address(vestingAllocationFactory));
-        console.log("  MetavesTController: ", address(controller));
-        console.log("  ZkCappedMinterV2: ", address(zkCappedMinter));
-        console.log("");
+        console2.log("Deployed addresses:");
+        console2.log("  BorgAuth: ", address(auth));
+        console2.log("  CyberAgreementRegistry: ", address(registry));
+        console2.log("  VestingAllocationFactory: ", address(vestingAllocationFactory));
+        console2.log("  MetavesTController: ", address(controller));
+        console2.log("  ZkCappedMinterV2: ", address(zkCappedMinter));
+        console2.log("");
 
-        console.log("Safe TXs:");
+        console2.log("Safe TXs:");
         for (uint256 i = 0 ; i < safeTxs.length ; i++) {
-            console.log("  #", i);
-            console.log("    to:", safeTxs[i].to);
-            console.log("    value:", safeTxs[i].value);
-            console.log("    data:");
-            console.logBytes(safeTxs[i].data);
-            console.log("");
+            console2.log("  #", i);
+            console2.log("    to:", safeTxs[i].to);
+            console2.log("    value:", safeTxs[i].value);
+            console2.log("    data:");
+            console2.logBytes(safeTxs[i].data);
+            console2.log("");
         }
     }
 }
