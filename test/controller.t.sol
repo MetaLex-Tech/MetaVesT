@@ -13,6 +13,7 @@ import "./lib/MetaVesTControllerTestBase.sol";
 import "./mocks/MockCondition.sol";
 import {Strings} from "zk-governance/l2-contracts/lib/openzeppelin-contracts/contracts/utils/Strings.sol";
 import {ERC1967ProxyLib} from "./lib/ERC1967ProxyLib.sol";
+import {ZkCappedMinterV2} from "zk-governance/l2-contracts/src/ZkCappedMinterV2.sol";
 
 contract MetaVestControllerTest is MetaVesTControllerTestBase {
     using ERC1967ProxyLib for address;
@@ -47,28 +48,30 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
             )
         )));
 
-        // Deploy ZK Capped Minter v2
+        vm.startPrank(zkTokenAdmin);
 
+        // Simulate ZK Capped Minter v2 deployemnt
         zkCappedMinter = IZkCappedMinterV2(zkCappedMinterFactory.createCappedMinter(
             address(zkToken),
-            address(controller), // Grant controller admin privilege so it can grant minter privilege to deployed MetaVesT
+            address(zkTokenAdmin),
             cap,
             cappedMinterStartTime,
             cappedMinterExpirationTime,
             uint256(salt)
         ));
 
+        // Simulate TPP approval
+        zkToken.grantRole(zkToken.MINTER_ROLE(), address(zkCappedMinter));
+
+        // Simulate capped minter granting permission to MetaVesTcontroller
+        zkCappedMinter.grantRole(zkCappedMinter.MINTER_ROLE(), address(controller));
+
         vm.stopPrank();
 
         vm.startPrank(guardianSafe);
-        controller.setZkCappedMinter(address(zkCappedMinter));
+        controller.setZkCappedMinter(address(zkCappedMinter)); // Guardian SAFE to set capped minter on MetaVesTController
         controller.createSet("testSet");
         vm.stopPrank();
-
-        // TPP to review agreements and on-chain parameters, then approve by granting our ZkCappedMinter permissions
-        bytes32 minterRole = zkToken.MINTER_ROLE();
-        vm.prank(zkTokenAdmin);
-        zkToken.grantRole(minterRole, address(zkCappedMinter));
 
         // Guardian SAFE to delegate signing to an EOA
         vm.prank(guardianSafe);
@@ -1415,7 +1418,7 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
         ));
 
         vm.prank(chad);
-        vm.expectRevert(abi.encodeWithSelector(IZkCappedMinterV2.ZkCappedMinterV2__CapExceeded.selector, address(vestingAllocationChad), 2001 ether));
+        vm.expectRevert(abi.encodeWithSelector(IZkCappedMinterV2.ZkCappedMinterV2__CapExceeded.selector, address(controller), 2001 ether));
         vestingAllocationChad.withdraw(2001 ether);
     }
 
@@ -1518,55 +1521,66 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
     }
 
     function test_TogglePauseMinting() public {
-        assertFalse(zkCappedMinter.paused(), "minter should not be paused yet");
+        IZkCappedMinterV2 controllerOwnedMinter = IZkCappedMinterV2(zkCappedMinterFactory.createCappedMinter(
+            address(zkToken),
+            address(controller), // Note MetaVesTController being the admin
+            cap,
+            cappedMinterStartTime,
+            cappedMinterExpirationTime,
+            uint256(salt)
+        ));
+        vm.prank(authority);
+        controller.setZkCappedMinter(address(controllerOwnedMinter));
+
+        assertFalse(controllerOwnedMinter.paused(), "minter should not be paused yet");
 
         // Authority should be able to pause minting through controller
         vm.prank(authority);
         controller.pauseZkCappedMinter();
-        assertTrue(zkCappedMinter.paused(), "minter should be paused now");
+        assertTrue(controllerOwnedMinter.paused(), "minter should be paused now");
 
         vm.prank(authority);
         controller.unpauseZkCappedMinter();
-        assertFalse(zkCappedMinter.paused(), "minter should be unpaused now");
+        assertFalse(controllerOwnedMinter.paused(), "minter should be unpaused now");
     }
 
-    function test_RevertIf_PauseMintingNonGuardianSafe() public {
+    function test_RevertIf_PauseMintingNonAuthority() public {
         // Non-authority should not be able to pause minting through controller
         vm.expectRevert(abi.encodeWithSelector(metavestController.MetaVesTController_OnlyAuthority.selector));
         controller.pauseZkCappedMinter();
-
-        // Non-controller should not be able to pause minting directly
-        vm.expectRevert(abi.encodePacked(
-            "AccessControl: account ",
-            Strings.toHexString(address(this)),
-            " is missing role ",
-            Strings.toHexString(uint256(zkCappedMinter.PAUSER_ROLE()), 32)
-        ));
-        zkCappedMinter.pause();
     }
 
     function test_CloseMinting() public {
-        assertFalse(zkCappedMinter.closed(), "minter should not be closed yet");
+        IZkCappedMinterV2 controllerOwnedMinter = IZkCappedMinterV2(zkCappedMinterFactory.createCappedMinter(
+            address(zkToken),
+            address(controller), // Note MetaVesTController being the admin
+            cap,
+            cappedMinterStartTime,
+            cappedMinterExpirationTime,
+            uint256(salt)
+        ));
+        vm.prank(authority);
+        controller.setZkCappedMinter(address(controllerOwnedMinter));
+
+        assertFalse(controllerOwnedMinter.closed(), "minter should not be closed yet");
 
         // Authority should be able to close minting through controller
         vm.prank(authority);
         controller.closeZkCappedMinter();
-        assertTrue(zkCappedMinter.closed(), "minter should be closed now");
+        assertTrue(controllerOwnedMinter.closed(), "minter should be closed now");
     }
 
-    function test_RevertIf_CloseMintingNonGuardianSafe() public {
+    function test_RevertIf_CloseMintingNonAuthority() public {
         // Non-authority should not be able to close minting through controller
         vm.expectRevert(abi.encodeWithSelector(metavestController.MetaVesTController_OnlyAuthority.selector));
         controller.closeZkCappedMinter();
+    }
 
-        // Non-controller should not be able to close minting directly
-        vm.expectRevert(abi.encodePacked(
-            "AccessControl: account ",
-            Strings.toHexString(address(this)),
-            " is missing role ",
-            Strings.toHexString(uint256(zkCappedMinter.DEFAULT_ADMIN_ROLE()), 32)
-        ));
-        zkCappedMinter.close();
+    function test_RevertIf_MintUnauthorized() public {
+        // Should not be able to mint arbitrarily
+        vm.prank(alice);
+        vm.expectRevert(abi.encodeWithSelector(metavestController.MetaVesTController_UnauthorizedToMint.selector));
+        controller.mint(alice, 1 ether);
     }
 
     function test_UpgradeMetaVesTController() public {

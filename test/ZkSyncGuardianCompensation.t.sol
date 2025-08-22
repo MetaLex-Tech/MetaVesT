@@ -38,19 +38,29 @@ contract ZkSyncGuardianCompensationTest is MetaVesTControllerTestBase {
             )
         )));
 
-        // Deploy ZK Capped Minter v2
+        vm.stopPrank();
 
+        vm.startPrank(zkTokenAdmin);
+
+        // Simulate ZK Capped Minter v2 deployemnt
         zkCappedMinter = IZkCappedMinterV2(zkCappedMinterFactory.createCappedMinter(
             address(zkToken),
-            address(controller), // Grant controller admin privilege so it can grant minter privilege to deployed MetaVesT
+            address(zkTokenAdmin),
             cap,
             cappedMinterStartTime,
             cappedMinterExpirationTime,
             uint256(salt)
         ));
 
+        // Simulate TPP approval
+        zkToken.grantRole(zkToken.MINTER_ROLE(), address(zkCappedMinter));
+
+        // Simulate capped minter granting permission to MetaVesTcontroller
+        zkCappedMinter.grantRole(zkCappedMinter.MINTER_ROLE(), address(controller));
+
         vm.stopPrank();
 
+        // Guardian SAFE to set capped minter on MetaVesTController
         vm.prank(guardianSafe);
         controller.setZkCappedMinter(address(zkCappedMinter));
     }
@@ -208,12 +218,6 @@ contract ZkSyncGuardianCompensationTest is MetaVesTControllerTestBase {
             bobPrivateKey,
             "Bob"
         );
-
-        // TPP to review agreements and on-chain parameters, then approve by granting our ZkCappedMinter permissions
-
-        bytes32 minterRole = zkToken.MINTER_ROLE();
-        vm.prank(zkTokenAdmin);
-        zkToken.grantRole(minterRole, address(zkCappedMinter));
 
         return (metavestAlice, metavestBob);
     }

@@ -17,6 +17,7 @@ interface IERC20M {
 
 interface IController { 
     function authority() external view returns (address);
+    function mint(address recipient, uint256 amount) external;
 }
 
 /// @notice Solady's SafeTransferLib 'SafeTransfer()' and 'SafeTransferFrom()'; (https://github.com/Vectorized/solady/blob/main/src/utils/SafeTransferLib.sol)
@@ -171,7 +172,6 @@ abstract contract BaseAllocation is ReentrancyGuard, SafeTransferLib{
         GovType public govType;
         bool public terminated;
         uint256 public terminationTime;
-        address public ZkCappedMinterAddress;
 
         /// @notice BaseAllocation constructor
         /// @param _grantee: address of the grantee, cannot be a zero address
@@ -229,10 +229,6 @@ abstract contract BaseAllocation is ReentrancyGuard, SafeTransferLib{
         function updateUnlockRate(uint160 _newUnlockRate) external onlyController {
             allocation.unlockRate = _newUnlockRate;
             emit MetaVesT_UnlockRateUpdated(grantee, _newUnlockRate);
-        }
-
-        function setZkCappedMinterAddress(address _ZkCappedMinterAddress) external onlyController {
-            ZkCappedMinterAddress = _ZkCappedMinterAddress;
         }
 
         /// @notice Sets the governing power type for the MetaVesT
@@ -326,7 +322,7 @@ abstract contract BaseAllocation is ReentrancyGuard, SafeTransferLib{
             if (_amount == 0) revert MetaVesT_ZeroAmount();
             if (_amount > getAmountWithdrawable()) revert MetaVesT_MoreThanAvailable();
             tokensWithdrawn += _amount;
-            IZkCappedMinterV2(ZkCappedMinterAddress).mint(recipient, _amount);
+            IController(controller).mint(recipient, _amount);
             emit MetaVesT_Withdrawn(msg.sender, recipient, allocation.tokenContract, _amount);
         }
 

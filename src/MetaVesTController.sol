@@ -99,6 +99,9 @@ contract metavestController is UUPSUpgradeable, SafeTransferLib {
     /// @notice Maps agreement IDs to arrays of counter party values for closed deals.
     mapping(bytes32 => string[]) public counterPartyValues;
 
+    /// @notice Map MetaVesT contract address to its corresponding agreement ID
+    mapping(address => bytes32) public metavestAgreementIds;
+
     ///
     /// EVENTS
     ///
@@ -129,6 +132,7 @@ contract metavestController is UUPSUpgradeable, SafeTransferLib {
         address indexed recipient,
         address metavest
     );
+    event MetaVesTController_Minted(address indexed metavest, address indexed recipient, address zkCappedMinter, uint256 amount);
 
     ///
     /// ERRORS
@@ -169,6 +173,7 @@ contract metavestController is UUPSUpgradeable, SafeTransferLib {
     error MetaVesTController_CounterPartyNotFound();
     error MetaVesTController_PartyValuesLengthMismatch();
     error MetaVesTController_CounterPartyValueMismatch();
+    error MetaVesTController_UnauthorizedToMint();
 
     ///
     /// FUNCTIONS
@@ -386,11 +391,7 @@ contract metavestController is UUPSUpgradeable, SafeTransferLib {
             revert MetaVesTController_IncorrectMetaVesTType();
         }
         // Grant MetaVesT minter privilege
-        IZkCappedMinterV2(zkCappedMinter).grantRole(
-            IZkCappedMinterV2(zkCappedMinter).MINTER_ROLE(),
-            deal.metavest
-        );
-        BaseAllocation(deal.metavest).setZkCappedMinterAddress(address(zkCappedMinter));
+        metavestAgreementIds[deal.metavest] = agreementId;
 
         return deal.metavest;
     }
@@ -537,6 +538,16 @@ contract metavestController is UUPSUpgradeable, SafeTransferLib {
 //            //safeTransferFrom(_allocation.tokenContract, authority, restrictedTokenAward, _total);
 //            return restrictedTokenAward;
 //        }
+
+    function mint(address recipient, uint256 amount) external {
+        bytes32 agreementId = metavestAgreementIds[msg.sender];
+        if (agreementId == bytes32(0)) {
+            revert MetaVesTController_UnauthorizedToMint();
+        }
+
+        IZkCappedMinterV2(zkCappedMinter).mint(recipient, amount);
+        emit MetaVesTController_Minted(msg.sender, recipient, zkCappedMinter, amount);
+    }
     
     function getMetaVestType(address _grant) public view returns (uint256) {
         return BaseAllocation(_grant).getVestingType();

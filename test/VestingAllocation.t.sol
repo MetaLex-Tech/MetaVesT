@@ -10,11 +10,18 @@ import {metavestController} from "../src/MetaVesTController.sol";
 
 contract MockMetaVesTController {
     address public authority;
+    address public zkCappedMinter;
 
     constructor(
-        address _authority
+        address _authority,
+        address _zkCappedMinter
     ) {
         authority = _authority;
+        zkCappedMinter = _zkCappedMinter;
+    }
+
+    function mint(address recipient, uint256 amount) external {
+        ZkCappedMinterV2(zkCappedMinter).mint(recipient, amount);
     }
 }
 
@@ -33,7 +40,26 @@ contract VestingAllocationTest is Test {
         zkToken = new ZkTokenV1();
         zkToken.initialize(address(this), address(this), 0 ether);
 
-        mockController = new MockMetaVesTController(address(this));
+        // Deploy ZK Capped Minter v2
+        ZkCappedMinterV2 zkCappedMinter = new ZkCappedMinterV2(
+            IMintable(address(zkToken)),
+            address(this),
+            10000 ether,
+            uint48(block.timestamp),
+            uint48(block.timestamp + 365 days * 10)
+        );
+
+        // Grant ZkCappedMinter permissions
+        zkToken.grantRole(zkToken.MINTER_ROLE(), address(zkCappedMinter));
+
+        // Create mock controller
+        mockController = new MockMetaVesTController(address(this), address(zkCappedMinter));
+
+        // Grant controller minter privilege
+        zkCappedMinter.grantRole(
+            zkCappedMinter.MINTER_ROLE(),
+            address(mockController)
+        );
 
         BaseAllocation.Milestone[] memory milestones = new BaseAllocation.Milestone[](1);
         milestones[0] = BaseAllocation.Milestone({
@@ -59,27 +85,6 @@ contract VestingAllocationTest is Test {
             }),
             milestones
         );
-
-        // Deploy ZK Capped Minter v2
-        ZkCappedMinterV2 zkCappedMinter = new ZkCappedMinterV2(
-            IMintable(address(zkToken)),
-            address(this),
-            10000 ether,
-            uint48(block.timestamp),
-            uint48(block.timestamp + 365 days * 10)
-        );
-
-        // Grant ZkCappedMinter permissions
-        bytes32 minterRole = zkToken.MINTER_ROLE();
-        zkToken.grantRole(minterRole, address(zkCappedMinter));
-
-        // Grant MetaVesT minter privilege
-        zkCappedMinter.grantRole(
-            zkCappedMinter.MINTER_ROLE(),
-            address(vestingAllocation)
-        );
-        vm.prank(address(mockController));
-        vestingAllocation.setZkCappedMinterAddress(address(zkCappedMinter));
     }
 
     function test_Metadata() public {
@@ -97,6 +102,12 @@ contract VestingAllocationTest is Test {
         VestingAllocation(vestingAllocation).withdraw(100 ether);
 
         assertEq(zkToken.balanceOf(recipient), balanceBefore + 100 ether);
+    }
+
+    function test_RevertIf_WithdrawTooMuch() public {
+        vm.prank(grantee);
+        vm.expectRevert(abi.encodeWithSelector(BaseAllocation.MetaVesT_MoreThanAvailable.selector));
+        VestingAllocation(vestingAllocation).withdraw(101 ether);
     }
 
     function test_UpdateRecipient() public {

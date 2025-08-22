@@ -96,8 +96,12 @@ contract MetaVesTControllerTestBase is Test {
     function _granteeWithdrawAndAsserts(VestingAllocation vestingAllocation, uint256 amount, string memory assertName) internal {
         address grantee = vestingAllocation.grantee();
         uint256 balanceBefore = zkToken.balanceOf(grantee);
+
         vm.prank(grantee);
+        vm.expectEmit(true, true, true, true);
+        emit metavestController.MetaVesTController_Minted(address(vestingAllocation), grantee, address(zkCappedMinter), amount);
         vestingAllocation.withdraw(amount);
+
         assertEq(zkToken.balanceOf(grantee), balanceBefore + amount, string(abi.encodePacked(assertName, ": unexpected received amount")));
         assertEq(zkToken.balanceOf(address(vestingAllocation)), 0, string(abi.encodePacked(assertName, ": vesting contract should not have any token (it mints on-demand)")));
     }
