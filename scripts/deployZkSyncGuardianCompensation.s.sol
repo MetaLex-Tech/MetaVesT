@@ -61,8 +61,6 @@ contract DeployZkSyncGuardianCompensationScript is ZkSyncGuardianCompConfig, Saf
 
         auth.updateRole(address(metalexSafe), auth.OWNER_ROLE());
         auth.zeroOwner();
-        auth.onlyRole(auth.OWNER_ROLE(), address(metalexSafe)); // MetaLeX SAFE should own BorgAuth
-        require(auth.userRoles(deployer) == 0, "deployer should revoke BorgAuth ownership");
 
         // Deploy MetaVesT Controller
 
@@ -103,6 +101,42 @@ contract DeployZkSyncGuardianCompensationScript is ZkSyncGuardianCompConfig, Saf
 
         vm.stopBroadcast();
 
+        // Post-deployment verifications
+
+        auth.onlyRole(auth.OWNER_ROLE(), address(metalexSafe)); // MetaLeX SAFE should own BorgAuth
+        vm.assertEq(auth.userRoles(deployer), 0, "deployer should revoke BorgAuth ownership");
+        vm.assertEq(address(registry.AUTH()), address(auth), "Unexpected CyberAgreementRegistry auth");
+
+        _assertTemplate(
+            registry,
+            compTemplateId,
+            compAgreementUri,
+            compTemplateName,
+            compGlobalFields,
+            compPartyFields
+        );
+        _assertTemplate(
+            registry,
+            serviceTemplateId,
+            serviceAgreementUri,
+            serviceTemplateName,
+            serviceGlobalFields,
+            servicePartyFields
+        );
+
+        vm.assertEq(controller.authority(), address(guardianSafe), "MetaVesTController's authority should be Guardian SAFE");
+        vm.assertEq(controller.dao(), address(guardianSafe), "MetaVesTController's DAO should be Guardian SAFE");
+        vm.assertEq(controller.registry(), address(registry), "Unexpected MetaVesTController registry");
+        vm.assertEq(controller.vestingFactory(), address(vestingAllocationFactory), "Unexpected MetaVesTController vesting allocation factory");
+
+        vm.assertEq(address(zkCappedMinter.MINTABLE()), address(zkToken), "ZkCappedMinter should mint ZK");
+        vm.assertTrue(zkCappedMinter.hasRole(zkCappedMinter.DEFAULT_ADMIN_ROLE(), address(controller)), "MetaVesTController should be the admin of ZkCappedMinter");
+        vm.assertEq(zkCappedMinter.CAP(), 1e6 ether, "Unexpected ZkCappedMinter cap");
+        vm.assertEq(zkCappedMinter.START_TIME(), 1756684800, "Unexpected ZkCappedMinter start time"); // 2025/09/01 00:00 UTC
+        vm.assertEq(zkCappedMinter.EXPIRATION_TIME(), 1756684800 + 365 days * 2, "Unexpected ZkCappedMinter expiry");
+
+        // Output logs
+
         console2.log("Deployer: ", deployer);
         console2.log("Guardian Safe: ", address(guardianSafe));
         console2.log("ZK token: ", address(zkToken));
@@ -126,5 +160,25 @@ contract DeployZkSyncGuardianCompensationScript is ZkSyncGuardianCompConfig, Saf
             console2.logBytes(safeTxs[i].data);
             console2.log("");
         }
+    }
+
+    function _assertTemplate(
+        CyberAgreementRegistry registry,
+        bytes32 templateId,
+        string memory _legalContractUri,
+        string memory _title,
+        string[] memory _globalFields,
+        string[] memory _partyFields
+    ) internal {
+        (
+            string memory legalContractUri,
+            string memory title,
+            string[] memory globalFields,
+            string[] memory partyFields
+        ) = registry.getTemplateDetails(templateId);
+        vm.assertEq(legalContractUri, _legalContractUri, "Unexpected legalContractUri");
+        vm.assertEq(title, _title, "Unexpected template title");
+        vm.assertEq(globalFields, _globalFields, "Unexpected template global fields");
+        vm.assertEq(partyFields, _partyFields, "Unexpected template party fields");
     }
 }
