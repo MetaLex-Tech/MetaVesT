@@ -39,11 +39,6 @@ contract DeployZkSyncGuardianCompensationScript is ZkSyncGuardianCompConfig, Saf
             )
         )));
 
-        // TODO do it when metalexSafe is deployed
-//        // Transfer CyberAgreementRegistry ownership to MetaLeX SAFE
-//        auth.updateRole(address(metalexSafe), auth.OWNER_ROLE());
-//        auth.zeroOwner();
-
         // Create zkSync Guardian Compensation Agreement template
         registry.createTemplate(
             compTemplateId,
@@ -61,6 +56,13 @@ contract DeployZkSyncGuardianCompensationScript is ZkSyncGuardianCompConfig, Saf
             serviceGlobalFields,
             servicePartyFields
         );
+
+        // Transfer CyberAgreementRegistry ownership to MetaLeX SAFE
+
+        auth.updateRole(address(metalexSafe), auth.OWNER_ROLE());
+        auth.zeroOwner();
+        auth.onlyRole(auth.OWNER_ROLE(), address(metalexSafe)); // MetaLeX SAFE should own BorgAuth
+        require(auth.userRoles(deployer) == 0, "deployer should revoke BorgAuth ownership");
 
         // Deploy MetaVesT Controller
 

@@ -9,11 +9,11 @@ import {IGnosisSafe} from "../../test/lib/safe.sol";
 import {BaseAllocation} from "../../src/BaseAllocation.sol";
 
 contract ZkSyncGuardianCompConfig is CommonBase {
-    // Assume zkSync Era mainnet @ 64165479
+    // Assume zkSync Era mainnet @ 64202885
 
     // MetaLeX SAFE
 
-    address metalexSafe = vm.addr(vm.envUint("DEPLOYER_PRIVATE_KEY")); // TODO WIP: use deployer as the placeholder for now
+    IGnosisSafe metalexSafe = IGnosisSafe(0x99ba28257DbDB399b53bF59Aa5656480f3bdc5bc);
 
     // zkSync Guardian SAFE
 
