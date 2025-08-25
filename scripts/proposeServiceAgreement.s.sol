@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity ^0.8.24;
 
-import {ZkSyncGuardianCompConfig2024_2025} from "./lib/ZkSyncGuardianCompConfig2024_2025.sol";
+import {ZkSyncGuardianCompensationConfig2024_2025} from "./lib/ZkSyncGuardianCompensationConfig2024_2025.sol";
 import {BaseAllocation} from "../src/BaseAllocation.sol";
 import {BorgAuth} from "cybercorps-contracts/src/libs/auth.sol";
 import {CyberAgreementRegistry} from "cybercorps-contracts/src/CyberAgreementRegistry.sol";
@@ -17,7 +17,7 @@ import {ZkTokenV2} from "zk-governance/l2-contracts/src/ZkTokenV2.sol";
 import {console2} from "forge-std/console2.sol";
 import {metavestController} from "../src/MetaVesTController.sol";
 
-contract ProposeServiceAgreementScript is ZkSyncGuardianCompConfig2024_2025, SafeTxHelper, Script {
+contract ProposeServiceAgreementScript is ZkSyncGuardianCompensationConfig2024_2025, SafeTxHelper, Script {
 
     /// @dev For running from `forge script`. Provide the deployer private key through env var.
     function run() public virtual {

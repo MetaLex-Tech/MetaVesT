@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity ^0.8.24;
 
-import {ZkSyncGuardianCompConfigBase} from "./lib/ZkSyncGuardianCompConfigBase.sol";
+import {ZkSyncGuardianCompensationConfigBase} from "./lib/ZkSyncGuardianCompensationConfigBase.sol";
 import {ISafeProxyFactory, IGnosisSafe, GnosisTransaction} from "../test/lib/safe.sol";
 import {BorgAuth} from "cybercorps-contracts/src/libs/auth.sol";
 import {CyberAgreementRegistry} from "cybercorps-contracts/src/CyberAgreementRegistry.sol";
@@ -15,7 +15,7 @@ import {ZkTokenV2} from "zk-governance/l2-contracts/src/ZkTokenV2.sol";
 import {console2} from "forge-std/console2.sol";
 import {metavestController} from "../src/MetaVesTController.sol";
 
-contract DeployZkSyncGuardianCompensationPrerequisitesScript is ZkSyncGuardianCompConfigBase, SafeTxHelper, Script {
+contract DeployZkSyncGuardianCompensationPrerequisitesScript is ZkSyncGuardianCompensationConfigBase, SafeTxHelper, Script {
     // Assume zkSync Era mainnet @ 64166260
 
     /// @dev For running from `forge script`. Provide the deployer private key through env var.

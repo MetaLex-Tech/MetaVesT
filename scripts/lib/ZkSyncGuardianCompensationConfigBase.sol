@@ -10,7 +10,7 @@ import {IGnosisSafe} from "../../test/lib/safe.sol";
 import {BaseAllocation} from "../../src/BaseAllocation.sol";
 import {VestingAllocationFactory} from "../../src/VestingAllocationFactory.sol";
 
-contract ZkSyncGuardianCompConfigBase is CommonBase {
+contract ZkSyncGuardianCompensationConfigBase is CommonBase {
     // Assume zkSync Era mainnet @ 64202885
 
     // MetaLeX SAFE
