@@ -100,7 +100,7 @@ contract ZkSyncGuardianCompConfigBase is CommonBase {
         });
     }
 
-    function _formatGlobalValues(
+    function _compFormatGlobalValues(
         address grantor,
         address grantee,
         address token,
@@ -123,7 +123,7 @@ contract ZkSyncGuardianCompConfigBase is CommonBase {
         return globalValues;
     }
 
-    function _formatPartyValues(
+    function _compFormatPartyValues(
         address grantor,
         address grantee,
         string memory granteeName
@@ -140,6 +140,30 @@ contract ZkSyncGuardianCompConfigBase is CommonBase {
         partyValues[1][1] = vm.toString(grantee);
         partyValues[1][2] = "email@company.com";
         partyValues[1][3] = "individual";
+        return partyValues;
+    }
+
+    function _serviceFormatGlobalValues(uint256 expiry) internal returns(string[] memory) {
+        string[] memory globalValues = new string[](1);
+        globalValues[0] = vm.toString(expiry);
+        return globalValues;
+    }
+
+    function _serviceFormatPartyValues(
+        address metalex,
+        address guardianBorg
+    ) internal returns(string[][] memory) {
+        string[][] memory partyValues = new string[][](2);
+        partyValues[0] = new string[](4);
+        partyValues[0][0] = "MetaLeX";
+        partyValues[0][1] = vm.toString(metalex);
+        partyValues[0][2] = "test@metalex.tech";
+        partyValues[0][3] = "Corporation";
+        partyValues[1] = new string[](4);
+        partyValues[1][0] = "Guardian BORG";
+        partyValues[1][1] = vm.toString(guardianBorg);
+        partyValues[1][2] = "inbox@guardian.borg";
+        partyValues[1][3] = "Foundation";
         return partyValues;
     }
 }

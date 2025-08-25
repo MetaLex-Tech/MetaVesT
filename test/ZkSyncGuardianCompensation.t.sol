@@ -11,12 +11,14 @@ import {console2} from "forge-std/console2.sol";
 import {CyberAgreementRegistry} from "cybercorps-contracts/src/CyberAgreementRegistry.sol";
 import {DeployZkSyncGuardianCompensationPrerequisitesScript} from "../scripts/deployZkSyncGuardianCompensationPrerequisites.s.sol";
 import {DeployZkSyncGuardianCompensation2024_2025Script} from "../scripts/deployZkSyncGuardianCompensation2024_2025.s.sol";
+import {ProposeServiceAgreementScript} from "../scripts/proposeServiceAgreement.s.sol";
 import {GnosisTransaction} from "./lib/safe.sol";
 
 // Test by forge test --zksync --via-ir
 contract ZkSyncGuardianCompensationTest is
     DeployZkSyncGuardianCompensationPrerequisitesScript,
     DeployZkSyncGuardianCompensation2024_2025Script,
+    ProposeServiceAgreementScript,
     Test
 {
     // zkSync Era mainnet @ 63631890
@@ -27,13 +29,15 @@ contract ZkSyncGuardianCompensationTest is
 
     uint256 deployerPrivateKey = privateKeySalt + 0;
     address deployer = vm.addr(deployerPrivateKey);
-    uint256 delegatePrivateKey = privateKeySalt + 1;
-    address delegate = vm.addr(delegatePrivateKey);
-    uint256 alicePrivateKey = privateKeySalt + 2;
+    uint256 metalexDelegatePrivateKey = privateKeySalt + 1;
+    address metalexDelegate = vm.addr(metalexDelegatePrivateKey);
+    uint256 guardianDelegatePrivateKey = privateKeySalt + 2;
+    address guardianDelegate = vm.addr(guardianDelegatePrivateKey);
+    uint256 alicePrivateKey = privateKeySalt + 3;
     address alice = vm.addr(alicePrivateKey);
-    uint256 bobPrivateKey = privateKeySalt + 3;
+    uint256 bobPrivateKey = privateKeySalt + 4;
     address bob = vm.addr(bobPrivateKey);
-    uint256 chadPrivateKey = privateKeySalt + 4;
+    uint256 chadPrivateKey = privateKeySalt + 5;
     address chad = vm.addr(chadPrivateKey);
 
     IZkCappedMinterV2 masterMinter;
@@ -42,7 +46,10 @@ contract ZkSyncGuardianCompensationTest is
     metavestController controller;
 
     function setUp() public {
+        // Prepare funds for accounts used by the actual deployment scripts
         deal(deployer, 1 ether);
+        deal(metalexDelegate, 1 ether);
+        deal(guardianDelegate, 1 ether);
 
         // Run deploy scripts
         GnosisTransaction[] memory safeTxs;
@@ -70,7 +77,8 @@ contract ZkSyncGuardianCompensationTest is
 
     function run() public override(
         DeployZkSyncGuardianCompensationPrerequisitesScript,
-        DeployZkSyncGuardianCompensation2024_2025Script
+        DeployZkSyncGuardianCompensation2024_2025Script,
+        ProposeServiceAgreementScript
     ) {
         // No-op, we don't use this part of the scripts
     }
@@ -113,6 +121,28 @@ contract ZkSyncGuardianCompensationTest is
         vm.assertTrue(zkCappedMinter.hasRole(zkCappedMinter.MINTER_ROLE(), address(controller)), "ZK Capped Minter should grant MetaVesTController MINTER role");
     }
 
+    function test_ProposeServiceAgreement() public {
+        // Simulate MetaLeX SAFE delegation
+        vm.prank(address(metalexSafe));
+        registry.setDelegation(metalexDelegate, block.timestamp + 60);
+        assertTrue(registry.isValidDelegate(address(metalexSafe), metalexDelegate), "should be MetaLeX SAFE's delegate");
+
+        // Simulate MetaLeX delegate proposing and signing agreement
+        bytes32 agreementId = ProposeServiceAgreementScript.run(metalexDelegatePrivateKey, registry);
+
+        // Verify agreement
+
+        (bytes32 templateId, , , , , , uint256 expiry) = registry.agreements(agreementId);
+        assertEq(templateId, serviceTemplateId, "Unexpected service agreement template ID");
+        assertEq(expiry, serviceAgreementExpiry, "Unexpected service agreement expiry");
+
+        (, , , , , address[] memory parties, , , , ) = registry.getContractDetails(agreementId);
+        vm.assertEq(parties[0], address(metalexSafe), "First party should be MetaLeX SAFE");
+        vm.assertEq(parties[1], address(guardianSafe), "Second party should be Guardian SAFE");
+
+        vm.assertTrue(registry.hasSigned(agreementId, metalexDelegate), "Should signed by MetaLeX delegate");
+    }
+
     function test_GuardianCompensation() public {
         (address metavestAddressAlice, address metavestAddressBob) = _guardiansSignAndTppPass();
 
@@ -148,15 +178,15 @@ contract ZkSyncGuardianCompensationTest is
 
         // Guardian SAFE to delegate signing to an EOA
         vm.prank(address(guardianSafe));
-        registry.setDelegation(delegate, block.timestamp + 60);
-        assertTrue(registry.isValidDelegate(address(guardianSafe), delegate), "delegate should be Guardian SAFE's delegate");
+        registry.setDelegation(guardianDelegate, block.timestamp + 60);
+        assertTrue(registry.isValidDelegate(address(guardianSafe), guardianDelegate), "should be Guardian SAFE's delegate");
 
         bytes32 contractIdChad = _proposeAndSignDeal(
             registry,
             controller,
             compTemplateId,
             block.timestamp, // salt
-            delegatePrivateKey,
+            guardianDelegatePrivateKey,
             chad,
             BaseAllocation.Allocation({
                 tokenContract: address(zkToken),
@@ -188,8 +218,8 @@ contract ZkSyncGuardianCompensationTest is
     function _guardiansSignAndTppPass() internal returns(address, address) {
         // Guardian SAFE to delegate signing to an EOA
         vm.prank(address(guardianSafe));
-        registry.setDelegation(delegate, block.timestamp + 60);
-        assertTrue(registry.isValidDelegate(address(guardianSafe), delegate), "delegate should be Guardian SAFE's delegate");
+        registry.setDelegation(guardianDelegate, block.timestamp + 60);
+        assertTrue(registry.isValidDelegate(address(guardianSafe), guardianDelegate), "delegate should be Guardian SAFE's delegate");
 
         // Guardian SAFE to propose deals on MetaVesTController
 
@@ -199,7 +229,7 @@ contract ZkSyncGuardianCompensationTest is
             controller,
             compTemplateId,
             block.timestamp, // salt
-            delegatePrivateKey,
+            guardianDelegatePrivateKey,
             alice,
             BaseAllocation.Allocation({
                 tokenContract: address(zkToken),
@@ -222,7 +252,7 @@ contract ZkSyncGuardianCompensationTest is
             controller,
             compTemplateId,
             block.timestamp, // salt
-            delegatePrivateKey,
+            guardianDelegatePrivateKey,
             bob,
             BaseAllocation.Allocation({
                 tokenContract: address(zkToken),

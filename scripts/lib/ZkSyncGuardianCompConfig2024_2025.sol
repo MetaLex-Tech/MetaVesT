@@ -15,9 +15,12 @@ contract ZkSyncGuardianCompConfig2024_2025 is ZkSyncGuardianCompConfigBase {
     // Vote: https://vote.zknation.io/dao/proposal/14920227315823844313255249182525601975564035647349569740836448589354658768084?govId=eip155:324:0xb83FF6501214ddF40C91C9565d095400f3F45746
     IZkCappedMinterV2 zkCappedMinter = IZkCappedMinterV2(0xE555FC98E45637D1B45e60E4fc05cF0F22836156);
 
-    // MetaVesT
+    // MetaVesT deployment
     CyberAgreementRegistry registry = CyberAgreementRegistry(address(0)); // TODO TBD
     VestingAllocationFactory vestingAllocationFactory = VestingAllocationFactory(address(0)); // TODO TBD
+
+    // MetaLeX <> zkSync Guardian BORG Service Agreement parameters
+    uint256 serviceAgreementExpiry = 1788220800;
 
     constructor() {
         // Vesting parameters
