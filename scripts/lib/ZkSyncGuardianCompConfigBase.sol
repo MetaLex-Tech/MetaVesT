@@ -3,12 +3,14 @@ pragma solidity ^0.8.28;
 
 import {CommonBase} from "forge-std/Base.sol";
 import {ZkCappedMinterV2} from "zk-governance/l2-contracts/src/ZkCappedMinterV2.sol";
+import {CyberAgreementRegistry} from "cybercorps-contracts/src/CyberAgreementRegistry.sol";
 import {IZkTokenV1} from "../../src/interfaces/zk-governance/IZkTokenV1.sol";
 import {IZkCappedMinterV2Factory} from "../../src/interfaces/zk-governance/IZkCappedMinterV2Factory.sol";
 import {IGnosisSafe} from "../../test/lib/safe.sol";
 import {BaseAllocation} from "../../src/BaseAllocation.sol";
+import {VestingAllocationFactory} from "../../src/VestingAllocationFactory.sol";
 
-contract ZkSyncGuardianCompConfig is CommonBase {
+contract ZkSyncGuardianCompConfigBase is CommonBase {
     // Assume zkSync Era mainnet @ 64202885
 
     // MetaLeX SAFE
@@ -22,37 +24,32 @@ contract ZkSyncGuardianCompConfig is CommonBase {
     // ZK Governance
 
     IZkTokenV1 zkToken = IZkTokenV1(0x5A7d6b2F92C77FAD6CCaBd7EE0624E64907Eaf3E);
-    IZkCappedMinterV2Factory zkCappedMinterFactory = IZkCappedMinterV2Factory(0x0400E6bc22B68686Fb197E91f66E199C6b0DDD6a);
-
-    // ZK Capped Minter
-
-    uint48 zkCappedMinterStartTime = 1756684800; // 2025/09/01 00:00 UTC
-    uint48 zkCappedMinterExpirationTime = zkCappedMinterStartTime + 365 days * 2; // Expect to vest over an year with a margin of an extra year for withdrawal
-    uint256 cap = 1e6 ether; // 1M ZK
-
-    // zkSync Guardian Compensation Agreement template
-
-    string compAgreementUri = "ipfs://bafybeiangqvqenqkvybrbxu2npv6mlqreunxxygsh3377mpwwjao64qpse"; // TODO WIP
-    string compTemplateName = "zkSync Guardian Compensation Agreement"; // TODO WIP
-    bytes32 compTemplateId = hex"59ac13333823089915f19c84afec3537118dfd884fdbe0618cf4503811691590"; // Randomly generated
-
-    string[] compGlobalFields;
-    string[] compPartyFields;
-
-    // TODO WIP: zkSync Guardian Compensation default rate
-
-    uint160 annualVestingRate = 50e3 ether;
-    uint160 annualUnlockRate = 50e3 ether;
-    BaseAllocation.Milestone[] milestones = new BaseAllocation.Milestone[](0);
 
     // MetaLeX <> zkSync Guardian BORG Service Agreement template
 
     string serviceAgreementUri = "ipfs://bafybeiangqvqenqkvybrbxu2npv6mlqreunxxygsh3377mpwwjao64qpse"; // TODO WIP
     string serviceTemplateName = "MetaLeX <> zkSync Guardian BORG Service Agreement"; // TODO WIP
-    bytes32 serviceTemplateId = hex"3af0e11862b617ece70550dbb5ec0a260053aa21466a4209036d5b74f9be107b"; // Randomly generated
+    bytes32 serviceTemplateId = bytes32(uint256(200)); // TODO TBD
 
     string[] serviceGlobalFields;
     string[] servicePartyFields;
+
+    // zkSync Guardian Compensation Agreement template
+
+    string compAgreementUri = "ipfs://bafybeiangqvqenqkvybrbxu2npv6mlqreunxxygsh3377mpwwjao64qpse"; // TODO WIP
+    string compTemplateName = "zkSync Guardian Compensation Agreement"; // TODO WIP
+    bytes32 compTemplateId = bytes32(uint256(201)); // TODO TBD
+
+    string[] compGlobalFields;
+    string[] compPartyFields;
+
+    BaseAllocation.Milestone[] milestones = new BaseAllocation.Milestone[](0);
+
+    // Vesting parameters (should be overridden by child deploy configs)
+
+    address[] guardians;
+    uint256 fixedAnnualCompensation;
+    uint48 metavestVestingAndUnlockStartTime;
 
     constructor() {
 
@@ -79,10 +76,9 @@ contract ZkSyncGuardianCompConfig is CommonBase {
 
         // MetaLeX <> zkSync Guardian BORG Service Agreement template
 
-        // TODO WIP
-        serviceGlobalFields = new string[](0);
+        serviceGlobalFields = new string[](1);
+        serviceGlobalFields[0] = "expiryDate";
 
-        // TODO WIP
         servicePartyFields = new string[](4);
         servicePartyFields[0] = "name";
         servicePartyFields[1] = "evmAddress";
@@ -91,16 +87,15 @@ contract ZkSyncGuardianCompConfig is CommonBase {
     }
 
     function _parseAllocation(address token, uint48 startTime) internal returns(BaseAllocation.Allocation memory) {
-        // TODO WIP
         return BaseAllocation.Allocation({
             tokenContract: token,
             // 100k ZK total, the first half unlocks with a cliff and the second half unlocks over an year
-            tokenStreamTotal: 100e3 ether,
-            vestingCliffCredit: 50e3 ether,
-            unlockingCliffCredit: 50e3 ether,
-            vestingRate: annualVestingRate / 365 days,
+            tokenStreamTotal: fixedAnnualCompensation,
+            vestingCliffCredit: 0e3 ether,
+            unlockingCliffCredit: 0e3 ether,
+            vestingRate: uint160(fixedAnnualCompensation / 365 days),
             vestingStartTime: startTime, // start along with capped minter
-            unlockRate: annualUnlockRate / 365 days,
+            unlockRate: uint160(fixedAnnualCompensation / 365 days),
             unlockStartTime: startTime // start along with capped minter
         });
     }
@@ -111,7 +106,6 @@ contract ZkSyncGuardianCompConfig is CommonBase {
         address token,
         uint48 startTime
     ) internal returns(string[] memory) {
-        // TODO WIP
         BaseAllocation.Allocation memory allocation = _parseAllocation(token, startTime);
 
         string[] memory globalValues = new string[](11);
@@ -122,9 +116,9 @@ contract ZkSyncGuardianCompConfig is CommonBase {
         globalValues[4] = vm.toString(allocation.tokenStreamTotal / 1 ether); //tokenStreamTotal (human-readable)
         globalValues[5] = vm.toString(allocation.vestingCliffCredit / 1 ether); // vestingCliffCredit (human-readable)
         globalValues[6] = vm.toString(allocation.unlockingCliffCredit / 1 ether); // unlockingCliffCredit (human-readable)
-        globalValues[7] = vm.toString(annualVestingRate / 1 ether); // vestingRate (annually) (human-readable)
+        globalValues[7] = vm.toString(fixedAnnualCompensation / 1 ether); // vestingRate (annually) (human-readable)
         globalValues[8] = vm.toString(allocation.vestingStartTime); // vestingStartTime
-        globalValues[9] = vm.toString(annualUnlockRate / 1 ether); // unlockRate (annually) (human-readable)
+        globalValues[9] = vm.toString(fixedAnnualCompensation / 1 ether); // unlockRate (annually) (human-readable)
         globalValues[10] = vm.toString(allocation.unlockStartTime); // unlockStartTime
         return globalValues;
     }
