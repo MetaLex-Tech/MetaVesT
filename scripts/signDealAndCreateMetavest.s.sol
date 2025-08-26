@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity ^0.8.24;
 
-import {ZkSyncGuardianCompensationConfig2024_2025} from "./lib/ZkSyncGuardianCompensationConfig2024_2025.sol";
+import {ZkSyncGuardianCompensation2024_2025} from "./lib/ZkSyncGuardianCompensation2024_2025.sol";
 import {BaseAllocation} from "../src/BaseAllocation.sol";
 import {BorgAuth} from "cybercorps-contracts/src/libs/auth.sol";
 import {CyberAgreementRegistry} from "cybercorps-contracts/src/CyberAgreementRegistry.sol";
@@ -17,50 +17,50 @@ import {ZkTokenV2} from "zk-governance/l2-contracts/src/ZkTokenV2.sol";
 import {console} from "forge-std/console.sol";
 import {metavestController} from "../src/MetaVesTController.sol";
 
-contract SignDealAndCreateMetavestScript is ZkSyncGuardianCompensationConfig2024_2025, SafeTxHelper, Script {
+contract SignDealAndCreateMetavestScript is SafeTxHelper, Script {
+    using ZkSyncGuardianCompensation2024_2025 for ZkSyncGuardianCompensation2024_2025.Config;
 
     /// @dev For running from `forge script`. Provide the deployer private key through env var.
     function run() public virtual {
         uint256 granteePrivateKey = vm.envUint("GRANTEE_PRIVATE_KEY");
         run(
             granteePrivateKey,
-            registry,
-            controller,
             0x0000000000000000000000000000000000000000000000000000000000000000, // TODO TBD
-            PartyInfo({ // TODO TBD
+            ZkSyncGuardianCompensation2024_2025.PartyInfo({ // TODO TBD
                 name: "Alice",
                 evmAddress: vm.addr(granteePrivateKey),
                 contactDetails: "email@company.com",
                 _type: "individual"
-            })
+            }),
+            ZkSyncGuardianCompensation2024_2025.getDefault()
         );
     }
 
     /// @dev For running in tests
     function run(
-        uint256 granteePrivateKey,
-        CyberAgreementRegistry registry,
-        metavestController controller,
+        uint256 granteePrivateKey,     
         bytes32 agreementId,
-        PartyInfo memory granteeInfo
+        ZkSyncGuardianCompensation2024_2025.PartyInfo memory granteeInfo,
+        ZkSyncGuardianCompensation2024_2025.Config memory config
     ) public virtual returns(address) {
 
         // Sign the deal and create MetaVesT
 
-        string[] memory granteePartyValues = _compFormatPartyValues(granteeInfo);
+        string[] memory granteePartyValues = ZkSyncGuardianCompensation2024_2025._compFormatPartyValues(vm, granteeInfo);
         bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
             vm,
-            registry.DOMAIN_SEPARATOR(),
-            registry.SIGNATUREDATA_TYPEHASH(),
+            config.registry.DOMAIN_SEPARATOR(),
+            config.registry.SIGNATUREDATA_TYPEHASH(),
             agreementId,
-            compAgreementUri,
-            compGlobalFields,
-            compPartyFields,
-            _compFormatGlobalValues(
-                address(guardianSafe),
+            config.compAgreementUri,
+            config.compGlobalFields,
+            config.compPartyFields,
+            config._compFormatGlobalValues(
+                vm,
+                address(config.guardianSafe),
                 granteeInfo.evmAddress,
-                address(zkToken),
-                metavestVestingAndUnlockStartTime
+                address(config.zkToken),
+                config.metavestVestingAndUnlockStartTime
             ),
             granteePartyValues,
             granteePrivateKey
@@ -68,7 +68,7 @@ contract SignDealAndCreateMetavestScript is ZkSyncGuardianCompensationConfig2024
 
         vm.startBroadcast(granteePrivateKey);
 
-        address metavest = controller.signDealAndCreateMetavest(
+        address metavest = config.controller.signDealAndCreateMetavest(
             granteeInfo.evmAddress,
             granteeInfo.evmAddress,
             agreementId,
@@ -81,9 +81,9 @@ contract SignDealAndCreateMetavestScript is ZkSyncGuardianCompensationConfig2024
 
         console.log("Grantee: ", granteeInfo.evmAddress);
         console.log("Grantee Name: ", granteeInfo.name);
-        console.log("Guardian Safe: ", address(guardianSafe));
-        console.log("CyberAgreementRegistry: ", address(registry));
-        console.log("MetavesTController: ", address(controller));
+        console.log("Guardian Safe: ", address(config.guardianSafe));
+        console.log("CyberAgreementRegistry: ", address(config.registry));
+        console.log("MetavesTController: ", address(config.controller));
         console.log("Agreement ID:");
         console.logBytes32(agreementId);
         console.log("Created:");

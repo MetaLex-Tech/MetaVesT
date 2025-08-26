@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity ^0.8.24;
 
-import {ZkSyncGuardianCompensationConfig2024_2025} from "./lib/ZkSyncGuardianCompensationConfig2024_2025.sol";
+import {ZkSyncGuardianCompensation2024_2025} from "./lib/ZkSyncGuardianCompensation2024_2025.sol";
 import {BaseAllocation} from "../src/BaseAllocation.sol";
 import {BorgAuth} from "cybercorps-contracts/src/libs/auth.sol";
 import {CyberAgreementRegistry} from "cybercorps-contracts/src/CyberAgreementRegistry.sol";
@@ -17,40 +17,40 @@ import {ZkTokenV2} from "zk-governance/l2-contracts/src/ZkTokenV2.sol";
 import {console2} from "forge-std/console2.sol";
 import {metavestController} from "../src/MetaVesTController.sol";
 
-contract ProposeServiceAgreementScript is ZkSyncGuardianCompensationConfig2024_2025, SafeTxHelper, Script {
+contract ProposeServiceAgreementScript is SafeTxHelper, Script {
+    using ZkSyncGuardianCompensation2024_2025 for ZkSyncGuardianCompensation2024_2025.Config;
 
     /// @dev For running from `forge script`. Provide the deployer private key through env var.
     function run() public virtual {
         run(
             vm.envUint("METALEX_SAFE_DELEGATE_PRIVATE_KEY"),
-            registry
+            ZkSyncGuardianCompensation2024_2025.getDefault()
         );
     }
 
     /// @dev For running in tests
     function run(
         uint256 proposerPrivateKey,
-        CyberAgreementRegistry _registry
+        ZkSyncGuardianCompensation2024_2025.Config memory config
     ) public virtual returns(bytes32) {
         address metalexProposer = vm.addr(proposerPrivateKey);
-        registry = _registry;
 
         // Assume Guardian SAFE already delegate signing to the deployer
 
         // Propose a new deal
 
         address[] memory parties = new address[](2);
-        parties[0] = address(metalexSafe);
-        parties[1] = address(guardianSafe);
+        parties[0] = address(config.metalexSafe);
+        parties[1] = address(config.guardianSafe);
 
-        string[] memory globalValues = _serviceFormatGlobalValues(serviceAgreementExpiry);
-        string[][] memory partyValues = _serviceFormatPartyValues(address(metalexProposer), address(guardianSafe));
+        string[] memory globalValues = ZkSyncGuardianCompensation2024_2025._serviceFormatGlobalValues(vm, config.serviceAgreementExpiry);
+        string[][] memory partyValues = ZkSyncGuardianCompensation2024_2025._serviceFormatPartyValues(vm, address(metalexProposer), address(config.guardianSafe));
 
         uint256 agreementSalt = block.timestamp;
 
         bytes32 expectedContractId = keccak256(
             abi.encode(
-                serviceTemplateId,
+                config.serviceTemplateId,
                 agreementSalt, // salt,
                 globalValues,
                 parties
@@ -59,12 +59,12 @@ contract ProposeServiceAgreementScript is ZkSyncGuardianCompensationConfig2024_2
 
         bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
             vm,
-            registry.DOMAIN_SEPARATOR(),
-            registry.SIGNATUREDATA_TYPEHASH(),
+            config.registry.DOMAIN_SEPARATOR(),
+            config.registry.SIGNATUREDATA_TYPEHASH(),
             expectedContractId,
-            serviceAgreementUri,
-            serviceGlobalFields,
-            servicePartyFields,
+            config.serviceAgreementUri,
+            config.serviceGlobalFields,
+            config.servicePartyFields,
             globalValues,
             partyValues[0],
             proposerPrivateKey
@@ -72,18 +72,18 @@ contract ProposeServiceAgreementScript is ZkSyncGuardianCompensationConfig2024_2
 
         vm.startBroadcast(proposerPrivateKey);
 
-        bytes32 contractId = registry.createContract(
-            serviceTemplateId,
+        bytes32 contractId = config.registry.createContract(
+            config.serviceTemplateId,
             agreementSalt,
             globalValues,
             parties,
             partyValues,
             bytes32(0), // no secrets
             address(0), // no finalizer
-            serviceAgreementExpiry
+            config.serviceAgreementExpiry
         );
 
-        registry.signContract(
+        config.registry.signContract(
             contractId,
             partyValues[0],
             signature,
@@ -94,8 +94,8 @@ contract ProposeServiceAgreementScript is ZkSyncGuardianCompensationConfig2024_2
         vm.stopBroadcast();
 
         console2.log("MetaLeX proposer: ", address(metalexProposer));
-        console2.log("Guardian Safe: ", address(guardianSafe));
-        console2.log("CyberAgreementRegistry: ", address(registry));
+        console2.log("Guardian Safe: ", address(config.guardianSafe));
+        console2.log("CyberAgreementRegistry: ", address(config.registry));
         console2.log("Created:");
         console2.log("  Agreement ID:");
         console2.logBytes32(contractId);

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity ^0.8.24;
 
-import {ZkSyncGuardianCompensationConfig2024_2025} from "./lib/ZkSyncGuardianCompensationConfig2024_2025.sol";
+import {ZkSyncGuardianCompensation2024_2025} from "./lib/ZkSyncGuardianCompensation2024_2025.sol";
 import {ISafeProxyFactory, IGnosisSafe, GnosisTransaction} from "../test/lib/safe.sol";
 import {BorgAuth} from "cybercorps-contracts/src/libs/auth.sol";
 import {CyberAgreementRegistry} from "cybercorps-contracts/src/CyberAgreementRegistry.sol";
@@ -15,23 +15,31 @@ import {ZkTokenV2} from "zk-governance/l2-contracts/src/ZkTokenV2.sol";
 import {console2} from "forge-std/console2.sol";
 import {metavestController} from "../src/MetaVesTController.sol";
 
-contract DeployZkSyncGuardianCompensationPrerequisitesScript is ZkSyncGuardianCompensationConfig2024_2025, SafeTxHelper, Script {
-    // Assume zkSync Era mainnet @ 64166260
+contract DeployZkSyncGuardianCompensationPrerequisitesScript is SafeTxHelper, Script {
+    using ZkSyncGuardianCompensation2024_2025 for ZkSyncGuardianCompensation2024_2025.Config;
 
     /// @dev For running from `forge script`. Provide the deployer private key through env var.
     function run() public virtual {
-        run(vm.envUint("DEPLOYER_PRIVATE_KEY"));
+        deployPrerequisites(
+            "MetaLexMetaVestZkSyncGuardianCompensationLaunchV1.0",
+            vm.envUint("DEPLOYER_PRIVATE_KEY"),
+            ZkSyncGuardianCompensation2024_2025.getDefault()
+        );
     }
 
     /// @dev For running in tests
-    function run(uint256 deployerPrivateKey) public virtual returns(
+    function deployPrerequisites(
+        string memory saltStr,
+        uint256 deployerPrivateKey,
+        ZkSyncGuardianCompensation2024_2025.Config memory config
+    ) public virtual returns(
         BorgAuth,
         CyberAgreementRegistry,
         VestingAllocationFactory
     ) {
         address deployer = vm.addr(deployerPrivateKey);
 
-        bytes32 salt = keccak256("MetaLexMetaVestZkSyncGuardianCompensationLaunchV1.0");
+        bytes32 salt = keccak256(bytes(saltStr));
 
         vm.startBroadcast(deployerPrivateKey);
 
@@ -49,25 +57,25 @@ contract DeployZkSyncGuardianCompensationPrerequisitesScript is ZkSyncGuardianCo
 
         // Create zkSync Guardian Compensation Agreement template
         registry.createTemplate(
-            compTemplateId,
-            compTemplateName,
-            compAgreementUri,
-            compGlobalFields,
-            compPartyFields
+            config.compTemplateId,
+            config.compTemplateName,
+            config.compAgreementUri,
+            config.compGlobalFields,
+            config.compPartyFields
         );
 
         // Create MetaLeX <> zkSync Guardian BORG Service Agreement template
         registry.createTemplate(
-            serviceTemplateId,
-            serviceTemplateName,
-            serviceAgreementUri,
-            serviceGlobalFields,
-            servicePartyFields
+            config.serviceTemplateId,
+            config.serviceTemplateName,
+            config.serviceAgreementUri,
+            config.serviceGlobalFields,
+            config.servicePartyFields
         );
 
         // Transfer CyberAgreementRegistry ownership to MetaLeX SAFE
 
-        auth.updateRole(address(metalexSafe), auth.OWNER_ROLE());
+        auth.updateRole(address(config.metalexSafe), auth.OWNER_ROLE());
         auth.zeroOwner();
 
         // Deploy MetaVesT pre-requisites
@@ -79,7 +87,7 @@ contract DeployZkSyncGuardianCompensationPrerequisitesScript is ZkSyncGuardianCo
         // Output logs
 
         console2.log("Deployer: ", deployer);
-        console2.log("Guardian Safe: ", address(guardianSafe));
+        console2.log("Guardian Safe: ", address(config.guardianSafe));
         console2.log("");
 
         console2.log("Deployed addresses:");

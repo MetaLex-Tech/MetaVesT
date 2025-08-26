@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity ^0.8.24;
 
-import {ZkSyncGuardianCompensationConfig2024_2025} from "./lib/ZkSyncGuardianCompensationConfig2024_2025.sol";
+import {ZkSyncGuardianCompensation2024_2025} from "./lib/ZkSyncGuardianCompensation2024_2025.sol";
 import {ISafeProxyFactory, IGnosisSafe, GnosisTransaction} from "../test/lib/safe.sol";
 import {BorgAuth} from "cybercorps-contracts/src/libs/auth.sol";
 import {CyberAgreementRegistry} from "cybercorps-contracts/src/CyberAgreementRegistry.sol";
@@ -13,32 +13,27 @@ import {VestingAllocationFactory} from "../src/VestingAllocationFactory.sol";
 import {console2} from "forge-std/console2.sol";
 import {metavestController} from "../src/MetaVesTController.sol";
 
-contract DeployZkSyncGuardianCompensation2024_2025Script is ZkSyncGuardianCompensationConfig2024_2025, SafeTxHelper, Script {
-    // Assume zkSync Era mainnet @ 64166260
-
+contract DeployZkSyncGuardianCompensationScript is SafeTxHelper, Script {
     /// @dev For running from `forge script`. Provide the deployer private key through env var.
     function run() public virtual {
-        run(
+        deployCompensation(
+            "MetaLexMetaVestZkSyncGuardianCompensationLaunchV1.0.2024-2025",
             vm.envUint("DEPLOYER_PRIVATE_KEY"),
-            registry,
-            vestingAllocationFactory
+            ZkSyncGuardianCompensation2024_2025.getDefault()
         );
     }
 
     /// @dev For running in tests
-    function run(
+    function deployCompensation(
+        string memory saltStr,
         uint256 deployerPrivateKey,
-        CyberAgreementRegistry _registry,
-        VestingAllocationFactory _vestingAllocationFactory
+        ZkSyncGuardianCompensation2024_2025.Config memory config
     ) public virtual returns(
         metavestController,
         GnosisTransaction[] memory
     ) {
         address deployer = vm.addr(deployerPrivateKey);
-        registry = _registry;
-        vestingAllocationFactory = _vestingAllocationFactory;
 
-        string memory saltStr = "MetaLexMetaVestZkSyncGuardianCompensationLaunchV1.0.2024-2025";
         bytes32 salt = keccak256(bytes(saltStr));
 
         vm.startBroadcast(deployerPrivateKey);
@@ -49,10 +44,10 @@ contract DeployZkSyncGuardianCompensation2024_2025Script is ZkSyncGuardianCompen
             address(new metavestController{salt: salt}()),
             abi.encodeWithSelector(
                 metavestController.initialize.selector,
-                address(guardianSafe),
-                address(guardianSafe),
-                address(registry),
-                address(vestingAllocationFactory)
+                address(config.guardianSafe),
+                address(config.guardianSafe),
+                address(config.registry),
+                address(config.vestingAllocationFactory)
             )
         )));
 
@@ -63,11 +58,11 @@ contract DeployZkSyncGuardianCompensation2024_2025Script is ZkSyncGuardianCompen
         // 2. Set MetaVesT Controller's ZK Capped Minter
         GnosisTransaction[] memory safeTxs = new GnosisTransaction[](2);
         safeTxs[0] = GnosisTransaction({
-            to: address(zkCappedMinter),
+            to: address(config.zkCappedMinter),
             value: 0,
             data: abi.encodeWithSelector(
                 IZkCappedMinterV2.grantRole.selector,
-                zkCappedMinter.MINTER_ROLE(),
+                config.zkCappedMinter.MINTER_ROLE(),
                 address(controller)
             )
         });
@@ -76,7 +71,7 @@ contract DeployZkSyncGuardianCompensation2024_2025Script is ZkSyncGuardianCompen
             value: 0,
             data: abi.encodeWithSelector(
                 controller.setZkCappedMinter.selector,
-                address(zkCappedMinter)
+                address(config.zkCappedMinter)
             )
         });
 
@@ -84,9 +79,10 @@ contract DeployZkSyncGuardianCompensation2024_2025Script is ZkSyncGuardianCompen
 
         console2.log("Deployer: ", deployer);
         console2.log("salt: ", saltStr);
-        console2.log("Guardian Safe: ", address(guardianSafe));
-        console2.log("CyberAgreementRegistry: ", address(registry));
-        console2.log("VestingAllocationFactory: ", address(vestingAllocationFactory));
+        console2.log("ZkCappedMinterV2: ", address(config.zkCappedMinter));
+        console2.log("Guardian Safe: ", address(config.guardianSafe));
+        console2.log("CyberAgreementRegistry: ", address(config.registry));
+        console2.log("VestingAllocationFactory: ", address(config.vestingAllocationFactory));
         console2.log("");
 
         console2.log("Deployed addresses:");

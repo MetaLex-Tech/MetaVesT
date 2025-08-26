@@ -10,17 +10,18 @@ import {Test} from "forge-std/Test.sol";
 import {console2} from "forge-std/console2.sol";
 import {CyberAgreementRegistry} from "cybercorps-contracts/src/CyberAgreementRegistry.sol";
 import {DeployZkSyncGuardianCompensationPrerequisitesScript} from "../scripts/deployZkSyncGuardianCompensationPrerequisites.s.sol";
-import {DeployZkSyncGuardianCompensation2024_2025Script} from "../scripts/deployZkSyncGuardianCompensation2024_2025.s.sol";
+import {DeployZkSyncGuardianCompensationScript} from "../scripts/deployZkSyncGuardianCompensation.s.sol";
 import {ProposeServiceAgreementScript} from "../scripts/proposeServiceAgreement.s.sol";
 import {ProposeMetaVestDealScript} from "../scripts/proposeMetavestDeal.s.sol";
 import {SignDealAndCreateMetavestScript} from "../scripts/signDealAndCreateMetavest.s.sol";
-import {ZkSyncGuardianCompensationConfig2024_2025} from "../scripts/lib/ZkSyncGuardianCompensationConfig2024_2025.sol";
+import {ZkSyncGuardianCompensation2024_2025} from "../scripts/lib/ZkSyncGuardianCompensation2024_2025.sol";
+import {ZkSyncGuardianCompensation2025_2026} from "../scripts/lib/ZkSyncGuardianCompensation2025_2026.sol";
 import {GnosisTransaction} from "./lib/safe.sol";
 
 // Test by forge test --zksync --via-ir
 contract ZkSyncGuardianCompensationTest is
     DeployZkSyncGuardianCompensationPrerequisitesScript,
-    DeployZkSyncGuardianCompensation2024_2025Script,
+    DeployZkSyncGuardianCompensationScript,
     ProposeServiceAgreementScript,
     ProposeMetaVestDealScript,
     SignDealAndCreateMetavestScript,
@@ -28,6 +29,8 @@ contract ZkSyncGuardianCompensationTest is
 {
     // zkSync Era mainnet @ 63631890
     address zkTokenAdmin = 0xe5d21A9179CA2E1F0F327d598D464CcF60d89c3d;
+
+    string saltStr = "ZkSyncGuardianCompensationTest";
 
     // Randomly generated to avoid contaminated common test address
     uint256 privateKeySalt = 0x4425fdf88097e51c669a66d392c4019ad555544e966908af6ee3cec32f53ab77;
@@ -47,7 +50,12 @@ contract ZkSyncGuardianCompensationTest is
 
     IZkCappedMinterV2 masterMinter;
 
+    ZkSyncGuardianCompensation2024_2025.Config config2024_2025;
+    ZkSyncGuardianCompensation2024_2025.Config config2025_2026;
+
     BorgAuth auth;
+    metavestController controller2024_2025;
+    metavestController controller2025_2026;
 
     function setUp() public {
         // Prepare funds for accounts used by the actual deployment scripts
@@ -58,23 +66,60 @@ contract ZkSyncGuardianCompensationTest is
         deal(bob, 1 ether);
         deal(chad, 1 ether);
 
-        // Run deploy scripts
-        GnosisTransaction[] memory safeTxs;
-        (auth, registry, vestingAllocationFactory) = DeployZkSyncGuardianCompensationPrerequisitesScript.run(deployerPrivateKey);
-        (controller, safeTxs) = DeployZkSyncGuardianCompensation2024_2025Script.run(deployerPrivateKey, registry, vestingAllocationFactory);
+        CyberAgreementRegistry registry;
+        VestingAllocationFactory vestingAllocationFactory;
+        metavestController controller;
+        GnosisTransaction[] memory safeTxs2024_2025;
+        GnosisTransaction[] memory safeTxs2025_2026;
+
+        config2024_2025 = ZkSyncGuardianCompensation2024_2025.getDefault();
+        config2025_2026 = ZkSyncGuardianCompensation2025_2026.getDefault();
+
+        (auth, registry, vestingAllocationFactory) = DeployZkSyncGuardianCompensationPrerequisitesScript.deployPrerequisites(
+            saltStr,
+            deployerPrivateKey,
+            config2024_2025
+        );
+
+        // Update configs with deployed contracts
+        config2024_2025.registry = registry;
+        config2024_2025.vestingAllocationFactory = vestingAllocationFactory;
+        config2025_2026.registry = registry;
+        config2025_2026.vestingAllocationFactory = vestingAllocationFactory;
+
+        // Deploy 2024-2025 compensation contracts
+        (controller, safeTxs2024_2025) = DeployZkSyncGuardianCompensationScript.deployCompensation(
+            string(abi.encodePacked(saltStr, ".2024-2025")),
+            deployerPrivateKey,
+            config2024_2025
+        );
+        config2024_2025.controller = controller; // Update configs with deployed contracts
+
+        // Deploy 2025-2026 compensation contracts
+        (controller, safeTxs2025_2026) = DeployZkSyncGuardianCompensationScript.deployCompensation(
+            string(abi.encodePacked(saltStr, ".2025-2026")),
+            deployerPrivateKey,
+            config2025_2026
+        );
+        config2025_2026.controller = controller; // Update configs with deployed contracts
 
         // Simulate Guardian SAFE to execute txs as instructed
-        for (uint256 i = 0; i < safeTxs.length; i++) {
-            vm.prank(address(guardianSafe));
-            (safeTxs[i].to).call{value: safeTxs[i].value}(safeTxs[i].data);
+        for (uint256 i = 0; i < safeTxs2024_2025.length; i++) {
+            vm.prank(address(config2024_2025.guardianSafe));
+            (safeTxs2024_2025[i].to).call{value: safeTxs2024_2025[i].value}(safeTxs2024_2025[i].data);
+        }
+        for (uint256 i = 0; i < safeTxs2025_2026.length; i++) {
+            vm.prank(address(config2025_2026.guardianSafe));
+            (safeTxs2025_2026[i].to).call{value: safeTxs2025_2026[i].value}(safeTxs2025_2026[i].data);
         }
 
         // Simulate vote pass (https://vote.zknation.io/dao/proposal/14920227315823844313255249182525601975564035647349569740836448589354658768084?govId=eip155:324:0xb83FF6501214ddF40C91C9565d095400f3F45746)
 
         vm.startPrank(zkTokenAdmin);
 
-        masterMinter = IZkCappedMinterV2(zkCappedMinter.MINTABLE());
-        masterMinter.grantRole(masterMinter.MINTER_ROLE(), address(zkCappedMinter));
+        masterMinter = IZkCappedMinterV2(config2024_2025.zkCappedMinter.MINTABLE());
+        masterMinter.grantRole(masterMinter.MINTER_ROLE(), address(config2024_2025.zkCappedMinter));
+        masterMinter.grantRole(masterMinter.MINTER_ROLE(), address(config2025_2026.zkCappedMinter));
 
         IZkCappedMinterV2 grandMasterMinter = IZkCappedMinterV2(masterMinter.MINTABLE());
         grandMasterMinter.grantRole(grandMasterMinter.MINTER_ROLE(), address(masterMinter));
@@ -84,7 +129,7 @@ contract ZkSyncGuardianCompensationTest is
 
     function run() public override(
         DeployZkSyncGuardianCompensationPrerequisitesScript,
-        DeployZkSyncGuardianCompensation2024_2025Script,
+        DeployZkSyncGuardianCompensationScript,
         ProposeServiceAgreementScript,
         ProposeMetaVestDealScript,
         SignDealAndCreateMetavestScript
@@ -95,89 +140,104 @@ contract ZkSyncGuardianCompensationTest is
     function test_metadata() public {
         // ZK governance pre-requisites
 
-        assertTrue(masterMinter.hasRole(masterMinter.MINTER_ROLE(), address(zkCappedMinter)), "Master Minter should grant this year's ZK Capped Minter access");
+        assertTrue(masterMinter.hasRole(masterMinter.MINTER_ROLE(), address(config2024_2025.zkCappedMinter)), "Master Minter should grant this year's ZK Capped Minter access");
 
         // MetaVesT pre-requisites
 
-        auth.onlyRole(auth.OWNER_ROLE(), address(metalexSafe)); // MetaLeX SAFE should own BorgAuth
+        auth.onlyRole(auth.OWNER_ROLE(), address(config2024_2025.metalexSafe)); // MetaLeX SAFE should own BorgAuth
         vm.assertEq(auth.userRoles(deployer), 0, "deployer should revoke BorgAuth ownership");
-        vm.assertEq(address(registry.AUTH()), address(auth), "Unexpected CyberAgreementRegistry auth");
+        vm.assertEq(address(config2024_2025.registry.AUTH()), address(auth), "Unexpected CyberAgreementRegistry auth");
 
         _assertTemplate(
-            registry,
-            compTemplateId,
-            compAgreementUri,
-            compTemplateName,
-            compGlobalFields,
-            compPartyFields
+            config2024_2025.registry,
+            config2024_2025.compTemplateId,
+            config2024_2025.compAgreementUri,
+            config2024_2025.compTemplateName,
+            config2024_2025.compGlobalFields,
+            config2024_2025.compPartyFields
         );
         _assertTemplate(
-            registry,
-            serviceTemplateId,
-            serviceAgreementUri,
-            serviceTemplateName,
-            serviceGlobalFields,
-            servicePartyFields
+            config2024_2025.registry,
+            config2024_2025.serviceTemplateId,
+            config2024_2025.serviceAgreementUri,
+            config2024_2025.serviceTemplateName,
+            config2024_2025.serviceGlobalFields,
+            config2024_2025.servicePartyFields
         );
 
         // MetaVesT deployments
 
-        vm.assertEq(controller.authority(), address(guardianSafe), "MetaVesTController's authority should be Guardian SAFE");
-        vm.assertEq(controller.dao(), address(guardianSafe), "MetaVesTController's DAO should be Guardian SAFE");
-        vm.assertEq(controller.registry(), address(registry), "Unexpected MetaVesTController registry");
-        vm.assertEq(controller.vestingFactory(), address(vestingAllocationFactory), "Unexpected MetaVesTController vesting allocation factory");
-        vm.assertEq(controller.zkCappedMinter(), address(zkCappedMinter), "MetaVesTController should have ZK Capped Minter should set");
-        vm.assertTrue(zkCappedMinter.hasRole(zkCappedMinter.MINTER_ROLE(), address(controller)), "ZK Capped Minter should grant MetaVesTController MINTER role");
+        vm.assertEq(config2024_2025.controller.authority(), address(config2024_2025.guardianSafe), "2024-2025 MetaVesTController's authority should be Guardian SAFE");
+        vm.assertEq(config2024_2025.controller.dao(), address(config2024_2025.guardianSafe), "2024-2025 MetaVesTController's DAO should be Guardian SAFE");
+        vm.assertEq(config2024_2025.controller.registry(), address(config2024_2025.registry), "2024-2025 Unexpected MetaVesTController registry");
+        vm.assertEq(config2024_2025.controller.vestingFactory(), address(config2024_2025.vestingAllocationFactory), "2024-2025 Unexpected MetaVesTController vesting allocation factory");
+        vm.assertEq(config2024_2025.controller.zkCappedMinter(), address(config2024_2025.zkCappedMinter), "2024-2025 MetaVesTController should have ZK Capped Minter should set");
+        vm.assertTrue(config2024_2025.zkCappedMinter.hasRole(config2024_2025.zkCappedMinter.MINTER_ROLE(), address(config2024_2025.controller)), "2024-2025 ZK Capped Minter should grant MetaVesTController MINTER role");
+
+        vm.assertEq(config2025_2026.controller.authority(), address(config2025_2026.guardianSafe), "2025-2026 MetaVesTController's authority should be Guardian SAFE");
+        vm.assertEq(config2025_2026.controller.dao(), address(config2025_2026.guardianSafe), "2025-2026 MetaVesTController's DAO should be Guardian SAFE");
+        vm.assertEq(config2025_2026.controller.registry(), address(config2025_2026.registry), "2025-2026 Unexpected MetaVesTController registry");
+        vm.assertEq(config2025_2026.controller.vestingFactory(), address(config2025_2026.vestingAllocationFactory), "2025-2026 Unexpected MetaVesTController vesting allocation factory");
+        vm.assertEq(config2025_2026.controller.zkCappedMinter(), address(config2025_2026.zkCappedMinter), "2025-2026 MetaVesTController should have ZK Capped Minter should set");
+        vm.assertTrue(config2025_2026.zkCappedMinter.hasRole(config2025_2026.zkCappedMinter.MINTER_ROLE(), address(config2025_2026.controller)), "2025-2026 ZK Capped Minter should grant MetaVesTController MINTER role");
     }
 
     function test_ProposeServiceAgreement() public {
         // Simulate MetaLeX SAFE delegation
-        vm.prank(address(metalexSafe));
-        registry.setDelegation(metalexDelegate, block.timestamp + 60);
-        assertTrue(registry.isValidDelegate(address(metalexSafe), metalexDelegate), "should be MetaLeX SAFE's delegate");
+        vm.prank(address(config2024_2025.metalexSafe));
+        config2024_2025.registry.setDelegation(metalexDelegate, block.timestamp + 60);
+        assertTrue(config2024_2025.registry.isValidDelegate(address(config2024_2025.metalexSafe), metalexDelegate), "should be MetaLeX SAFE's delegate");
 
         // Simulate MetaLeX delegate proposing and signing agreement
-        bytes32 agreementId = ProposeServiceAgreementScript.run(metalexDelegatePrivateKey, registry);
+        bytes32 agreementId = ProposeServiceAgreementScript.run(
+            metalexDelegatePrivateKey,
+            config2024_2025
+        );
 
         // Verify agreement
 
-        (bytes32 templateId, , , , , , uint256 expiry) = registry.agreements(agreementId);
-        assertEq(templateId, serviceTemplateId, "Unexpected service agreement template ID");
-        assertEq(expiry, serviceAgreementExpiry, "Unexpected service agreement expiry");
+        (bytes32 templateId, , , , , , uint256 expiry) = config2024_2025.registry.agreements(agreementId);
+        assertEq(templateId, config2024_2025.serviceTemplateId, "Unexpected service agreement template ID");
+        assertEq(expiry, config2024_2025.serviceAgreementExpiry, "Unexpected service agreement expiry");
 
-        (, , , , , address[] memory parties, , , , ) = registry.getContractDetails(agreementId);
-        vm.assertEq(parties[0], address(metalexSafe), "First party should be MetaLeX SAFE");
-        vm.assertEq(parties[1], address(guardianSafe), "Second party should be Guardian SAFE");
+        (, , , , , address[] memory parties, , , , ) = config2024_2025.registry.getContractDetails(agreementId);
+        vm.assertEq(parties[0], address(config2024_2025.metalexSafe), "First party should be MetaLeX SAFE");
+        vm.assertEq(parties[1], address(config2024_2025.guardianSafe), "Second party should be Guardian SAFE");
 
-        vm.assertTrue(registry.hasSigned(agreementId, metalexDelegate), "Should signed by MetaLeX delegate");
+        vm.assertTrue(config2024_2025.registry.hasSigned(agreementId, metalexDelegate), "Should signed by MetaLeX delegate");
     }
 
     function test_GuardianCompensation() public {
-        (address metavestAddressAlice, address metavestAddressBob) = _proposeAndFinalizeAllGuardianDeals();
+        (address metavestAddressAlice2024_2025, address metavestAddressAlice2025_2026) = _proposeAndFinalizeAllGuardianDeals();
 
-        VestingAllocation vestingAllocationAlice = VestingAllocation(metavestAddressAlice);
-        VestingAllocation vestingAllocationBob = VestingAllocation(metavestAddressBob);
+        VestingAllocation vestingAllocationAlice2024_2025 = VestingAllocation(metavestAddressAlice2024_2025);
+        VestingAllocation vestingAllocationAlice2025_2026 = VestingAllocation(metavestAddressAlice2025_2026);
 
-        // Grantee should be able to withdraw all on 2025/09/01 because this compensation is for 2024~2025
-        vm.warp(1756684800 + 1); // 2025/09/01 00:00 UTC with some margin for precision error
+        // Alice should be able to withdraw all on 2025/09/01 because this compensation is for 2024~2025
+        vm.warp(1756684800); // 2025/09/01 00:00 UTC
+        _granteeWithdrawAndAsserts(config2024_2025.zkToken, config2024_2025.zkCappedMinter, vestingAllocationAlice2024_2025, 615e3 ether, "Alice 2024-2025 partial");
 
-        _granteeWithdrawAndAsserts(zkToken, zkCappedMinter, vestingAllocationAlice, 625e3 ether, "Alice full");
-        _granteeWithdrawAndAsserts(zkToken, zkCappedMinter, vestingAllocationBob, 615e3 ether, "Bob partial");
+        // Alice should be able to withdraw within the 2024-2025 grace period (set by ZK Capped Minter expiry)
+        vm.warp(1767225599); // 2025/12/31 23:59:59 UTC
+        _granteeWithdrawAndAsserts(config2024_2025.zkToken, config2024_2025.zkCappedMinter, vestingAllocationAlice2024_2025, 10e3 ether, "Alice 2024-2025 remaining");
 
-        // Grantees should be able to withdraw within the grace period (set by ZK Capped Minter expiry)
-        skip(60 days);
+        // Alice should be able to withdraw half of her 2025-2026 compensation half way through the period
+        vm.warp(1772496000); // 2026/03/03 00:00 UTC
+        _granteeWithdrawAndAsserts(config2025_2026.zkToken, config2025_2026.zkCappedMinter, vestingAllocationAlice2025_2026, 312.5e3 ether, "Alice 2025-2026 half");
 
-        _granteeWithdrawAndAsserts(zkToken, zkCappedMinter, vestingAllocationBob, 10e3 ether, "Bob remaining");
+        // Alice should be able to withdraw within the 2025-2026 grace period (set by ZK Capped Minter expiry)
+        vm.warp(1793491199); // 2026/10/31 23:59:59 UTC
+        _granteeWithdrawAndAsserts(config2025_2026.zkToken, config2025_2026.zkCappedMinter, vestingAllocationAlice2025_2026, 312.5e3 ether, "Alice 2025-2026 remaining");
     }
 
     function test_AdminToolingCompensation() public {
-        (address metavestAddressAlice, address metavestAddressBob) = _proposeAndFinalizeAllGuardianDeals();
-        VestingAllocation vestingAllocationAlice = VestingAllocation(metavestAddressAlice);
+        (address metavestAddressAlice2024_2025, ) = _proposeAndFinalizeAllGuardianDeals();
+        VestingAllocation vestingAllocationAlice = VestingAllocation(metavestAddressAlice2024_2025);
 
-        // Vesting starts and a month has passed
-        vm.warp(1756684800 + 1); // 2025/09/01 00:00 UTC with some margin for precision error
+        // 2024-2025 Vesting starts
+        vm.warp(1756684800); // 2025/09/01 00:00 UTC
 
-        _granteeWithdrawAndAsserts(zkToken, zkCappedMinter, vestingAllocationAlice, 300e3 ether, "Alice partial");
+        _granteeWithdrawAndAsserts(config2024_2025.zkToken, config2024_2025.zkCappedMinter, vestingAllocationAlice, 300e3 ether, "Alice partial");
 
         // A month has passed
         skip(30 days);
@@ -185,11 +245,11 @@ contract ZkSyncGuardianCompensationTest is
         // Add new grantee for admin/tooling compensation
 
         // Guardian SAFE to delegate signing to an EOA
-        vm.prank(address(guardianSafe));
-        registry.setDelegation(guardianDelegate, block.timestamp + 60);
-        assertTrue(registry.isValidDelegate(address(guardianSafe), guardianDelegate), "should be Guardian SAFE's delegate");
+        vm.prank(address(config2024_2025.guardianSafe));
+        config2024_2025.registry.setDelegation(guardianDelegate, block.timestamp + 60);
+        assertTrue(config2024_2025.registry.isValidDelegate(address(config2024_2025.guardianSafe), guardianDelegate), "should be Guardian SAFE's delegate");
 
-        ZkSyncGuardianCompensationConfig2024_2025.PartyInfo memory chadInfo = ZkSyncGuardianCompensationConfig2024_2025.PartyInfo({
+        ZkSyncGuardianCompensation2024_2025.PartyInfo memory chadInfo = ZkSyncGuardianCompensation2024_2025.PartyInfo({
             name: "Chad",
             evmAddress: chad,
             contactDetails: "chad@email.com",
@@ -197,12 +257,9 @@ contract ZkSyncGuardianCompensationTest is
         });
         bytes32 contractIdChad = ProposeMetaVestDealScript.run(
             guardianDelegatePrivateKey,
-            registry,
-            controller,
-            guardianSafeInfo,
             chadInfo,
             BaseAllocation.Allocation({
-                tokenContract: address(zkToken),
+                tokenContract: address(config2024_2025.zkToken),
                 // 10k ZK total in one cliff
                 tokenStreamTotal: 10e3 ether,
                 vestingCliffCredit: 10e3 ether,
@@ -211,72 +268,60 @@ contract ZkSyncGuardianCompensationTest is
                 vestingStartTime: 0,
                 unlockRate: 0,
                 unlockStartTime: 0
-            })
+            }),
+            config2024_2025
         );
         VestingAllocation vestingAllocationChad = VestingAllocation(SignDealAndCreateMetavestScript.run(
             chadPrivateKey,
-            registry,
-            controller,
             contractIdChad,
-            chadInfo
+            chadInfo,
+            config2024_2025
         ));
-        _granteeWithdrawAndAsserts(zkToken, zkCappedMinter, vestingAllocationChad, 10e3 ether, "Chad cliff");
+        _granteeWithdrawAndAsserts(config2024_2025.zkToken, config2024_2025.zkCappedMinter, vestingAllocationChad, 10e3 ether, "Chad cliff");
     }
 
     function _proposeAndFinalizeAllGuardianDeals() internal returns(address, address) {
         // Guardian SAFE to delegate signing to an EOA
-        vm.prank(address(guardianSafe));
-        registry.setDelegation(guardianDelegate, block.timestamp + 60);
-        assertTrue(registry.isValidDelegate(address(guardianSafe), guardianDelegate), "delegate should be Guardian SAFE's delegate");
+        vm.prank(address(config2024_2025.guardianSafe));
+        config2024_2025.registry.setDelegation(guardianDelegate, block.timestamp + 60);
+        assertTrue(config2024_2025.registry.isValidDelegate(address(config2024_2025.guardianSafe), guardianDelegate), "delegate should be Guardian SAFE's delegate");
 
         // Run scripts to propose deals
 
-        ZkSyncGuardianCompensationConfig2024_2025.PartyInfo memory aliceInfo = ZkSyncGuardianCompensationConfig2024_2025.PartyInfo({
+        ZkSyncGuardianCompensation2024_2025.PartyInfo memory aliceInfo = ZkSyncGuardianCompensation2024_2025.PartyInfo({
             name: "Alice",
             evmAddress: alice,
             contactDetails: "alice@email.com",
             _type: "individual"
         });
-        ZkSyncGuardianCompensationConfig2024_2025.PartyInfo memory bobInfo = ZkSyncGuardianCompensationConfig2024_2025.PartyInfo({
-            name: "Bob",
-            evmAddress: bob,
-            contactDetails: "bob@email.com",
-            _type: "individual"
-        });
 
-        bytes32 contractIdAlice = ProposeMetaVestDealScript.run(
+        bytes32 contractIdAlice2024_2025 = ProposeMetaVestDealScript.run(
             guardianDelegatePrivateKey,
-            registry,
-            controller,
-            guardianSafeInfo,
-            aliceInfo
+            aliceInfo,
+            config2024_2025
         );
-        bytes32 contractIdBob = ProposeMetaVestDealScript.run(
+        bytes32 contractIdAlice2025_2026 = ProposeMetaVestDealScript.run(
             guardianDelegatePrivateKey,
-            registry,
-            controller,
-            guardianSafeInfo,
-            bobInfo
+            aliceInfo,
+            config2025_2026
         );
 
         // Simulate guardian counter-sign and finalize the deal
 
-        address metavestAlice = SignDealAndCreateMetavestScript.run(
+        address metavestAlice2024_2025 = SignDealAndCreateMetavestScript.run(
             alicePrivateKey,
-            registry,
-            controller,
-            contractIdAlice,
-            aliceInfo
+            contractIdAlice2024_2025,
+            aliceInfo,
+            config2024_2025
         );
-        address metavestBob = SignDealAndCreateMetavestScript.run(
-            bobPrivateKey,
-            registry,
-            controller,
-            contractIdBob,
-            bobInfo
+        address metavestAlice2025_2026 = SignDealAndCreateMetavestScript.run(
+            alicePrivateKey,
+            contractIdAlice2025_2026,
+            aliceInfo,
+            config2025_2026
         );
 
-        return (metavestAlice, metavestBob);
+        return (metavestAlice2024_2025, metavestAlice2025_2026);
     }
 
     function _assertTemplate(
