@@ -12,6 +12,9 @@ import {CyberAgreementRegistry} from "cybercorps-contracts/src/CyberAgreementReg
 import {DeployZkSyncGuardianCompensationPrerequisitesScript} from "../scripts/deployZkSyncGuardianCompensationPrerequisites.s.sol";
 import {DeployZkSyncGuardianCompensation2024_2025Script} from "../scripts/deployZkSyncGuardianCompensation2024_2025.s.sol";
 import {ProposeServiceAgreementScript} from "../scripts/proposeServiceAgreement.s.sol";
+import {ProposeMetaVestDealScript} from "../scripts/proposeMetavestDeal.s.sol";
+import {SignDealAndCreateMetavestScript} from "../scripts/signDealAndCreateMetavest.s.sol";
+import {ZkSyncGuardianCompensationConfig2024_2025} from "../scripts/lib/ZkSyncGuardianCompensationConfig2024_2025.sol";
 import {GnosisTransaction} from "./lib/safe.sol";
 
 // Test by forge test --zksync --via-ir
@@ -19,6 +22,8 @@ contract ZkSyncGuardianCompensationTest is
     DeployZkSyncGuardianCompensationPrerequisitesScript,
     DeployZkSyncGuardianCompensation2024_2025Script,
     ProposeServiceAgreementScript,
+    ProposeMetaVestDealScript,
+    SignDealAndCreateMetavestScript,
     Test
 {
     // zkSync Era mainnet @ 63631890
@@ -43,13 +48,15 @@ contract ZkSyncGuardianCompensationTest is
     IZkCappedMinterV2 masterMinter;
 
     BorgAuth auth;
-    metavestController controller;
 
     function setUp() public {
         // Prepare funds for accounts used by the actual deployment scripts
         deal(deployer, 1 ether);
         deal(metalexDelegate, 1 ether);
         deal(guardianDelegate, 1 ether);
+        deal(alice, 1 ether);
+        deal(bob, 1 ether);
+        deal(chad, 1 ether);
 
         // Run deploy scripts
         GnosisTransaction[] memory safeTxs;
@@ -78,7 +85,9 @@ contract ZkSyncGuardianCompensationTest is
     function run() public override(
         DeployZkSyncGuardianCompensationPrerequisitesScript,
         DeployZkSyncGuardianCompensation2024_2025Script,
-        ProposeServiceAgreementScript
+        ProposeServiceAgreementScript,
+        ProposeMetaVestDealScript,
+        SignDealAndCreateMetavestScript
     ) {
         // No-op, we don't use this part of the scripts
     }
@@ -144,7 +153,7 @@ contract ZkSyncGuardianCompensationTest is
     }
 
     function test_GuardianCompensation() public {
-        (address metavestAddressAlice, address metavestAddressBob) = _guardiansSignAndTppPass();
+        (address metavestAddressAlice, address metavestAddressBob) = _proposeAndFinalizeAllGuardianDeals();
 
         VestingAllocation vestingAllocationAlice = VestingAllocation(metavestAddressAlice);
         VestingAllocation vestingAllocationBob = VestingAllocation(metavestAddressBob);
@@ -152,7 +161,6 @@ contract ZkSyncGuardianCompensationTest is
         // Grantee should be able to withdraw all on 2025/09/01 because this compensation is for 2024~2025
         vm.warp(1756684800 + 1); // 2025/09/01 00:00 UTC with some margin for precision error
 
-        console2.log("alice amount withdrawable: %d", vestingAllocationAlice.getAmountWithdrawable());
         _granteeWithdrawAndAsserts(zkToken, zkCappedMinter, vestingAllocationAlice, 625e3 ether, "Alice full");
         _granteeWithdrawAndAsserts(zkToken, zkCappedMinter, vestingAllocationBob, 615e3 ether, "Bob partial");
 
@@ -163,7 +171,7 @@ contract ZkSyncGuardianCompensationTest is
     }
 
     function test_AdminToolingCompensation() public {
-        (address metavestAddressAlice, address metavestAddressBob) = _guardiansSignAndTppPass();
+        (address metavestAddressAlice, address metavestAddressBob) = _proposeAndFinalizeAllGuardianDeals();
         VestingAllocation vestingAllocationAlice = VestingAllocation(metavestAddressAlice);
 
         // Vesting starts and a month has passed
@@ -181,13 +189,18 @@ contract ZkSyncGuardianCompensationTest is
         registry.setDelegation(guardianDelegate, block.timestamp + 60);
         assertTrue(registry.isValidDelegate(address(guardianSafe), guardianDelegate), "should be Guardian SAFE's delegate");
 
-        bytes32 contractIdChad = _proposeAndSignDeal(
+        ZkSyncGuardianCompensationConfig2024_2025.PartyInfo memory chadInfo = ZkSyncGuardianCompensationConfig2024_2025.PartyInfo({
+            name: "Chad",
+            evmAddress: chad,
+            contactDetails: "chad@email.com",
+            _type: "individual"
+        });
+        bytes32 contractIdChad = ProposeMetaVestDealScript.run(
+            guardianDelegatePrivateKey,
             registry,
             controller,
-            compTemplateId,
-            block.timestamp, // salt
-            guardianDelegatePrivateKey,
-            chad,
+            guardianSafeInfo,
+            chadInfo,
             BaseAllocation.Allocation({
                 tokenContract: address(zkToken),
                 // 10k ZK total in one cliff
@@ -198,98 +211,69 @@ contract ZkSyncGuardianCompensationTest is
                 vestingStartTime: 0,
                 unlockRate: 0,
                 unlockStartTime: 0
-            }),
-            new BaseAllocation.Milestone[](0),
-            "Chad",
-            block.timestamp + 60
+            })
         );
-        VestingAllocation vestingAllocationChad = VestingAllocation(_granteeSignDeal(
+        VestingAllocation vestingAllocationChad = VestingAllocation(SignDealAndCreateMetavestScript.run(
+            chadPrivateKey,
             registry,
             controller,
             contractIdChad,
-            chad, // grantee
-            chad, // recipient
-            chadPrivateKey,
-            "Chad"
+            chadInfo
         ));
         _granteeWithdrawAndAsserts(zkToken, zkCappedMinter, vestingAllocationChad, 10e3 ether, "Chad cliff");
     }
 
-    function _guardiansSignAndTppPass() internal returns(address, address) {
+    function _proposeAndFinalizeAllGuardianDeals() internal returns(address, address) {
         // Guardian SAFE to delegate signing to an EOA
         vm.prank(address(guardianSafe));
         registry.setDelegation(guardianDelegate, block.timestamp + 60);
         assertTrue(registry.isValidDelegate(address(guardianSafe), guardianDelegate), "delegate should be Guardian SAFE's delegate");
 
-        // Guardian SAFE to propose deals on MetaVesTController
+        // Run scripts to propose deals
 
-        // TODO revise it to fit actual numbers
-        bytes32 contractIdAlice = _proposeAndSignDeal(
+        ZkSyncGuardianCompensationConfig2024_2025.PartyInfo memory aliceInfo = ZkSyncGuardianCompensationConfig2024_2025.PartyInfo({
+            name: "Alice",
+            evmAddress: alice,
+            contactDetails: "alice@email.com",
+            _type: "individual"
+        });
+        ZkSyncGuardianCompensationConfig2024_2025.PartyInfo memory bobInfo = ZkSyncGuardianCompensationConfig2024_2025.PartyInfo({
+            name: "Bob",
+            evmAddress: bob,
+            contactDetails: "bob@email.com",
+            _type: "individual"
+        });
+
+        bytes32 contractIdAlice = ProposeMetaVestDealScript.run(
+            guardianDelegatePrivateKey,
             registry,
             controller,
-            compTemplateId,
-            block.timestamp, // salt
-            guardianDelegatePrivateKey,
-            alice,
-            BaseAllocation.Allocation({
-                tokenContract: address(zkToken),
-            // 100k ZK total, the first half unlocks with a cliff and the second half unlocks over an year
-                tokenStreamTotal: 625e3 ether,
-                vestingCliffCredit: 0e3 ether,
-                unlockingCliffCredit: 0e3 ether,
-                vestingRate: uint160(625e3 ether) / 365 days,
-                vestingStartTime: metavestVestingAndUnlockStartTime,
-                unlockRate: uint160(625e3 ether) / 365 days,
-                unlockStartTime: metavestVestingAndUnlockStartTime
-            }),
-            new BaseAllocation.Milestone[](0),
-            "Alice",
-            block.timestamp + 7 days
+            guardianSafeInfo,
+            aliceInfo
         );
-
-        bytes32 contractIdBob = _proposeAndSignDeal(
+        bytes32 contractIdBob = ProposeMetaVestDealScript.run(
+            guardianDelegatePrivateKey,
             registry,
             controller,
-            compTemplateId,
-            block.timestamp, // salt
-            guardianDelegatePrivateKey,
-            bob,
-            BaseAllocation.Allocation({
-                tokenContract: address(zkToken),
-            // 80k ZK total, the first half unlocks with a cliff and the second half unlocks over an year
-                tokenStreamTotal: 625e3 ether,
-                vestingCliffCredit: 0e3 ether,
-                unlockingCliffCredit: 0e3 ether,
-                vestingRate: uint160(625e3 ether) / 365 days,
-                vestingStartTime: metavestVestingAndUnlockStartTime,
-                unlockRate: uint160(625e3 ether) / 365 days,
-                unlockStartTime: metavestVestingAndUnlockStartTime
-            }),
-            new BaseAllocation.Milestone[](0),
-            "Bob",
-            block.timestamp + 7 days
+            guardianSafeInfo,
+            bobInfo
         );
 
-        // Guardians to sign agreements
+        // Simulate guardian counter-sign and finalize the deal
 
-        address metavestAlice = _granteeSignDeal(
+        address metavestAlice = SignDealAndCreateMetavestScript.run(
+            alicePrivateKey,
             registry,
             controller,
             contractIdAlice,
-            alice, // grantee
-            alice, // recipient
-            alicePrivateKey,
-            "Alice"
+            aliceInfo
         );
-
-        address metavestBob = _granteeSignDeal(
+        address metavestBob = SignDealAndCreateMetavestScript.run(
+            bobPrivateKey,
             registry,
             controller,
             contractIdBob,
-            bob, // grantee
-            bob, // recipient
-            bobPrivateKey,
-            "Bob"
+            bobInfo
         );
 
         return (metavestAlice, metavestBob);
@@ -326,192 +310,5 @@ contract ZkSyncGuardianCompensationTest is
 
         assertEq(zkToken.balanceOf(grantee), balanceBefore + amount, string(abi.encodePacked(assertName, ": unexpected received amount")));
         assertEq(zkToken.balanceOf(address(vestingAllocation)), 0, string(abi.encodePacked(assertName, ": vesting contract should not have any token (it mints on-demand)")));
-    }
-
-    function _proposeAndSignDeal(
-        CyberAgreementRegistry registry,
-        metavestController controller,
-        bytes32 templateId,
-        uint256 agreementSalt,
-        uint256 grantorOrDelegatePrivateKey,
-        address grantee,
-        BaseAllocation.Allocation memory allocation,
-        BaseAllocation.Milestone[] memory milestones,
-        string memory partyName,
-        uint256 expiry
-    ) internal returns(bytes32) {
-        return _proposeAndSignDeal(
-            registry, controller, templateId, agreementSalt, grantorOrDelegatePrivateKey, grantee, allocation, milestones, partyName, expiry,
-            "" // Not expecting revert
-        );
-    }
-
-    function _proposeAndSignDeal(
-        CyberAgreementRegistry registry,
-        metavestController controller,
-        bytes32 templateId,
-        uint256 agreementSalt,
-        uint256 grantorOrDelegatePrivateKey,
-        address grantee,
-        BaseAllocation.Allocation memory allocation,
-        BaseAllocation.Milestone[] memory milestones,
-        string memory partyName,
-        uint256 expiry,
-        bytes memory expectRevertData
-    ) internal returns(bytes32) {
-        string[] memory globalValues = new string[](11);
-        globalValues[0] = "0"; // metavestType: Vesting
-        globalValues[1] = vm.toString(address(guardianSafe)); // grantor
-        globalValues[2] = vm.toString(grantee); // grantee
-        globalValues[3] = vm.toString(allocation.tokenContract); // tokenContract
-        globalValues[4] = vm.toString(allocation.tokenStreamTotal / 1 ether); //tokenStreamTotal (human-readable)
-        globalValues[5] = vm.toString(allocation.vestingCliffCredit / 1 ether); // vestingCliffCredit (human-readable)
-        globalValues[6] = vm.toString(allocation.unlockingCliffCredit / 1 ether); // unlockingCliffCredit (human-readable)
-        globalValues[7] = vm.toString(allocation.vestingRate * 365 days / 1 ether); // vestingRate (annually) (human-readable)
-        globalValues[8] = vm.toString(allocation.vestingStartTime); // vestingStartTime
-        globalValues[9] = vm.toString(allocation.unlockRate * 365 days / 1 ether); // unlockRate (annually) (human-readable)
-        globalValues[10] = vm.toString(allocation.unlockStartTime); // unlockStartTime
-
-        // TODO what to do with milestones, which could be of dynamic lengths
-
-        string[][] memory partyValues = new string[][](2);
-        partyValues[0] = new string[](4);
-        partyValues[0][0] = "Guardian BORG";
-        partyValues[0][1] = vm.toString(address(guardianSafe));
-        partyValues[0][2] = "guardian-safe@company.com";
-        partyValues[0][3] = "Foundation";
-        partyValues[1] = new string[](4);
-        partyValues[1][0] = partyName;
-        partyValues[1][1] = vm.toString(grantee); // evmAddress
-        partyValues[1][2] = "email@company.com";
-        partyValues[1][3] = "individual";
-
-        address[] memory parties = new address[](2);
-        parties[0] = address(guardianSafe);
-        parties[1] = grantee;
-        bytes32 expectedContractId = keccak256(
-            abi.encode(
-                templateId,
-                agreementSalt,
-                globalValues,
-                parties
-            )
-        );
-
-        bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
-            vm,
-            registry.DOMAIN_SEPARATOR(),
-            registry.SIGNATUREDATA_TYPEHASH(),
-            expectedContractId,
-            compAgreementUri,
-            compGlobalFields,
-            compPartyFields,
-            globalValues,
-            partyValues[0],
-            grantorOrDelegatePrivateKey
-        );
-
-        if (expectRevertData.length > 0) {
-            vm.expectRevert(expectRevertData);
-        }
-        bytes32 contractId = controller.proposeAndSignDeal(
-            templateId,
-            agreementSalt,
-            metavestController.metavestType.Vesting,
-            grantee,
-            allocation,
-            milestones,
-            globalValues,
-            parties,
-            partyValues,
-            signature,
-            bytes32(0), // no secrets
-            expiry
-        );
-
-        if (expectRevertData.length == 0) {
-            assertEq(contractId, expectedContractId, "Unexpected contract ID");
-            return contractId;
-        } else {
-            return 0;
-        }
-    }
-
-    function _granteeSignDeal(
-        CyberAgreementRegistry registry,
-        metavestController controller,
-        bytes32 contractId,
-        address grantee,
-        address recipient,
-        uint256 granteePrivateKey,
-        string memory partyName
-    ) internal returns(address) {
-        return _granteeSignDeal(
-            registry, controller, contractId, grantee, recipient, granteePrivateKey, partyName,
-            "" // Not expecting revert
-        );
-    }
-
-    function _granteeSignDeal(
-        CyberAgreementRegistry registry,
-        metavestController controller,
-        bytes32 contractId,
-        address grantee,
-        address recipient,
-        uint256 granteePrivateKey,
-        string memory partyName,
-        bytes memory expectRevertData
-    ) internal returns(address) {
-        metavestController.DealData memory deal = controller.getDeal(contractId);
-
-        string[] memory globalValues = new string[](11);
-        globalValues[0] = "0"; // metavestType: Vesting
-        globalValues[1] = vm.toString(address(guardianSafe)); // grantor
-        globalValues[2] = vm.toString(grantee); // grantee
-        globalValues[3] = vm.toString(deal.allocation.tokenContract); // tokenContract
-        globalValues[4] = vm.toString(deal.allocation.tokenStreamTotal / 1 ether); //tokenStreamTotal (human-readable)
-        globalValues[5] = vm.toString(deal.allocation.vestingCliffCredit / 1 ether); // vestingCliffCredit (human-readable)
-        globalValues[6] = vm.toString(deal.allocation.unlockingCliffCredit / 1 ether); // unlockingCliffCredit (human-readable)
-        globalValues[7] = vm.toString(deal.allocation.vestingRate * 365 days / 1 ether); // vestingRate (annually) (human-readable)
-        globalValues[8] = vm.toString(deal.allocation.vestingStartTime); // vestingStartTime
-        globalValues[9] = vm.toString(deal.allocation.unlockRate * 365 days / 1 ether); // unlockRate (annually) (human-readable)
-        globalValues[10] = vm.toString(deal.allocation.unlockStartTime); // unlockStartTime
-
-        string[] memory partyValues = new string[](4);
-        partyValues[0] = partyName;
-        partyValues[1] = vm.toString(grantee); // evmAddress
-        partyValues[2] = "email@company.com"; // Make sure it matches the proposed deal
-        partyValues[3] = "individual"; // Make sure it matches the proposed deal
-
-        bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
-            vm,
-            registry.DOMAIN_SEPARATOR(),
-            registry.SIGNATUREDATA_TYPEHASH(),
-            contractId,
-            compAgreementUri,
-            compGlobalFields,
-            compPartyFields,
-            globalValues,
-            partyValues,
-            granteePrivateKey
-        );
-
-        if (expectRevertData.length > 0) {
-            vm.expectRevert(expectRevertData);
-        }
-        address metavest = controller.signDealAndCreateMetavest(
-            grantee,
-            recipient,
-            contractId,
-            partyValues,
-            signature,
-            "" // no secrets
-        );
-
-        if (expectRevertData.length == 0) {
-            return metavest;
-        } else {
-            return address(0);
-        }
     }
 }

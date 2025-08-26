@@ -22,7 +22,7 @@ contract ProposeServiceAgreementScript is ZkSyncGuardianCompensationConfig2024_2
     /// @dev For running from `forge script`. Provide the deployer private key through env var.
     function run() public virtual {
         run(
-            vm.envUint("METALEX_PROPOSER_PRIVATE_KEY"),
+            vm.envUint("METALEX_SAFE_DELEGATE_PRIVATE_KEY"),
             registry
         );
     }
