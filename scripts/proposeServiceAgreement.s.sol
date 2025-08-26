@@ -33,7 +33,15 @@ contract ProposeServiceAgreementScript is SafeTxHelper, Script {
         uint256 proposerPrivateKey,
         ZkSyncGuardianCompensation2024_2025.Config memory config
     ) public virtual returns(bytes32) {
+
         address metalexProposer = vm.addr(proposerPrivateKey);
+
+        console2.log("");
+        console2.log("=== ProposeServiceAgreementScript ===");
+        console2.log("MetaLeX proposer: ", address(metalexProposer));
+        console2.log("Guardian Safe: ", address(config.guardianSafe));
+        console2.log("CyberAgreementRegistry: ", address(config.registry));
+        console2.log("");
 
         // Assume Guardian SAFE already delegate signing to the deployer
 
@@ -43,8 +51,8 @@ contract ProposeServiceAgreementScript is SafeTxHelper, Script {
         parties[0] = address(config.metalexSafe);
         parties[1] = address(config.guardianSafe);
 
-        string[] memory globalValues = ZkSyncGuardianCompensation2024_2025._serviceFormatGlobalValues(vm, config.serviceAgreementExpiry);
-        string[][] memory partyValues = ZkSyncGuardianCompensation2024_2025._serviceFormatPartyValues(vm, address(metalexProposer), address(config.guardianSafe));
+        string[] memory globalValues = ZkSyncGuardianCompensation2024_2025.formatServiceGlobalValues(vm, config.serviceAgreementExpiry);
+        string[][] memory partyValues = ZkSyncGuardianCompensation2024_2025.formatPartyValues(vm, config.metalexSafeInfo, config.guardianSafeInfo);
 
         uint256 agreementSalt = block.timestamp;
 
@@ -93,12 +101,10 @@ contract ProposeServiceAgreementScript is SafeTxHelper, Script {
 
         vm.stopBroadcast();
 
-        console2.log("MetaLeX proposer: ", address(metalexProposer));
-        console2.log("Guardian Safe: ", address(config.guardianSafe));
-        console2.log("CyberAgreementRegistry: ", address(config.registry));
         console2.log("Created:");
         console2.log("  Agreement ID:");
         console2.logBytes32(contractId);
+        console2.log("");
 
         return contractId;
     }

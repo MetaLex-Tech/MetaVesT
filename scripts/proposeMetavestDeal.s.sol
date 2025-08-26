@@ -14,7 +14,7 @@ import {Script} from "forge-std/Script.sol";
 import {VestingAllocationFactory} from "../src/VestingAllocationFactory.sol";
 import {ZkCappedMinterV2} from "zk-governance/l2-contracts/src/ZkCappedMinterV2.sol";
 import {ZkTokenV2} from "zk-governance/l2-contracts/src/ZkTokenV2.sol";
-import {console} from "forge-std/console.sol";
+import {console2} from "forge-std/console2.sol";
 import {metavestController} from "../src/MetaVesTController.sol";
 
 contract ProposeMetaVestDealScript is SafeTxHelper, Script {
@@ -43,7 +43,7 @@ contract ProposeMetaVestDealScript is SafeTxHelper, Script {
         return run(
             proposerPrivateKey, guardianInfo,
             // Default guardian allocations
-            config._parseAllocation(address(config.zkToken), config.metavestVestingAndUnlockStartTime),
+            config.parseAllocation(),
             config
         );
     }
@@ -58,6 +58,17 @@ contract ProposeMetaVestDealScript is SafeTxHelper, Script {
 
         address proposer = vm.addr(proposerPrivateKey);
 
+        console2.log("");
+        console2.log("=== ProposeMetaVestDealScript ===");
+        console2.log("Proposer: ", proposer);
+        console2.log("Guardian Safe: ", address(config.guardianSafe));
+        console2.log("ZK token: ", address(config.zkToken));
+        console2.log("CyberAgreementRegistry: ", address(config.registry));
+        console2.log("VestingAllocationFactory: ", address(config.vestingAllocationFactory));
+        console2.log("MetavesTController: ", address(config.controller));
+        console2.log("ZkCappedMinterV2: ", address(config.zkCappedMinter));
+        console2.log("");
+
         // Assume Guardian SAFE already delegate signing to the deployer
 
         // Propose a new deal
@@ -68,14 +79,8 @@ contract ProposeMetaVestDealScript is SafeTxHelper, Script {
         parties[0] = address(config.guardianSafe);
         parties[1] = guardianInfo.evmAddress;
 
-        string[] memory globalValues = config._compFormatGlobalValues(
-            vm,
-            address(config.guardianSafe),
-            guardianInfo.evmAddress,
-            address(config.zkToken),
-            startTime
-        );
-        string[][] memory partyValues = ZkSyncGuardianCompensation2024_2025._compFormatPartyValues(
+        string[] memory globalValues = config.formatCompGlobalValues(vm, guardianInfo.evmAddress);
+        string[][] memory partyValues = ZkSyncGuardianCompensation2024_2025.formatPartyValues(
             vm,
             config.guardianSafeInfo,
             guardianInfo
@@ -123,17 +128,11 @@ contract ProposeMetaVestDealScript is SafeTxHelper, Script {
         );
 
         vm.stopBroadcast();
-
-        console.log("Proposer: ", proposer);
-        console.log("Guardian Safe: ", address(config.guardianSafe));
-        console.log("ZK token: ", address(config.zkToken));
-        console.log("CyberAgreementRegistry: ", address(config.registry));
-        console.log("VestingAllocationFactory: ", address(config.vestingAllocationFactory));
-        console.log("MetavesTController: ", address(config.controller));
-        console.log("ZkCappedMinterV2: ", address(config.zkCappedMinter));
-        console.log("Created:");
-        console.log("  Agreement ID:");
-        console.logBytes32(contractId);
+        
+        console2.log("Created:");
+        console2.log("  Agreement ID:");
+        console2.logBytes32(contractId);
+        console2.log("");
 
         return contractId;
     }

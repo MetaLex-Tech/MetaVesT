@@ -39,6 +39,13 @@ contract DeployZkSyncGuardianCompensationPrerequisitesScript is SafeTxHelper, Sc
     ) {
         address deployer = vm.addr(deployerPrivateKey);
 
+        console2.log("");
+        console2.log("=== DeployZkSyncGuardianCompensationPrerequisitesScript ===");
+        console2.log("Deployer: ", deployer);
+        console2.log("Salt string: ", saltStr);
+        console2.log("Guardian Safe: ", address(config.guardianSafe));
+        console2.log("");
+
         bytes32 salt = keccak256(bytes(saltStr));
 
         vm.startBroadcast(deployerPrivateKey);
@@ -86,14 +93,11 @@ contract DeployZkSyncGuardianCompensationPrerequisitesScript is SafeTxHelper, Sc
 
         // Output logs
 
-        console2.log("Deployer: ", deployer);
-        console2.log("Guardian Safe: ", address(config.guardianSafe));
-        console2.log("");
-
         console2.log("Deployed addresses:");
         console2.log("  BorgAuth: ", address(auth));
         console2.log("  CyberAgreementRegistry: ", address(registry));
         console2.log("  VestingAllocationFactory: ", address(vestingAllocationFactory));
+        console2.log("");
 
         return (auth, registry, vestingAllocationFactory);
     }

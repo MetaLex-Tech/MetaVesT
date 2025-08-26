@@ -14,7 +14,7 @@ import {Script} from "forge-std/Script.sol";
 import {VestingAllocationFactory} from "../src/VestingAllocationFactory.sol";
 import {ZkCappedMinterV2} from "zk-governance/l2-contracts/src/ZkCappedMinterV2.sol";
 import {ZkTokenV2} from "zk-governance/l2-contracts/src/ZkTokenV2.sol";
-import {console} from "forge-std/console.sol";
+import {console2} from "forge-std/console2.sol";
 import {metavestController} from "../src/MetaVesTController.sol";
 
 contract SignDealAndCreateMetavestScript is SafeTxHelper, Script {
@@ -44,9 +44,23 @@ contract SignDealAndCreateMetavestScript is SafeTxHelper, Script {
         ZkSyncGuardianCompensation2024_2025.Config memory config
     ) public virtual returns(address) {
 
+        address signer = vm.addr(granteePrivateKey);
+
+        console2.log("");
+        console2.log("=== SignDealAndCreateMetavestScript ===");
+        console2.log("Signer: ", signer);
+        console2.log("Grantee: ", granteeInfo.evmAddress);
+        console2.log("Grantee Name: ", granteeInfo.name);
+        console2.log("Guardian Safe: ", address(config.guardianSafe));
+        console2.log("CyberAgreementRegistry: ", address(config.registry));
+        console2.log("MetavesTController: ", address(config.controller));
+        console2.log("Agreement ID:");
+        console2.logBytes32(agreementId);
+        console2.log("");
+        
         // Sign the deal and create MetaVesT
 
-        string[] memory granteePartyValues = ZkSyncGuardianCompensation2024_2025._compFormatPartyValues(vm, granteeInfo);
+        string[] memory granteePartyValues = ZkSyncGuardianCompensation2024_2025.formatPartyValues(vm, granteeInfo);
         bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
             vm,
             config.registry.DOMAIN_SEPARATOR(),
@@ -55,13 +69,7 @@ contract SignDealAndCreateMetavestScript is SafeTxHelper, Script {
             config.compAgreementUri,
             config.compGlobalFields,
             config.compPartyFields,
-            config._compFormatGlobalValues(
-                vm,
-                address(config.guardianSafe),
-                granteeInfo.evmAddress,
-                address(config.zkToken),
-                config.metavestVestingAndUnlockStartTime
-            ),
+            config.formatCompGlobalValues(vm, granteeInfo.evmAddress),
             granteePartyValues,
             granteePrivateKey
         );
@@ -78,16 +86,10 @@ contract SignDealAndCreateMetavestScript is SafeTxHelper, Script {
         );
 
         vm.stopBroadcast();
-
-        console.log("Grantee: ", granteeInfo.evmAddress);
-        console.log("Grantee Name: ", granteeInfo.name);
-        console.log("Guardian Safe: ", address(config.guardianSafe));
-        console.log("CyberAgreementRegistry: ", address(config.registry));
-        console.log("MetavesTController: ", address(config.controller));
-        console.log("Agreement ID:");
-        console.logBytes32(agreementId);
-        console.log("Created:");
-        console.log("  MetavesT: ", address(metavest));
+        
+        console2.log("Created:");
+        console2.log("  MetavesT: ", address(metavest));
+        console2.log("");
 
         return address(metavest);
     }

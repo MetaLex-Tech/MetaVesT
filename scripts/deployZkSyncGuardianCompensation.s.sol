@@ -34,6 +34,16 @@ contract DeployZkSyncGuardianCompensationScript is SafeTxHelper, Script {
     ) {
         address deployer = vm.addr(deployerPrivateKey);
 
+        console2.log("");
+        console2.log("=== DeployZkSyncGuardianCompensationScript ===");
+        console2.log("Deployer: ", deployer);
+        console2.log("Salt string: ", saltStr);
+        console2.log("ZkCappedMinterV2: ", address(config.zkCappedMinter));
+        console2.log("Guardian Safe: ", address(config.guardianSafe));
+        console2.log("CyberAgreementRegistry: ", address(config.registry));
+        console2.log("VestingAllocationFactory: ", address(config.vestingAllocationFactory));
+        console2.log("");
+
         bytes32 salt = keccak256(bytes(saltStr));
 
         vm.startBroadcast(deployerPrivateKey);
@@ -76,14 +86,6 @@ contract DeployZkSyncGuardianCompensationScript is SafeTxHelper, Script {
         });
 
         // Output logs
-
-        console2.log("Deployer: ", deployer);
-        console2.log("salt: ", saltStr);
-        console2.log("ZkCappedMinterV2: ", address(config.zkCappedMinter));
-        console2.log("Guardian Safe: ", address(config.guardianSafe));
-        console2.log("CyberAgreementRegistry: ", address(config.registry));
-        console2.log("VestingAllocationFactory: ", address(config.vestingAllocationFactory));
-        console2.log("");
 
         console2.log("Deployed addresses:");
         console2.log("  MetavesTController: ", address(controller));
