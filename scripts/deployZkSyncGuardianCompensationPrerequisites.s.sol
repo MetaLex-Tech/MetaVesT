@@ -2,6 +2,8 @@
 pragma solidity ^0.8.24;
 
 import {ZkSyncGuardianCompensation2024_2025} from "./lib/ZkSyncGuardianCompensation2024_2025.sol";
+import {ZkSyncGuardianCompensation2025_2026} from "./lib/ZkSyncGuardianCompensation2025_2026.sol";
+import {ZkSyncGuardianCompensationSepolia2024_2025} from "./lib/ZkSyncGuardianCompensationSepolia2024_2025.sol";
 import {ISafeProxyFactory, IGnosisSafe, GnosisTransaction} from "../test/lib/safe.sol";
 import {BorgAuth} from "cybercorps-contracts/src/libs/auth.sol";
 import {CyberAgreementRegistry} from "cybercorps-contracts/src/CyberAgreementRegistry.sol";
@@ -21,16 +23,22 @@ contract DeployZkSyncGuardianCompensationPrerequisitesScript is SafeTxHelper, Sc
     /// @dev For running from `forge script`. Provide the deployer private key through env var.
     function run() public virtual {
         deployPrerequisites(
-            "MetaLexMetaVestZkSyncGuardianCompensationLaunchV1.0",
             vm.envUint("DEPLOYER_PRIVATE_KEY"),
-            ZkSyncGuardianCompensation2024_2025.getDefault()
+
+            // zkSync Era
+//            "MetaLexMetaVestZkSyncGuardianCompensationLaunchV1.0",
+//            ZkSyncGuardianCompensation2024_2025.getDefault()
+
+            // zkSync Sepolia
+            "MetaLexMetaVestZkSyncGuardianCompensationTestnetV0.1.1",
+            ZkSyncGuardianCompensationSepolia2024_2025.getDefault()
         );
     }
 
     /// @dev For running in tests
     function deployPrerequisites(
-        string memory saltStr,
         uint256 deployerPrivateKey,
+        string memory saltStr,
         ZkSyncGuardianCompensation2024_2025.Config memory config
     ) public virtual returns(
         BorgAuth,
@@ -43,7 +51,7 @@ contract DeployZkSyncGuardianCompensationPrerequisitesScript is SafeTxHelper, Sc
         console2.log("=== DeployZkSyncGuardianCompensationPrerequisitesScript ===");
         console2.log("Deployer: ", deployer);
         console2.log("Salt string: ", saltStr);
-        console2.log("Guardian Safe: ", address(config.guardianSafe));
+        console2.log("MetaLeX SAFE: ", address(config.metalexSafe));
         console2.log("");
 
         bytes32 salt = keccak256(bytes(saltStr));

@@ -52,7 +52,7 @@ library ZkSyncGuardianCompensation2024_2025 {
         string[] compGlobalFields;
         string[] compPartyFields;
 
-        address[] guardians;
+        PartyInfo[] guardians;
         uint256 fixedAnnualCompensation;
         uint48 metavestVestingAndUnlockStartTime;
         BaseAllocation.Milestone[] milestones;
@@ -97,7 +97,7 @@ library ZkSyncGuardianCompensation2024_2025 {
         IGnosisSafe guardianSafe = IGnosisSafe(0x06E19F3CEafBC373329973821ee738021A58F0E3);
         IGnosisSafe metalexSafe = IGnosisSafe(0x99ba28257DbDB399b53bF59Aa5656480f3bdc5bc);
 
-        address[] memory guardians = new address[](0); // TODO TBD
+        PartyInfo[] memory guardians = new PartyInfo[](0); // TODO TBD
 
         return Config({
 

@@ -2,6 +2,8 @@
 pragma solidity ^0.8.24;
 
 import {ZkSyncGuardianCompensation2024_2025} from "./lib/ZkSyncGuardianCompensation2024_2025.sol";
+import {ZkSyncGuardianCompensation2025_2026} from "./lib/ZkSyncGuardianCompensation2025_2026.sol";
+import {ZkSyncGuardianCompensationSepolia2024_2025} from "./lib/ZkSyncGuardianCompensationSepolia2024_2025.sol";
 import {ISafeProxyFactory, IGnosisSafe, GnosisTransaction} from "../test/lib/safe.sol";
 import {BorgAuth} from "cybercorps-contracts/src/libs/auth.sol";
 import {CyberAgreementRegistry} from "cybercorps-contracts/src/CyberAgreementRegistry.sol";
@@ -17,16 +19,30 @@ contract DeployZkSyncGuardianCompensationScript is SafeTxHelper, Script {
     /// @dev For running from `forge script`. Provide the deployer private key through env var.
     function run() public virtual {
         deployCompensation(
-            "MetaLexMetaVestZkSyncGuardianCompensationLaunchV1.0.2024-2025",
             vm.envUint("DEPLOYER_PRIVATE_KEY"),
-            ZkSyncGuardianCompensation2024_2025.getDefault()
+
+            // zkSync Era for 2024-2025
+//            "MetaLexMetaVestZkSyncGuardianCompensationLaunchV1.0.2024-2025",
+//            ZkSyncGuardianCompensation2024_2025.getDefault()
+
+            // zkSync Era for 2025-2026
+//            "MetaLexMetaVestZkSyncGuardianCompensationLaunchV1.0.2025-2026",
+//            ZkSyncGuardianCompensation2025_2026.getDefault()
+
+            // zkSync Sepolia for 2024-2025
+            "MetaLexMetaVestZkSyncGuardianCompensationTestnetV0.1.1.2024-2025",
+            ZkSyncGuardianCompensationSepolia2024_2025.getDefault()
+
+            // zkSync Sepolia for 2025-2026
+//            "MetaLexMetaVestZkSyncGuardianCompensationTestnetV0.1.2025-2026",
+//            ZkSyncGuardianCompensationSepolia2025_2026.getDefault()
         );
     }
 
     /// @dev For running in tests
     function deployCompensation(
-        string memory saltStr,
         uint256 deployerPrivateKey,
+        string memory saltStr,
         ZkSyncGuardianCompensation2024_2025.Config memory config
     ) public virtual returns(
         metavestController,

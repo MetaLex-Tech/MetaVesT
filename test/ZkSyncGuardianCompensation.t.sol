@@ -76,8 +76,8 @@ contract ZkSyncGuardianCompensationTest is
         config2025_2026 = ZkSyncGuardianCompensation2025_2026.getDefault();
 
         (auth, registry, vestingAllocationFactory) = DeployZkSyncGuardianCompensationPrerequisitesScript.deployPrerequisites(
-            saltStr,
             deployerPrivateKey,
+            saltStr,
             config2024_2025
         );
 
@@ -89,16 +89,16 @@ contract ZkSyncGuardianCompensationTest is
 
         // Deploy 2024-2025 compensation contracts
         (controller, safeTxs2024_2025) = DeployZkSyncGuardianCompensationScript.deployCompensation(
-            string(abi.encodePacked(saltStr, ".2024-2025")),
             deployerPrivateKey,
+            string(abi.encodePacked(saltStr, ".2024-2025")),
             config2024_2025
         );
         config2024_2025.controller = controller; // Update configs with deployed contracts
 
         // Deploy 2025-2026 compensation contracts
         (controller, safeTxs2025_2026) = DeployZkSyncGuardianCompensationScript.deployCompensation(
-            string(abi.encodePacked(saltStr, ".2025-2026")),
             deployerPrivateKey,
+            string(abi.encodePacked(saltStr, ".2025-2026")),
             config2025_2026
         );
         config2025_2026.controller = controller; // Update configs with deployed contracts
