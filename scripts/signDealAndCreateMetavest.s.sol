@@ -2,6 +2,7 @@
 pragma solidity ^0.8.24;
 
 import {ZkSyncGuardianCompensation2024_2025} from "./lib/ZkSyncGuardianCompensation2024_2025.sol";
+import {ZkSyncGuardianCompensationSepolia2024_2025} from "./lib/ZkSyncGuardianCompensationSepolia2024_2025.sol";
 import {BaseAllocation} from "../src/BaseAllocation.sol";
 import {BorgAuth} from "cybercorps-contracts/src/libs/auth.sol";
 import {CyberAgreementRegistry} from "cybercorps-contracts/src/CyberAgreementRegistry.sol";
@@ -24,15 +25,26 @@ contract SignDealAndCreateMetavestScript is SafeTxHelper, Script {
     function run() public virtual {
         uint256 granteePrivateKey = vm.envUint("GRANTEE_PRIVATE_KEY");
         run(
+//            granteePrivateKey,
+//            0x0000000000000000000000000000000000000000000000000000000000000000, // TODO TBD
+//            ZkSyncGuardianCompensation2024_2025.PartyInfo({ // TODO TBD
+//                name: "Alice",
+//                evmAddress: vm.addr(granteePrivateKey),
+//                contactDetails: "email@company.com",
+//                _type: "individual"
+//            }),
+//            ZkSyncGuardianCompensation2024_2025.getDefault()
+
+            // zkSync Sepolia
             granteePrivateKey,
-            0x0000000000000000000000000000000000000000000000000000000000000000, // TODO TBD
+            0xd0d7610ca18b8a76a36c7e1241929641c06cce69ddc1161beebe69b72dae6cbf,
             ZkSyncGuardianCompensation2024_2025.PartyInfo({ // TODO TBD
                 name: "Alice",
                 evmAddress: vm.addr(granteePrivateKey),
-                contactDetails: "email@company.com",
+                contactDetails: "alice@email.com",
                 _type: "individual"
             }),
-            ZkSyncGuardianCompensation2024_2025.getDefault()
+            ZkSyncGuardianCompensationSepolia2024_2025.getDefault()
         );
     }
 

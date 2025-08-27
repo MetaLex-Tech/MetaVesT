@@ -2,6 +2,7 @@
 pragma solidity ^0.8.24;
 
 import {ZkSyncGuardianCompensation2024_2025} from "./lib/ZkSyncGuardianCompensation2024_2025.sol";
+import {ZkSyncGuardianCompensationSepolia2024_2025} from "./lib/ZkSyncGuardianCompensationSepolia2024_2025.sol";
 import {BaseAllocation} from "../src/BaseAllocation.sol";
 import {BorgAuth} from "cybercorps-contracts/src/libs/auth.sol";
 import {CyberAgreementRegistry} from "cybercorps-contracts/src/CyberAgreementRegistry.sol";
@@ -24,7 +25,12 @@ contract ProposeServiceAgreementScript is SafeTxHelper, Script {
     function run() public virtual {
         run(
             vm.envUint("METALEX_SAFE_DELEGATE_PRIVATE_KEY"),
-            ZkSyncGuardianCompensation2024_2025.getDefault()
+
+            // zkSync Era
+//            ZkSyncGuardianCompensation2024_2025.getDefault()
+
+            // zkSync Sepolia
+            ZkSyncGuardianCompensationSepolia2024_2025.getDefault()
         );
     }
 
