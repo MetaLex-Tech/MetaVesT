@@ -23,6 +23,13 @@ contract MockMetaVesTController {
     function mint(address recipient, uint256 amount) external {
         ZkCappedMinterV2(zkCappedMinter).mint(recipient, amount);
     }
+
+    function updateMetavestVestingRate(
+        address _grant,
+        uint160 _vestingRate
+    ) external {
+        BaseAllocation(_grant).updateVestingRate(_vestingRate);
+    }
 }
 
 contract VestingAllocationTest is Test {
@@ -142,5 +149,27 @@ contract VestingAllocationTest is Test {
     function test_RevertIf_TerminateNonController() public {
         vm.expectRevert(abi.encodeWithSelector(BaseAllocation.MetaVesT_OnlyController.selector));
         vestingAllocation.terminate();
+    }
+
+    function test_GetGoverningPowerAfterVestingRateReduction() public {
+        // Withdraw cliff amount first
+        vm.prank(grantee);
+        VestingAllocation(vestingAllocation).withdraw(100 ether);
+
+        skip(2 seconds);
+        assertEq(vestingAllocation.getAmountWithdrawable(), 10 ether * 2);
+        assertEq(vestingAllocation.getGoverningPower(), 10 ether * 2);
+
+        vm.prank(grantee);
+        VestingAllocation(vestingAllocation).withdraw(10 ether);
+
+        console2.log("getAmountWithdrawable: %d", vestingAllocation.getAmountWithdrawable()); // 10 ether
+        console2.log("getGoverningPower: %d", vestingAllocation.getGoverningPower()); // 10 ether
+
+        mockController.updateMetavestVestingRate(address(vestingAllocation), 4 ether);
+
+        // TODO this will fail because 4 ether/sec * 2 sec - 10 ether = -2 ether
+        console2.log("getAmountWithdrawable: %d", vestingAllocation.getAmountWithdrawable());
+        console2.log("getGoverningPower: %d", vestingAllocation.getGoverningPower());
     }
 }
