@@ -53,19 +53,23 @@ contract VestingAllocation is BaseAllocation {
     /// @notice returns the governing power of the VestingAllocation
     /// @return governingPower - the governing power of the VestingAllocation based on the governance setting
     function getGoverningPower() external view override returns (uint256 governingPower) {
-        if(govType==GovType.all)
-        {
+        if(govType==GovType.all) {
             uint256 totalMilestoneAward = 0;
-            for(uint256 i; i < milestones.length; ++i)
-            { 
+            for(uint256 i; i < milestones.length; ++i) {
                     totalMilestoneAward += milestones[i].milestoneAward;
             }
             governingPower = (allocation.tokenStreamTotal + totalMilestoneAward) - tokensWithdrawn;
+        } else if(govType==GovType.vested) {
+            uint256 amount = getVestedTokenAmount();
+            governingPower = (amount > tokensWithdrawn)
+                ? amount - tokensWithdrawn
+                : 0;
+        } else {
+            uint256 amount = _min(getVestedTokenAmount(), getUnlockedTokenAmount());
+            governingPower = (amount > tokensWithdrawn)
+                ? amount - tokensWithdrawn
+                : 0;
         }
-        else if(govType==GovType.vested)
-             governingPower = getVestedTokenAmount() - tokensWithdrawn;
-        else 
-            governingPower = _min(getVestedTokenAmount(), getUnlockedTokenAmount()) - tokensWithdrawn;
         
         return governingPower;
     }

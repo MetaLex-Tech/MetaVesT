@@ -163,13 +163,13 @@ contract VestingAllocationTest is Test {
         vm.prank(grantee);
         VestingAllocation(vestingAllocation).withdraw(10 ether);
 
-        console2.log("getAmountWithdrawable: %d", vestingAllocation.getAmountWithdrawable()); // 10 ether
-        console2.log("getGoverningPower: %d", vestingAllocation.getGoverningPower()); // 10 ether
+        assertEq(vestingAllocation.getAmountWithdrawable(), 10 ether * 2 - 10 ether);
+        assertEq(vestingAllocation.getGoverningPower(), 10 ether * 2 - 10 ether);
 
         mockController.updateMetavestVestingRate(address(vestingAllocation), 4 ether);
 
-        // TODO this will fail because 4 ether/sec * 2 sec - 10 ether = -2 ether
-        console2.log("getAmountWithdrawable: %d", vestingAllocation.getAmountWithdrawable());
-        console2.log("getGoverningPower: %d", vestingAllocation.getGoverningPower());
+        // 4 ether/sec * 2 sec - 10 ether = -2 ether < 0
+        assertEq(vestingAllocation.getAmountWithdrawable(), 0 ether);
+        assertEq(vestingAllocation.getGoverningPower(), 0 ether);
     }
 }
