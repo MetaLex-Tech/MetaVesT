@@ -70,23 +70,24 @@ contract DeployZkSyncGuardianCompensationPrerequisitesScript is SafeTxHelper, Sc
             )
         )));
 
-        // Create zkSync Guardian Compensation Agreement template
-        registry.createTemplate(
-            config.compTemplateId,
-            config.compTemplateName,
-            config.compAgreementUri,
-            config.compGlobalFields,
-            config.compPartyFields
-        );
-
-        // Create MetaLeX <> zkSync Guardian BORG Service Agreement template
-        registry.createTemplate(
-            config.serviceTemplateId,
-            config.serviceTemplateName,
-            config.serviceAgreementUri,
-            config.serviceGlobalFields,
-            config.servicePartyFields
-        );
+        // We will create the templates later
+//        // Create zkSync Guardian Compensation Agreement template
+//        registry.createTemplate(
+//            config.compTemplateId,
+//            config.compTemplateName,
+//            config.compAgreementUri,
+//            config.compGlobalFields,
+//            config.compPartyFields
+//        );
+//
+//        // Create MetaLeX <> zkSync Guardian BORG Service Agreement template
+//        registry.createTemplate(
+//            config.serviceTemplateId,
+//            config.serviceTemplateName,
+//            config.serviceAgreementUri,
+//            config.serviceGlobalFields,
+//            config.servicePartyFields
+//        );
 
         // Transfer CyberAgreementRegistry ownership to MetaLeX SAFE
 
