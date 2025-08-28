@@ -10,6 +10,7 @@ interface IZkCappedMinterV2 {
       function MINTER_ROLE() external returns (bytes32);
       function PAUSER_ROLE() external returns (bytes32);
       function START_TIME() external returns (uint48);
+      function EXPIRATION_TIME() external returns (uint48);
 
       function grantRole(bytes32 role, address account) external;
       function hasRole(bytes32 role, address account) external view returns (bool);

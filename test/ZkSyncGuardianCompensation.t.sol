@@ -186,6 +186,26 @@ contract ZkSyncGuardianCompensationTest is
         vm.assertTrue(config2025_2026.zkCappedMinter.hasRole(config2025_2026.zkCappedMinter.MINTER_ROLE(), address(config2025_2026.controller)), "2025-2026 ZK Capped Minter should grant MetaVesTController MINTER role");
     }
 
+    function test_AgreementDeadline() public {
+        // Guardian SAFE to delegate signing to an EOA
+        vm.prank(address(config2024_2025.guardianSafe));
+        config2024_2025.registry.setDelegation(guardianDelegate, block.timestamp + 60);
+        assertTrue(config2024_2025.registry.isValidDelegate(address(config2024_2025.guardianSafe), guardianDelegate), "delegate should be Guardian SAFE's delegate");
+
+        // Run scripts to propose deals
+        bytes32 agreementId = ProposeMetaVestDealScript.run(
+            guardianDelegatePrivateKey,
+            ZkSyncGuardianCompensation2024_2025.MetavestPartyInfo({
+                name: "Alice",
+                evmAddress: alice
+            }),
+            config2024_2025
+        );
+
+        (, , , , , , uint256 agreementExpiry) = config2024_2025.registry.agreements(agreementId);
+        assertGt(agreementExpiry, config2024_2025.zkCappedMinter.EXPIRATION_TIME(), "Agreement expiry should be later than the minter's");
+    }
+
     function test_GuardianCompensation() public {
         (address metavestAddressAlice2024_2025, address metavestAddressAlice2025_2026) = _proposeAndFinalizeAllGuardianDeals();
 

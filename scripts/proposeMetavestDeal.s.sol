@@ -122,7 +122,7 @@ contract ProposeMetaVestDealScript is SafeTxHelper, Script {
             partyValues,
             signature,
             bytes32(0), // no secrets
-            block.timestamp + 30 days * 2
+            block.timestamp + 365 days * 2 // 2 years after deployment
         );
 
         vm.stopBroadcast();
