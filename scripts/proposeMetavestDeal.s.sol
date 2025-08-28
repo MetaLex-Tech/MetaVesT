@@ -24,11 +24,9 @@ contract ProposeMetaVestDealScript is SafeTxHelper, Script {
     function run() public virtual {
         run(
             vm.envUint("GUARDIAN_BORG_DELEGATE_PRIVATE_KEY"),
-            ZkSyncGuardianCompensation2024_2025.PartyInfo({
+            ZkSyncGuardianCompensation2024_2025.MetavestPartyInfo({
                 name: "Alice",
-                evmAddress: 0x48d206948C366396a86A449DdD085FDbfC280B4b,
-                contactDetails: "email@company.com",
-                _type: "individual"
+                evmAddress: 0x48d206948C366396a86A449DdD085FDbfC280B4b
             }),
             ZkSyncGuardianCompensation2024_2025.getDefault()
         );
@@ -37,7 +35,7 @@ contract ProposeMetaVestDealScript is SafeTxHelper, Script {
     /// @dev For running in tests
     function run(
         uint256 proposerPrivateKey,
-        ZkSyncGuardianCompensation2024_2025.PartyInfo memory guardianInfo,
+        ZkSyncGuardianCompensation2024_2025.MetavestPartyInfo memory guardianInfo,
         ZkSyncGuardianCompensation2024_2025.Config memory config
     ) public virtual returns(bytes32) {
         return run(
@@ -51,7 +49,7 @@ contract ProposeMetaVestDealScript is SafeTxHelper, Script {
     /// @dev For running in tests
     function run(
         uint256 proposerPrivateKey,
-        ZkSyncGuardianCompensation2024_2025.PartyInfo memory guardianInfo,
+        ZkSyncGuardianCompensation2024_2025.MetavestPartyInfo memory guardianInfo,
         BaseAllocation.Allocation memory allocation,
         ZkSyncGuardianCompensation2024_2025.Config memory config
     ) public virtual returns(bytes32) {
@@ -80,9 +78,9 @@ contract ProposeMetaVestDealScript is SafeTxHelper, Script {
         parties[1] = guardianInfo.evmAddress;
 
         string[] memory globalValues = config.formatCompGlobalValues(vm, guardianInfo.evmAddress);
-        string[][] memory partyValues = ZkSyncGuardianCompensation2024_2025.formatPartyValues(
+        string[][] memory partyValues = ZkSyncGuardianCompensation2024_2025.formatMetaVestPartyValues(
             vm,
-            config.guardianSafeInfo,
+            config.guardianSafeInfoForMetavest,
             guardianInfo
         );
 

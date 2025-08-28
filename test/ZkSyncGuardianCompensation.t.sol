@@ -11,7 +11,6 @@ import {console2} from "forge-std/console2.sol";
 import {CyberAgreementRegistry} from "cybercorps-contracts/src/CyberAgreementRegistry.sol";
 import {DeployZkSyncGuardianCompensationPrerequisitesScript} from "../scripts/deployZkSyncGuardianCompensationPrerequisites.s.sol";
 import {DeployZkSyncGuardianCompensationScript} from "../scripts/deployZkSyncGuardianCompensation.s.sol";
-import {ProposeServiceAgreementScript} from "../scripts/proposeServiceAgreement.s.sol";
 import {ProposeMetaVestDealScript} from "../scripts/proposeMetavestDeal.s.sol";
 import {SignDealAndCreateMetavestScript} from "../scripts/signDealAndCreateMetavest.s.sol";
 import {ZkSyncGuardianCompensation2024_2025} from "../scripts/lib/ZkSyncGuardianCompensation2024_2025.sol";
@@ -22,7 +21,6 @@ import {GnosisTransaction} from "./lib/safe.sol";
 contract ZkSyncGuardianCompensationTest is
     DeployZkSyncGuardianCompensationPrerequisitesScript,
     DeployZkSyncGuardianCompensationScript,
-    ProposeServiceAgreementScript,
     ProposeMetaVestDealScript,
     SignDealAndCreateMetavestScript,
     Test
@@ -104,6 +102,7 @@ contract ZkSyncGuardianCompensationTest is
         config2025_2026.controller = controller; // Update configs with deployed contracts
 
         // Simulate Guardian SAFE to execute txs as instructed
+
         for (uint256 i = 0; i < safeTxs2024_2025.length; i++) {
             vm.prank(address(config2024_2025.guardianSafe));
             (safeTxs2024_2025[i].to).call{value: safeTxs2024_2025[i].value}(safeTxs2024_2025[i].data);
@@ -112,6 +111,20 @@ contract ZkSyncGuardianCompensationTest is
             vm.prank(address(config2025_2026.guardianSafe));
             (safeTxs2025_2026[i].to).call{value: safeTxs2025_2026[i].value}(safeTxs2025_2026[i].data);
         }
+
+        // Simulate MetaLeX SAFE create templates for Guardian Compensation and Service Agreement
+
+        vm.startPrank(address(config2024_2025.metalexSafe));
+        
+        registry.createTemplate(
+            config2024_2025.compTemplateId,
+            config2024_2025.compTemplateName,
+            config2024_2025.compAgreementUri,
+            config2024_2025.compGlobalFields,
+            config2024_2025.compPartyFields
+        );
+
+        vm.stopPrank();
 
         // Simulate vote pass (https://vote.zknation.io/dao/proposal/14920227315823844313255249182525601975564035647349569740836448589354658768084?govId=eip155:324:0xb83FF6501214ddF40C91C9565d095400f3F45746)
 
@@ -130,7 +143,6 @@ contract ZkSyncGuardianCompensationTest is
     function run() public override(
         DeployZkSyncGuardianCompensationPrerequisitesScript,
         DeployZkSyncGuardianCompensationScript,
-        ProposeServiceAgreementScript,
         ProposeMetaVestDealScript,
         SignDealAndCreateMetavestScript
     ) {
@@ -156,14 +168,6 @@ contract ZkSyncGuardianCompensationTest is
             config2024_2025.compGlobalFields,
             config2024_2025.compPartyFields
         );
-        _assertTemplate(
-            config2024_2025.registry,
-            config2024_2025.serviceTemplateId,
-            config2024_2025.serviceAgreementUri,
-            config2024_2025.serviceTemplateName,
-            config2024_2025.serviceGlobalFields,
-            config2024_2025.servicePartyFields
-        );
 
         // MetaVesT deployments
 
@@ -180,31 +184,6 @@ contract ZkSyncGuardianCompensationTest is
         vm.assertEq(config2025_2026.controller.vestingFactory(), address(config2025_2026.vestingAllocationFactory), "2025-2026 Unexpected MetaVesTController vesting allocation factory");
         vm.assertEq(config2025_2026.controller.zkCappedMinter(), address(config2025_2026.zkCappedMinter), "2025-2026 MetaVesTController should have ZK Capped Minter should set");
         vm.assertTrue(config2025_2026.zkCappedMinter.hasRole(config2025_2026.zkCappedMinter.MINTER_ROLE(), address(config2025_2026.controller)), "2025-2026 ZK Capped Minter should grant MetaVesTController MINTER role");
-    }
-
-    function test_ProposeServiceAgreement() public {
-        // Simulate MetaLeX SAFE delegation
-        vm.prank(address(config2024_2025.metalexSafe));
-        config2024_2025.registry.setDelegation(metalexDelegate, block.timestamp + 60);
-        assertTrue(config2024_2025.registry.isValidDelegate(address(config2024_2025.metalexSafe), metalexDelegate), "should be MetaLeX SAFE's delegate");
-
-        // Simulate MetaLeX delegate proposing and signing agreement
-        bytes32 agreementId = ProposeServiceAgreementScript.run(
-            metalexDelegatePrivateKey,
-            config2024_2025
-        );
-
-        // Verify agreement
-
-        (bytes32 templateId, , , , , , uint256 expiry) = config2024_2025.registry.agreements(agreementId);
-        assertEq(templateId, config2024_2025.serviceTemplateId, "Unexpected service agreement template ID");
-        assertEq(expiry, config2024_2025.serviceAgreementExpiry, "Unexpected service agreement expiry");
-
-        (, , , , , address[] memory parties, , , , ) = config2024_2025.registry.getContractDetails(agreementId);
-        vm.assertEq(parties[0], address(config2024_2025.metalexSafe), "First party should be MetaLeX SAFE");
-        vm.assertEq(parties[1], address(config2024_2025.guardianSafe), "Second party should be Guardian SAFE");
-
-        vm.assertTrue(config2024_2025.registry.hasSigned(agreementId, metalexDelegate), "Should signed by MetaLeX delegate");
     }
 
     function test_GuardianCompensation() public {
@@ -249,11 +228,9 @@ contract ZkSyncGuardianCompensationTest is
         config2024_2025.registry.setDelegation(guardianDelegate, block.timestamp + 60);
         assertTrue(config2024_2025.registry.isValidDelegate(address(config2024_2025.guardianSafe), guardianDelegate), "should be Guardian SAFE's delegate");
 
-        ZkSyncGuardianCompensation2024_2025.PartyInfo memory chadInfo = ZkSyncGuardianCompensation2024_2025.PartyInfo({
+        ZkSyncGuardianCompensation2024_2025.MetavestPartyInfo memory chadInfo = ZkSyncGuardianCompensation2024_2025.MetavestPartyInfo({
             name: "Chad",
-            evmAddress: chad,
-            contactDetails: "chad@email.com",
-            _type: "individual"
+            evmAddress: chad
         });
         bytes32 contractIdChad = ProposeMetaVestDealScript.run(
             guardianDelegatePrivateKey,
@@ -288,11 +265,9 @@ contract ZkSyncGuardianCompensationTest is
 
         // Run scripts to propose deals
 
-        ZkSyncGuardianCompensation2024_2025.PartyInfo memory aliceInfo = ZkSyncGuardianCompensation2024_2025.PartyInfo({
+        ZkSyncGuardianCompensation2024_2025.MetavestPartyInfo memory aliceInfo = ZkSyncGuardianCompensation2024_2025.MetavestPartyInfo({
             name: "Alice",
-            evmAddress: alice,
-            contactDetails: "alice@email.com",
-            _type: "individual"
+            evmAddress: alice
         });
 
         bytes32 contractIdAlice2024_2025 = ProposeMetaVestDealScript.run(

@@ -24,25 +24,14 @@ library ZkSyncGuardianCompensation2024_2025 {
         // zkSync Guardians
 
         IGnosisSafe guardianSafe;
-        PartyInfo guardianSafeInfo;
+        MetavestPartyInfo guardianSafeInfoForMetavest;
 
         // MetaLeX
 
         IGnosisSafe metalexSafe;
-        PartyInfo metalexSafeInfo;
         CyberAgreementRegistry registry;
         VestingAllocationFactory vestingAllocationFactory;
         metavestController controller;
-
-        // MetaLeX <> zkSync Guardian BORG Service Agreement
-
-        string serviceAgreementUri;
-        string serviceTemplateName;
-        bytes32 serviceTemplateId;
-        string[] serviceGlobalFields;
-        string[] servicePartyFields;
-
-        uint256 serviceAgreementExpiry;
 
         // zkSync Guardian Compensation Agreement
 
@@ -52,29 +41,18 @@ library ZkSyncGuardianCompensation2024_2025 {
         string[] compGlobalFields;
         string[] compPartyFields;
 
-        PartyInfo[] guardians;
+        MetavestPartyInfo[] guardians;
         uint256 fixedAnnualCompensation;
         uint48 metavestVestingAndUnlockStartTime;
         BaseAllocation.Milestone[] milestones;
     }
 
-    struct PartyInfo {
+    struct MetavestPartyInfo {
         string name;
         address evmAddress;
-        string contactDetails;
-        string _type;
     }
     
     function getDefault() internal view returns(Config memory) {
-        string[] memory serviceGlobalFields = new string[](1);
-        serviceGlobalFields[0] = "expiryDate";
-
-        string[] memory servicePartyFields = new string[](4);
-        servicePartyFields[0] = "name";
-        servicePartyFields[1] = "evmAddress";
-        servicePartyFields[2] = "contactDetails";
-        servicePartyFields[3] = "type";
-
         string[] memory compGlobalFields = new string[](11);
         compGlobalFields[0] = "metavestType";
         compGlobalFields[1] = "grantor";
@@ -88,16 +66,14 @@ library ZkSyncGuardianCompensation2024_2025 {
         compGlobalFields[9] = "unlockRate";
         compGlobalFields[10] = "unlockStartTime";
 
-        string[] memory compPartyFields = new string[](4);
+        string[] memory compPartyFields = new string[](2);
         compPartyFields[0] = "name";
         compPartyFields[1] = "evmAddress";
-        compPartyFields[2] = "contactDetails";
-        compPartyFields[3] = "type";
 
         IGnosisSafe guardianSafe = IGnosisSafe(0x06E19F3CEafBC373329973821ee738021A58F0E3);
         IGnosisSafe metalexSafe = IGnosisSafe(0x99ba28257DbDB399b53bF59Aa5656480f3bdc5bc);
 
-        PartyInfo[] memory guardians = new PartyInfo[](0); // TODO TBD
+        MetavestPartyInfo[] memory guardians = new MetavestPartyInfo[](0); // TODO TBD
 
         return Config({
 
@@ -110,41 +86,23 @@ library ZkSyncGuardianCompensation2024_2025 {
             // zkSync Guardians
 
             guardianSafe: guardianSafe,
-            guardianSafeInfo: PartyInfo({ // TODO TBD
+            guardianSafeInfoForMetavest: MetavestPartyInfo({
                 name: "Guardian BORG",
-                evmAddress: address(guardianSafe),
-                contactDetails: "inbox@guardian.borg",
-                _type: "Foundation"
+                evmAddress: address(guardianSafe)
             }),
 
             // MetaLeX
         
             metalexSafe: metalexSafe,
-            metalexSafeInfo: PartyInfo({ // TODO TBD
-                name: "MetaLeX",
-                evmAddress: address(metalexSafe),
-                contactDetails: "test@metalex.tech",
-                _type: "Corporation"
-            }),
             registry: CyberAgreementRegistry(address(0)), // TODO TBD
             vestingAllocationFactory: VestingAllocationFactory(address(0)), // TODO TBD
             controller: metavestController(address(0)), // TODO TBD
-
-            // MetaLeX <> zkSync Guardian BORG Service Agreement
-
-            serviceAgreementUri: "ipfs://bafybeiangqvqenqkvybrbxu2npv6mlqreunxxygsh3377mpwwjao64qpse", // TODO TBD
-            serviceTemplateName: "MetaLeX <> zkSync Guardian BORG Service Agreement", // TODO TBD
-            serviceTemplateId: bytes32(uint256(200)),
-            serviceGlobalFields: serviceGlobalFields,
-            servicePartyFields: servicePartyFields,
-
-            serviceAgreementExpiry: 1788220800,
 
             // zkSync Guardian Compensation Agreement
 
             compAgreementUri: "ipfs://bafybeiangqvqenqkvybrbxu2npv6mlqreunxxygsh3377mpwwjao64qpse", // TODO TBD
             compTemplateName: "zkSync Guardian Compensation Agreement", // TODO TBD
-            compTemplateId: bytes32(uint256(201)),
+            compTemplateId: bytes32(uint256(200)),
             compGlobalFields: compGlobalFields,
             compPartyFields: compPartyFields,
 
@@ -178,7 +136,7 @@ library ZkSyncGuardianCompensation2024_2025 {
 
         string[] memory globalValues = new string[](11);
         globalValues[0] = "0"; // metavestType: Vesting
-        globalValues[1] = vm.toString(config.guardianSafeInfo.evmAddress); // grantor
+        globalValues[1] = vm.toString(config.guardianSafeInfoForMetavest.evmAddress); // grantor
         globalValues[2] = vm.toString(grantee); // grantee
         globalValues[3] = vm.toString(allocation.tokenContract); // tokenContract
         globalValues[4] = vm.toString(allocation.tokenStreamTotal / 1 ether); //tokenStreamTotal (human-readable)
@@ -197,26 +155,24 @@ library ZkSyncGuardianCompensation2024_2025 {
         return globalValues;
     }
 
-    function formatPartyValues(
+    function formatMetaVestPartyValues(
         Vm vm,
-        PartyInfo memory partyInfo
+        MetavestPartyInfo memory partyInfo
     ) internal view returns(string[] memory) {
-        string[] memory partyValues = new string[](4);
+        string[] memory partyValues = new string[](2);
         partyValues[0] = partyInfo.name;
         partyValues[1] = vm.toString(partyInfo.evmAddress);
-        partyValues[2] = partyInfo.contactDetails;
-        partyValues[3] = partyInfo._type;
         return partyValues;
     }
 
-    function formatPartyValues(
+    function formatMetaVestPartyValues(
         Vm vm,
-        PartyInfo memory guardianSafeInfo,
-        PartyInfo memory guardianInfo
+        MetavestPartyInfo memory guardianSafeInfo,
+        MetavestPartyInfo memory guardianInfo
     ) internal view returns(string[][] memory) {
         string[][] memory partyValues = new string[][](2);
-        partyValues[0] = formatPartyValues(vm, guardianSafeInfo);
-        partyValues[1] = formatPartyValues(vm, guardianInfo);
+        partyValues[0] = formatMetaVestPartyValues(vm, guardianSafeInfo);
+        partyValues[1] = formatMetaVestPartyValues(vm, guardianInfo);
         return partyValues;
     }
 }

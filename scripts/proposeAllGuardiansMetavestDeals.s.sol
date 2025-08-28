@@ -52,8 +52,6 @@ contract ProposeAllGuardiansMetaVestDealScript is ProposeMetaVestDealScript {
             console2.log("Proposing to Guardian #%d", i + 1);
             console2.log("  name:", config.guardians[i].name);
             console2.log("  address:", config.guardians[i].evmAddress);
-            console2.log("  contact:", config.guardians[i].contactDetails);
-            console2.log("  type:", config.guardians[i]._type);
             console2.log("");
 
             agreementIds[i] = run(
