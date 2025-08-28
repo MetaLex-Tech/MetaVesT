@@ -26,12 +26,12 @@ contract DeployZkSyncGuardianCompensationPrerequisitesScript is SafeTxHelper, Sc
             vm.envUint("DEPLOYER_PRIVATE_KEY"),
 
             // zkSync Era
-//            "MetaLexMetaVestZkSyncGuardianCompensationLaunchV1.0",
-//            ZkSyncGuardianCompensation2024_2025.getDefault()
+            "MetaLexMetaVestZkSyncGuardianCompensationLaunchV1.0",
+            ZkSyncGuardianCompensation2024_2025.getDefault()
 
-            // zkSync Sepolia
-            "MetaLexMetaVestZkSyncGuardianCompensationTestnetV0.1.1",
-            ZkSyncGuardianCompensationSepolia2024_2025.getDefault()
+//            // zkSync Sepolia
+//            "MetaLexMetaVestZkSyncGuardianCompensationTestnetV0.1.1",
+//            ZkSyncGuardianCompensationSepolia2024_2025.getDefault()
         );
     }
 
