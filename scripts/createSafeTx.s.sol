@@ -20,35 +20,66 @@ contract CreateSafeTxScript is SafeTxHelper, Script {
     function run() public virtual {
         IGnosisSafe safe;
         ZkSyncGuardianCompensation2024_2025.Config memory config;
-        GnosisTransaction[] memory safeTxs = new GnosisTransaction[](2);
 
-        // zkSync Sepolia
-        config = ZkSyncGuardianCompensationSepolia2024_2025.getDefault();
+        // zkSync Era (zkSync Guardians)
+        config = ZkSyncGuardianCompensation2024_2025.getDefault();
         safe = config.guardianSafe;
+        GnosisTransaction[] memory safeTxs = new GnosisTransaction[](7);
         safeTxs[0] = GnosisTransaction({
             to: address(config.registry),
             value: 0 ether,
             data: abi.encodeWithSelector(
                 CyberAgreementRegistry.createTemplate.selector,
-                config.compTemplateId,
-                config.compTemplateName,
-                config.compAgreementUri,
-                config.compGlobalFields,
-                config.compPartyFields
+                vm.envUint("BORG_RESOLUTION_TEMPLATE_ID"), // template ID
+                vm.envString("BORG_RESOLUTION_TEMPLATE_NAME"), // template name
+                vm.envString("BORG_RESOLUTION_URI"), // agreement URI
+                config.borgResolutionGlobalFields,
+                config.borgResolutionPartyFields
             )
         });
-        safeTxs[1] = GnosisTransaction({
-            to: address(config.registry),
-            value: 0 ether,
-            data: abi.encodeWithSelector(
-                CyberAgreementRegistry.createTemplate.selector,
-                config.serviceTemplateId,
-                config.serviceTemplateName,
-                config.serviceAgreementUri,
-                config.serviceGlobalFields,
-                config.servicePartyFields
-            )
-        });
+        for (uint i = 0; i < 6 ; i++) {
+            safeTxs[i + 1] = GnosisTransaction({
+                to: address(config.registry),
+                value: 0 ether,
+                data: abi.encodeWithSelector(
+                    CyberAgreementRegistry.createTemplate.selector,
+                    vm.envUint(string(abi.encodePacked("GUARDIAN_TEMPLATE_ID_", vm.toString(i)))), // template ID
+                    vm.envString(string(abi.encodePacked("GUARDIAN_TEMPLATE_NAME_", vm.toString(i)))), // template name
+                    vm.envString(string(abi.encodePacked("GUARDIAN_AGREEMENT_URI_", vm.toString(i)))), // agreement URI
+                    config.compGlobalFields,
+                    config.compPartyFields
+                )
+            });
+        }
+
+        // zkSync Sepolia
+//        config = ZkSyncGuardianCompensationSepolia2024_2025.getDefault();
+//        safe = config.guardianSafe;
+//        GnosisTransaction[] memory safeTxs = new GnosisTransaction[](2);
+//        safeTxs[0] = GnosisTransaction({
+//            to: address(config.registry),
+//            value: 0 ether,
+//            data: abi.encodeWithSelector(
+//                CyberAgreementRegistry.createTemplate.selector,
+//                config.compTemplateId,
+//                config.compTemplateName,
+//                config.compAgreementUri,
+//                config.compGlobalFields,
+//                config.compPartyFields
+//            )
+//        });
+//        safeTxs[1] = GnosisTransaction({
+//            to: address(config.registry),
+//            value: 0 ether,
+//            data: abi.encodeWithSelector(
+//                CyberAgreementRegistry.createTemplate.selector,
+//                config.serviceTemplateId,
+//                config.serviceTemplateName,
+//                config.serviceAgreementUri,
+//                config.serviceGlobalFields,
+//                config.servicePartyFields
+//            )
+//        });
 
         // Output logs
 
