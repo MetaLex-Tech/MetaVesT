@@ -113,8 +113,8 @@ library ZkSyncGuardianCompensation2024_2025 {
             // MetaLeX
         
             metalexSafe: metalexSafe,
-            registry: CyberAgreementRegistry(address(0)), // TODO TBD
-            vestingAllocationFactory: VestingAllocationFactory(address(0)), // TODO TBD
+            registry: CyberAgreementRegistry(0x07E0a0BeC742f90f7879830bC917E783dA6a6357),
+            vestingAllocationFactory: VestingAllocationFactory(0xD1c48D8866d81CC0f6567f3E3fbbb8eF48E30D99),
             controller: metavestController(address(0)), // TODO TBD
 
             // zkSync Guardian BORG Resolution
