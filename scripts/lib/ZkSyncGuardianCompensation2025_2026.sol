@@ -29,7 +29,7 @@ library ZkSyncGuardianCompensation2025_2026 {
             // zkSync Guardians
 
             guardianSafe: defaultConfig.guardianSafe,
-            guardianSafeInfoForMetavest: defaultConfig.guardianSafeInfoForMetavest,
+            guardianSafeInfo: defaultConfig.guardianSafeInfo,
 
             // MetaLeX
 
@@ -37,6 +37,14 @@ library ZkSyncGuardianCompensation2025_2026 {
             registry: defaultConfig.registry,
             vestingAllocationFactory: defaultConfig.vestingAllocationFactory,
             controller: defaultConfig.controller,
+
+            // zkSync Guardian BORG Resolution
+
+            borgResolutionUri: defaultConfig.borgResolutionUri,
+            borgResolutionTemplateName: defaultConfig.borgResolutionTemplateName,
+            borgResolutionTemplateId: defaultConfig.borgResolutionTemplateId,
+            borgResolutionGlobalFields: defaultConfig.borgResolutionGlobalFields,
+            borgResolutionPartyFields: defaultConfig.borgResolutionPartyFields,
 
             // zkSync Guardian Compensation Agreement
 

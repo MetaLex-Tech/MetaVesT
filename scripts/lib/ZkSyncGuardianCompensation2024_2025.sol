@@ -24,7 +24,7 @@ library ZkSyncGuardianCompensation2024_2025 {
         // zkSync Guardians
 
         IGnosisSafe guardianSafe;
-        MetavestPartyInfo guardianSafeInfoForMetavest;
+        PartyInfo guardianSafeInfo;
 
         // MetaLeX
 
@@ -32,6 +32,14 @@ library ZkSyncGuardianCompensation2024_2025 {
         CyberAgreementRegistry registry;
         VestingAllocationFactory vestingAllocationFactory;
         metavestController controller;
+
+        // zkSync Guardian BORG Resolution
+
+        string borgResolutionUri;
+        string borgResolutionTemplateName;
+        bytes32 borgResolutionTemplateId;
+        string[] borgResolutionGlobalFields;
+        string[] borgResolutionPartyFields;
 
         // zkSync Guardian Compensation Agreement
 
@@ -41,18 +49,24 @@ library ZkSyncGuardianCompensation2024_2025 {
         string[] compGlobalFields;
         string[] compPartyFields;
 
-        MetavestPartyInfo[] guardians;
+        PartyInfo[] guardians;
         uint256 fixedAnnualCompensation;
         uint48 metavestVestingAndUnlockStartTime;
         BaseAllocation.Milestone[] milestones;
     }
 
-    struct MetavestPartyInfo {
+    struct PartyInfo {
         string name;
         address evmAddress;
     }
     
     function getDefault() internal view returns(Config memory) {
+        string[] memory borgResolutionGlobalFields = new string[](0);
+
+        string[] memory borgResolutionPartyFields = new string[](2);
+        borgResolutionPartyFields[0] = "name";
+        borgResolutionPartyFields[1] = "evmAddress";
+
         string[] memory compGlobalFields = new string[](11);
         compGlobalFields[0] = "metavestType";
         compGlobalFields[1] = "grantor";
@@ -73,7 +87,7 @@ library ZkSyncGuardianCompensation2024_2025 {
         IGnosisSafe guardianSafe = IGnosisSafe(0x06E19F3CEafBC373329973821ee738021A58F0E3);
         IGnosisSafe metalexSafe = IGnosisSafe(0x99ba28257DbDB399b53bF59Aa5656480f3bdc5bc);
 
-        MetavestPartyInfo[] memory guardians = new MetavestPartyInfo[](0); // TODO TBD
+        PartyInfo[] memory guardians = new PartyInfo[](0); // TODO TBD
 
         return Config({
 
@@ -86,8 +100,8 @@ library ZkSyncGuardianCompensation2024_2025 {
             // zkSync Guardians
 
             guardianSafe: guardianSafe,
-            guardianSafeInfoForMetavest: MetavestPartyInfo({
-                name: "Guardian BORG",
+            guardianSafeInfo: PartyInfo({
+                name: "ZKsync Guardians",
                 evmAddress: address(guardianSafe)
             }),
 
@@ -98,11 +112,20 @@ library ZkSyncGuardianCompensation2024_2025 {
             vestingAllocationFactory: VestingAllocationFactory(address(0)), // TODO TBD
             controller: metavestController(address(0)), // TODO TBD
 
+            // zkSync Guardian BORG Resolution
+
+            borgResolutionUri: "ipfs://bafybeiangqvqenqkvybrbxu2npv6mlqreunxxygsh3377mpwwjao64qpse", // TODO TBD
+            borgResolutionTemplateName: "ZKsync Guardians Board Resolutions Compensation Amendments Transmission",
+            borgResolutionTemplateId: bytes32(uint256(200)),
+            borgResolutionGlobalFields: borgResolutionGlobalFields,
+            borgResolutionPartyFields: borgResolutionPartyFields,
+
             // zkSync Guardian Compensation Agreement
+            // TODO WIP
 
             compAgreementUri: "ipfs://bafybeiangqvqenqkvybrbxu2npv6mlqreunxxygsh3377mpwwjao64qpse", // TODO TBD
-            compTemplateName: "zkSync Guardian Compensation Agreement", // TODO TBD
-            compTemplateId: bytes32(uint256(200)),
+            compTemplateName: "Guardians Compensation Amendment",
+            compTemplateId: bytes32(uint256(201)),
             compGlobalFields: compGlobalFields,
             compPartyFields: compPartyFields,
 
@@ -136,7 +159,7 @@ library ZkSyncGuardianCompensation2024_2025 {
 
         string[] memory globalValues = new string[](11);
         globalValues[0] = "0"; // metavestType: Vesting
-        globalValues[1] = vm.toString(config.guardianSafeInfoForMetavest.evmAddress); // grantor
+        globalValues[1] = vm.toString(config.guardianSafeInfo.evmAddress); // grantor
         globalValues[2] = vm.toString(grantee); // grantee
         globalValues[3] = vm.toString(allocation.tokenContract); // tokenContract
         globalValues[4] = vm.toString(allocation.tokenStreamTotal / 1 ether); //tokenStreamTotal (human-readable)
@@ -149,15 +172,13 @@ library ZkSyncGuardianCompensation2024_2025 {
         return globalValues;
     }
 
-    function formatServiceGlobalValues(Vm vm, uint256 expiry) internal view returns(string[] memory) {
-        string[] memory globalValues = new string[](1);
-        globalValues[0] = vm.toString(expiry);
-        return globalValues;
+    function formatBorgResolutionGlobalValues(Vm vm) internal view returns(string[] memory) {
+        return new string[](0);
     }
 
-    function formatMetaVestPartyValues(
+    function formatPartyValues(
         Vm vm,
-        MetavestPartyInfo memory partyInfo
+        PartyInfo memory partyInfo
     ) internal view returns(string[] memory) {
         string[] memory partyValues = new string[](2);
         partyValues[0] = partyInfo.name;
@@ -165,14 +186,14 @@ library ZkSyncGuardianCompensation2024_2025 {
         return partyValues;
     }
 
-    function formatMetaVestPartyValues(
+    function formatPartyValues(
         Vm vm,
-        MetavestPartyInfo memory guardianSafeInfo,
-        MetavestPartyInfo memory guardianInfo
+        PartyInfo memory guardianSafeInfo,
+        PartyInfo memory guardianInfo
     ) internal view returns(string[][] memory) {
         string[][] memory partyValues = new string[][](2);
-        partyValues[0] = formatMetaVestPartyValues(vm, guardianSafeInfo);
-        partyValues[1] = formatMetaVestPartyValues(vm, guardianInfo);
+        partyValues[0] = formatPartyValues(vm, guardianSafeInfo);
+        partyValues[1] = formatPartyValues(vm, guardianInfo);
         return partyValues;
     }
 }

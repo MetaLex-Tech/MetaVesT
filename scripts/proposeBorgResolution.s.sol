@@ -2,6 +2,7 @@
 pragma solidity ^0.8.24;
 
 import {ZkSyncGuardianCompensation2024_2025} from "./lib/ZkSyncGuardianCompensation2024_2025.sol";
+import {ZkSyncGuardianCompensationSepolia2024_2025} from "./lib/ZkSyncGuardianCompensationSepolia2024_2025.sol";
 import {BaseAllocation} from "../src/BaseAllocation.sol";
 import {BorgAuth} from "cybercorps-contracts/src/libs/auth.sol";
 import {CyberAgreementRegistry} from "cybercorps-contracts/src/CyberAgreementRegistry.sol";
@@ -17,78 +18,53 @@ import {ZkTokenV2} from "zk-governance/l2-contracts/src/ZkTokenV2.sol";
 import {console2} from "forge-std/console2.sol";
 import {metavestController} from "../src/MetaVesTController.sol";
 
-contract ProposeMetaVestDealScript is SafeTxHelper, Script {
+contract ProposeBorgResolutionScript is SafeTxHelper, Script {
     using ZkSyncGuardianCompensation2024_2025 for ZkSyncGuardianCompensation2024_2025.Config;
 
     /// @dev For running from `forge script`. Provide the deployer private key through env var.
     function run() public virtual {
         run(
             vm.envUint("GUARDIAN_BORG_DELEGATE_PRIVATE_KEY"),
-            ZkSyncGuardianCompensation2024_2025.PartyInfo({
-                name: "Alice",
-                evmAddress: 0x48d206948C366396a86A449DdD085FDbfC280B4b
-            }),
-            ZkSyncGuardianCompensation2024_2025.getDefault()
+
+            // zkSync Era
+//            ZkSyncGuardianCompensation2024_2025.getDefault()
+
+            // zkSync Sepolia
+            ZkSyncGuardianCompensationSepolia2024_2025.getDefault()
         );
     }
 
     /// @dev For running in tests
     function run(
         uint256 proposerPrivateKey,
-        ZkSyncGuardianCompensation2024_2025.PartyInfo memory guardianInfo,
-        ZkSyncGuardianCompensation2024_2025.Config memory config
-    ) public virtual returns(bytes32) {
-        return run(
-            proposerPrivateKey, guardianInfo,
-            // Default guardian allocations
-            config.parseAllocation(),
-            config
-        );
-    }
-
-    /// @dev For running in tests
-    function run(
-        uint256 proposerPrivateKey,
-        ZkSyncGuardianCompensation2024_2025.PartyInfo memory guardianInfo,
-        BaseAllocation.Allocation memory allocation,
         ZkSyncGuardianCompensation2024_2025.Config memory config
     ) public virtual returns(bytes32) {
 
-        address proposer = vm.addr(proposerPrivateKey);
+        address metalexProposer = vm.addr(proposerPrivateKey);
 
         console2.log("");
-        console2.log("=== ProposeMetaVestDealScript ===");
-        console2.log("Proposer: ", proposer);
+        console2.log("=== ProposeServiceAgreementScript ===");
+        console2.log("MetaLeX proposer: ", address(metalexProposer));
         console2.log("Guardian Safe: ", address(config.guardianSafe));
-        console2.log("ZK token: ", address(config.zkToken));
         console2.log("CyberAgreementRegistry: ", address(config.registry));
-        console2.log("VestingAllocationFactory: ", address(config.vestingAllocationFactory));
-        console2.log("MetavesTController: ", address(config.controller));
-        console2.log("ZkCappedMinterV2: ", address(config.zkCappedMinter));
         console2.log("");
 
         // Assume Guardian SAFE already delegate signing to the deployer
 
         // Propose a new deal
 
-        uint48 startTime = config.metavestVestingAndUnlockStartTime;
-
-        address[] memory parties = new address[](2);
+        address[] memory parties = new address[](1);
         parties[0] = address(config.guardianSafe);
-        parties[1] = guardianInfo.evmAddress;
 
-        string[] memory globalValues = config.formatCompGlobalValues(vm, guardianInfo.evmAddress);
-        string[][] memory partyValues = ZkSyncGuardianCompensation2024_2025.formatPartyValues(
-            vm,
-            config.guardianSafeInfo,
-            guardianInfo
-        );
+        string[] memory globalValues = ZkSyncGuardianCompensation2024_2025.formatBorgResolutionGlobalValues(vm);
+        string[][] memory partyValues = new string[][](1);
+        partyValues[0] = ZkSyncGuardianCompensation2024_2025.formatPartyValues(vm, config.guardianSafeInfo);
 
         uint256 agreementSalt = block.timestamp;
 
         bytes32 expectedContractId = keccak256(
             abi.encode(
-                config.compTemplateId,
+                config.borgResolutionTemplateId,
                 agreementSalt, // salt,
                 globalValues,
                 parties
@@ -100,9 +76,9 @@ contract ProposeMetaVestDealScript is SafeTxHelper, Script {
             config.registry.DOMAIN_SEPARATOR(),
             config.registry.SIGNATUREDATA_TYPEHASH(),
             expectedContractId,
-            config.compAgreementUri,
-            config.compGlobalFields,
-            config.compPartyFields,
+            config.borgResolutionUri,
+            config.borgResolutionGlobalFields,
+            config.borgResolutionPartyFields,
             globalValues,
             partyValues[0],
             proposerPrivateKey
@@ -110,23 +86,19 @@ contract ProposeMetaVestDealScript is SafeTxHelper, Script {
 
         vm.startBroadcast(proposerPrivateKey);
 
-        bytes32 contractId = config.controller.proposeAndSignDeal(
-            config.compTemplateId,
+        bytes32 contractId = config.registry.createContract(
+            config.borgResolutionTemplateId,
             agreementSalt,
-            metavestController.metavestType.Vesting,
-            guardianInfo.evmAddress,
-            allocation,
-            config.milestones,
             globalValues,
             parties,
             partyValues,
-            signature,
             bytes32(0), // no secrets
+            address(0), // no finalizer
             block.timestamp + 365 days * 2 // 2 years after deployment
         );
 
         vm.stopBroadcast();
-        
+
         console2.log("Created:");
         console2.log("  Agreement ID:");
         console2.logBytes32(contractId);

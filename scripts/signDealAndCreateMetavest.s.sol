@@ -27,7 +27,7 @@ contract SignDealAndCreateMetavestScript is SafeTxHelper, Script {
         run(
 //            granteePrivateKey,
 //            0x0000000000000000000000000000000000000000000000000000000000000000, // TODO TBD
-//            ZkSyncGuardianCompensation2024_2025.MetavestPartyInfo({ // TODO TBD
+//            ZkSyncGuardianCompensation2024_2025.PartyInfo({ // TODO TBD
 //                name: "Alice",
 //                evmAddress: vm.addr(granteePrivateKey)
 //            }),
@@ -36,7 +36,7 @@ contract SignDealAndCreateMetavestScript is SafeTxHelper, Script {
             // zkSync Sepolia
             granteePrivateKey,
             0xd0d7610ca18b8a76a36c7e1241929641c06cce69ddc1161beebe69b72dae6cbf,
-            ZkSyncGuardianCompensation2024_2025.MetavestPartyInfo({ // TODO TBD
+            ZkSyncGuardianCompensation2024_2025.PartyInfo({ // TODO TBD
                 name: "Alice",
                 evmAddress: vm.addr(granteePrivateKey)
             }),
@@ -48,7 +48,7 @@ contract SignDealAndCreateMetavestScript is SafeTxHelper, Script {
     function run(
         uint256 granteePrivateKey,     
         bytes32 agreementId,
-        ZkSyncGuardianCompensation2024_2025.MetavestPartyInfo memory granteeInfo,
+        ZkSyncGuardianCompensation2024_2025.PartyInfo memory granteeInfo,
         ZkSyncGuardianCompensation2024_2025.Config memory config
     ) public virtual returns(address) {
 
@@ -68,7 +68,7 @@ contract SignDealAndCreateMetavestScript is SafeTxHelper, Script {
         
         // Sign the deal and create MetaVesT
 
-        string[] memory granteePartyValues = ZkSyncGuardianCompensation2024_2025.formatMetaVestPartyValues(vm, granteeInfo);
+        string[] memory granteePartyValues = ZkSyncGuardianCompensation2024_2025.formatPartyValues(vm, granteeInfo);
         bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
             vm,
             config.registry.DOMAIN_SEPARATOR(),
