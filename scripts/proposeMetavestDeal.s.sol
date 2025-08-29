@@ -24,9 +24,12 @@ contract ProposeMetaVestDealScript is SafeTxHelper, Script {
     function run() public virtual {
         run(
             vm.envUint("GUARDIAN_BORG_DELEGATE_PRIVATE_KEY"),
-            ZkSyncGuardianCompensation2024_2025.PartyInfo({
-                name: "Alice",
-                evmAddress: 0x48d206948C366396a86A449DdD085FDbfC280B4b
+            ZkSyncGuardianCompensation2024_2025.GuardianCompInfo({
+                compTemplateId: bytes32(uint256(201)),
+                partyInfo: ZkSyncGuardianCompensation2024_2025.PartyInfo({
+                    name: "Alice",
+                    evmAddress: 0x48d206948C366396a86A449DdD085FDbfC280B4b
+                })
             }),
             ZkSyncGuardianCompensation2024_2025.getDefault()
         );
@@ -35,7 +38,7 @@ contract ProposeMetaVestDealScript is SafeTxHelper, Script {
     /// @dev For running in tests
     function run(
         uint256 proposerPrivateKey,
-        ZkSyncGuardianCompensation2024_2025.PartyInfo memory guardianInfo,
+        ZkSyncGuardianCompensation2024_2025.GuardianCompInfo memory guardianInfo,
         ZkSyncGuardianCompensation2024_2025.Config memory config
     ) public virtual returns(bytes32) {
         return run(
@@ -49,7 +52,7 @@ contract ProposeMetaVestDealScript is SafeTxHelper, Script {
     /// @dev For running in tests
     function run(
         uint256 proposerPrivateKey,
-        ZkSyncGuardianCompensation2024_2025.PartyInfo memory guardianInfo,
+        ZkSyncGuardianCompensation2024_2025.GuardianCompInfo memory guardianInfo,
         BaseAllocation.Allocation memory allocation,
         ZkSyncGuardianCompensation2024_2025.Config memory config
     ) public virtual returns(bytes32) {
@@ -75,13 +78,13 @@ contract ProposeMetaVestDealScript is SafeTxHelper, Script {
 
         address[] memory parties = new address[](2);
         parties[0] = address(config.guardianSafe);
-        parties[1] = guardianInfo.evmAddress;
+        parties[1] = guardianInfo.partyInfo.evmAddress;
 
-        string[] memory globalValues = config.formatCompGlobalValues(vm, guardianInfo.evmAddress);
+        string[] memory globalValues = config.formatCompGlobalValues(vm, guardianInfo.partyInfo.evmAddress);
         string[][] memory partyValues = ZkSyncGuardianCompensation2024_2025.formatPartyValues(
             vm,
             config.guardianSafeInfo,
-            guardianInfo
+            guardianInfo.partyInfo
         );
 
         uint256 agreementSalt = block.timestamp;
@@ -95,12 +98,14 @@ contract ProposeMetaVestDealScript is SafeTxHelper, Script {
             )
         );
 
+        (string memory agreementUri, ) = config.registry.templates(guardianInfo.compTemplateId);
+
         bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
             vm,
             config.registry.DOMAIN_SEPARATOR(),
             config.registry.SIGNATUREDATA_TYPEHASH(),
             expectedContractId,
-            config.compAgreementUri,
+            agreementUri,
             config.compGlobalFields,
             config.compPartyFields,
             globalValues,
@@ -114,7 +119,7 @@ contract ProposeMetaVestDealScript is SafeTxHelper, Script {
             config.compTemplateId,
             agreementSalt,
             metavestController.metavestType.Vesting,
-            guardianInfo.evmAddress,
+            guardianInfo.partyInfo.evmAddress,
             allocation,
             config.milestones,
             globalValues,

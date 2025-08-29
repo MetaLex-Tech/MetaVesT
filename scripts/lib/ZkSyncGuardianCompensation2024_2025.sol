@@ -49,7 +49,7 @@ library ZkSyncGuardianCompensation2024_2025 {
         string[] compGlobalFields;
         string[] compPartyFields;
 
-        PartyInfo[] guardians;
+        GuardianCompInfo[] guardians;
         uint256 fixedAnnualCompensation;
         uint48 metavestVestingAndUnlockStartTime;
         BaseAllocation.Milestone[] milestones;
@@ -58,6 +58,11 @@ library ZkSyncGuardianCompensation2024_2025 {
     struct PartyInfo {
         string name;
         address evmAddress;
+    }
+
+    struct GuardianCompInfo {
+        bytes32 compTemplateId;
+        PartyInfo partyInfo;
     }
     
     function getDefault() internal view returns(Config memory) {
@@ -87,7 +92,7 @@ library ZkSyncGuardianCompensation2024_2025 {
         IGnosisSafe guardianSafe = IGnosisSafe(0x06E19F3CEafBC373329973821ee738021A58F0E3);
         IGnosisSafe metalexSafe = IGnosisSafe(0x99ba28257DbDB399b53bF59Aa5656480f3bdc5bc);
 
-        PartyInfo[] memory guardians = new PartyInfo[](0); // TODO TBD
+        GuardianCompInfo[] memory guardians = new GuardianCompInfo[](6); // TBD
 
         return Config({
 

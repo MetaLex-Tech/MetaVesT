@@ -214,9 +214,12 @@ contract ZkSyncGuardianCompensationTest is
         // Run scripts to propose deals
         bytes32 agreementId = ProposeMetaVestDealScript.run(
             guardianDelegatePrivateKey,
-            ZkSyncGuardianCompensation2024_2025.PartyInfo({
-                name: "Alice",
-                evmAddress: alice
+            ZkSyncGuardianCompensation2024_2025.GuardianCompInfo({
+                compTemplateId: config2024_2025.compTemplateId,
+                partyInfo: ZkSyncGuardianCompensation2024_2025.PartyInfo({
+                    name: "Alice",
+                    evmAddress: alice
+                })
             }),
             config2024_2025
         );
@@ -289,9 +292,12 @@ contract ZkSyncGuardianCompensationTest is
         config2024_2025.registry.setDelegation(guardianDelegate, block.timestamp + 60);
         assertTrue(config2024_2025.registry.isValidDelegate(address(config2024_2025.guardianSafe), guardianDelegate), "should be Guardian SAFE's delegate");
 
-        ZkSyncGuardianCompensation2024_2025.PartyInfo memory chadInfo = ZkSyncGuardianCompensation2024_2025.PartyInfo({
-            name: "Chad",
-            evmAddress: chad
+        ZkSyncGuardianCompensation2024_2025.GuardianCompInfo memory chadInfo = ZkSyncGuardianCompensation2024_2025.GuardianCompInfo({
+            compTemplateId: config2024_2025.compTemplateId,
+            partyInfo: ZkSyncGuardianCompensation2024_2025.PartyInfo({
+                name: "Chad",
+                evmAddress: chad
+            })
         });
         bytes32 contractIdChad = ProposeMetaVestDealScript.run(
             guardianDelegatePrivateKey,
@@ -326,9 +332,12 @@ contract ZkSyncGuardianCompensationTest is
 
         // Run scripts to propose deals
 
-        ZkSyncGuardianCompensation2024_2025.PartyInfo memory aliceInfo = ZkSyncGuardianCompensation2024_2025.PartyInfo({
-            name: "Alice",
-            evmAddress: alice
+        ZkSyncGuardianCompensation2024_2025.GuardianCompInfo memory aliceInfo = ZkSyncGuardianCompensation2024_2025.GuardianCompInfo({
+            compTemplateId: config2024_2025.compTemplateId,
+            partyInfo: ZkSyncGuardianCompensation2024_2025.PartyInfo({
+                name: "Alice",
+                evmAddress: alice
+            })
         });
 
         bytes32 contractIdAlice2024_2025 = ProposeMetaVestDealScript.run(

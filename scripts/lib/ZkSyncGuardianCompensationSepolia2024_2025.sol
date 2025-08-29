@@ -21,14 +21,20 @@ library ZkSyncGuardianCompensationSepolia2024_2025 {
         IGnosisSafe guardianSafe = IGnosisSafe(0x3C785F96864002eB47bDe32d597476a3D97fCd15);
         IGnosisSafe metalexSafe = IGnosisSafe(0x8E9603BcB5D974Ed9C870510F3665F67CE5c5bDe); // This is faked by EOA
 
-        ZkSyncGuardianCompensation2024_2025.PartyInfo[] memory guardians = new ZkSyncGuardianCompensation2024_2025.PartyInfo[](2);
-        guardians[0] = ZkSyncGuardianCompensation2024_2025.PartyInfo({
-            name: "Alice",
-            evmAddress: 0x48d206948C366396a86A449DdD085FDbfC280B4b
+        ZkSyncGuardianCompensation2024_2025.GuardianCompInfo[] memory guardians = new ZkSyncGuardianCompensation2024_2025.GuardianCompInfo[](2);
+        guardians[0] = ZkSyncGuardianCompensation2024_2025.GuardianCompInfo({
+            compTemplateId: defaultConfig.compTemplateId,
+            partyInfo: ZkSyncGuardianCompensation2024_2025.PartyInfo({
+                name: "Alice",
+                evmAddress: 0x48d206948C366396a86A449DdD085FDbfC280B4b
+            })
         });
-        guardians[1] = ZkSyncGuardianCompensation2024_2025.PartyInfo({
-            name: "Bob",
-            evmAddress: 0x8E9603BcB5D974Ed9C870510F3665F67CE5c5bDe
+        guardians[1] = ZkSyncGuardianCompensation2024_2025.GuardianCompInfo({
+            compTemplateId: defaultConfig.compTemplateId,
+            partyInfo: ZkSyncGuardianCompensation2024_2025.PartyInfo({
+                name: "Bob",
+                evmAddress: 0x48d206948C366396a86A449DdD085FDbfC280B4b
+            })
         });
 
         return ZkSyncGuardianCompensation2024_2025.Config({
