@@ -26,7 +26,7 @@ contract ProposeAllGuardiansMetaVestDealScript is ProposeMetaVestDealScript {
             vm.envUint("GUARDIAN_BORG_DELEGATE_PRIVATE_KEY"),
 
             // zkSync Sepolia for 2024-2025
-            ZkSyncGuardianCompensationSepolia2024_2025.getDefault()
+            ZkSyncGuardianCompensationSepolia2024_2025.getDefault(vm)
         );
     }
 

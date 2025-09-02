@@ -15,8 +15,8 @@ import {metavestController} from "../../src/MetaVesTController.sol";
 
 library ZkSyncGuardianCompensation2025_2026 {
 
-    function getDefault() internal returns(ZkSyncGuardianCompensation2024_2025.Config memory) {
-        ZkSyncGuardianCompensation2024_2025.Config memory defaultConfig = ZkSyncGuardianCompensation2024_2025.getDefault();
+    function getDefault(Vm vm) internal returns(ZkSyncGuardianCompensation2024_2025.Config memory) {
+        ZkSyncGuardianCompensation2024_2025.Config memory defaultConfig = ZkSyncGuardianCompensation2024_2025.getDefault(vm);
 
         return ZkSyncGuardianCompensation2024_2025.Config({
 
@@ -36,23 +36,13 @@ library ZkSyncGuardianCompensation2025_2026 {
             metalexSafe: defaultConfig.metalexSafe,
             registry: defaultConfig.registry,
             vestingAllocationFactory: defaultConfig.vestingAllocationFactory,
-            controller: defaultConfig.controller,
+            controller: metavestController(0x570d31F59bD0C96a9e1CC889E7E4dBd585D6915b),
 
             // zkSync Guardian BORG Resolution
 
-            borgResolutionUri: defaultConfig.borgResolutionUri,
-            borgResolutionTemplateName: defaultConfig.borgResolutionTemplateName,
-            borgResolutionTemplateId: defaultConfig.borgResolutionTemplateId,
-            borgResolutionGlobalFields: defaultConfig.borgResolutionGlobalFields,
-            borgResolutionPartyFields: defaultConfig.borgResolutionPartyFields,
+            borgResolutionTemplate: defaultConfig.borgResolutionTemplate,
 
             // zkSync Guardian Compensation Agreement
-
-            compAgreementUri: defaultConfig.compAgreementUri,
-            compTemplateName: defaultConfig.compTemplateName,
-            compTemplateId: defaultConfig.compTemplateId,
-            compGlobalFields: defaultConfig.compGlobalFields,
-            compPartyFields: defaultConfig.compPartyFields,
 
             guardians: defaultConfig.guardians,
             fixedAnnualCompensation: 625e3 ether,

@@ -15,27 +15,11 @@ import {metavestController} from "../../src/MetaVesTController.sol";
 
 library ZkSyncGuardianCompensationSepolia2024_2025 {
 
-    function getDefault() internal returns(ZkSyncGuardianCompensation2024_2025.Config memory) {
-        ZkSyncGuardianCompensation2024_2025.Config memory defaultConfig = ZkSyncGuardianCompensation2024_2025.getDefault();
+    function getDefault(Vm vm) internal returns(ZkSyncGuardianCompensation2024_2025.Config memory) {
+        ZkSyncGuardianCompensation2024_2025.Config memory defaultConfig = ZkSyncGuardianCompensation2024_2025.getDefault(vm);
 
         IGnosisSafe guardianSafe = IGnosisSafe(0x3C785F96864002eB47bDe32d597476a3D97fCd15);
         IGnosisSafe metalexSafe = IGnosisSafe(0x8E9603BcB5D974Ed9C870510F3665F67CE5c5bDe); // This is faked by EOA
-
-        ZkSyncGuardianCompensation2024_2025.GuardianCompInfo[] memory guardians = new ZkSyncGuardianCompensation2024_2025.GuardianCompInfo[](2);
-        guardians[0] = ZkSyncGuardianCompensation2024_2025.GuardianCompInfo({
-            compTemplateId: defaultConfig.compTemplateId,
-            partyInfo: ZkSyncGuardianCompensation2024_2025.PartyInfo({
-                name: "Alice",
-                evmAddress: 0x48d206948C366396a86A449DdD085FDbfC280B4b
-            })
-        });
-        guardians[1] = ZkSyncGuardianCompensation2024_2025.GuardianCompInfo({
-            compTemplateId: defaultConfig.compTemplateId,
-            partyInfo: ZkSyncGuardianCompensation2024_2025.PartyInfo({
-                name: "Bob",
-                evmAddress: 0x48d206948C366396a86A449DdD085FDbfC280B4b
-            })
-        });
 
         return ZkSyncGuardianCompensation2024_2025.Config({
 
@@ -61,21 +45,11 @@ library ZkSyncGuardianCompensationSepolia2024_2025 {
 
             // zkSync Guardian BORG Resolution
 
-            borgResolutionUri: defaultConfig.borgResolutionUri,
-            borgResolutionTemplateName: defaultConfig.borgResolutionTemplateName,
-            borgResolutionTemplateId: bytes32(uint256(206)),
-            borgResolutionGlobalFields: defaultConfig.borgResolutionGlobalFields,
-            borgResolutionPartyFields: defaultConfig.borgResolutionPartyFields,
+            borgResolutionTemplate: ZkSyncGuardianCompensation2024_2025.loadBorgResolutionTemplate(vm),
 
             // zkSync Guardian Compensation Agreement
 
-            compAgreementUri: defaultConfig.compAgreementUri,
-            compTemplateName: defaultConfig.compTemplateName,
-            compTemplateId: bytes32(uint256(207)),
-            compGlobalFields: defaultConfig.compGlobalFields,
-            compPartyFields: defaultConfig.compPartyFields,
-
-            guardians: guardians,
+            guardians: ZkSyncGuardianCompensation2024_2025.loadGuardianAndComps(vm),
             fixedAnnualCompensation: defaultConfig.fixedAnnualCompensation,
             metavestVestingAndUnlockStartTime: defaultConfig.metavestVestingAndUnlockStartTime,
             milestones: defaultConfig.milestones

@@ -23,19 +23,19 @@ contract DeployZkSyncGuardianCompensationScript is SafeTxHelper, Script {
 
             // zkSync Era for 2024-2025
 //            "MetaLexMetaVestZkSyncGuardianCompensationLaunchV1.0.2024-2025",
-//            ZkSyncGuardianCompensation2024_2025.getDefault()
+//            ZkSyncGuardianCompensation2024_2025.getDefault(vm)
 
             // zkSync Era for 2025-2026
 //            "MetaLexMetaVestZkSyncGuardianCompensationLaunchV1.0.2025-2026",
-//            ZkSyncGuardianCompensation2025_2026.getDefault()
+//            ZkSyncGuardianCompensation2025_2026.getDefault(vm)
 
             // zkSync Sepolia for 2024-2025
             "MetaLexMetaVestZkSyncGuardianCompensationTestnetV0.1.1.2024-2025",
-            ZkSyncGuardianCompensationSepolia2024_2025.getDefault()
+            ZkSyncGuardianCompensationSepolia2024_2025.getDefault(vm)
 
             // zkSync Sepolia for 2025-2026
 //            "MetaLexMetaVestZkSyncGuardianCompensationTestnetV0.1.2025-2026",
-//            ZkSyncGuardianCompensationSepolia2025_2026.getDefault()
+//            ZkSyncGuardianCompensationSepolia2025_2026.getDefault(vm)
         );
     }
 

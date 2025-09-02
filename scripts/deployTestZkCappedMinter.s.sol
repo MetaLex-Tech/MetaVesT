@@ -24,12 +24,12 @@ contract DeployTestZkCappedMinterScript is SafeTxHelper, Script {
             // zkSync Sepolia for 2024-2025
             "MetaLexMetaVestZkSyncGuardianCompensationTestnetV0.1.2024-2025",
             IZkCappedMinterV2Factory(0x329CE320a0Ef03F8c0E01195604b5ef7D3Fb150E),
-            ZkSyncGuardianCompensationSepolia2024_2025.getDefault()
+            ZkSyncGuardianCompensationSepolia2024_2025.getDefault(vm)
 
             // zkSync Sepolia for 2025-2026
 //            "MetaLexMetaVestZkSyncGuardianCompensationTestnetV0.1.2025-2026",
 //            IZkCappedMinterV2Factory(0x329CE320a0Ef03F8c0E01195604b5ef7D3Fb150E),
-//            ZkSyncGuardianCompensationSepolia2025_2026.getDefault()
+//            ZkSyncGuardianCompensationSepolia2025_2026.getDefault(vm)
         );
     }
 

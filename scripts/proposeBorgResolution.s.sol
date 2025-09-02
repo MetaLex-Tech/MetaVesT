@@ -27,10 +27,10 @@ contract ProposeBorgResolutionScript is SafeTxHelper, Script {
             vm.envUint("GUARDIAN_BORG_DELEGATE_PRIVATE_KEY"),
 
             // zkSync Era
-//            ZkSyncGuardianCompensation2024_2025.getDefault()
+//            ZkSyncGuardianCompensation2024_2025.getDefault(vm)
 
             // zkSync Sepolia
-            ZkSyncGuardianCompensationSepolia2024_2025.getDefault()
+            ZkSyncGuardianCompensationSepolia2024_2025.getDefault(vm)
         );
     }
 
@@ -64,7 +64,7 @@ contract ProposeBorgResolutionScript is SafeTxHelper, Script {
 
         bytes32 expectedContractId = keccak256(
             abi.encode(
-                config.borgResolutionTemplateId,
+                config.borgResolutionTemplate.id,
                 agreementSalt, // salt,
                 globalValues,
                 parties
@@ -76,9 +76,9 @@ contract ProposeBorgResolutionScript is SafeTxHelper, Script {
             config.registry.DOMAIN_SEPARATOR(),
             config.registry.SIGNATUREDATA_TYPEHASH(),
             expectedContractId,
-            config.borgResolutionUri,
-            config.borgResolutionGlobalFields,
-            config.borgResolutionPartyFields,
+            config.borgResolutionTemplate.agreementUri,
+            config.borgResolutionTemplate.globalFields,
+            config.borgResolutionTemplate.partyFields,
             globalValues,
             partyValues[0],
             proposerPrivateKey
@@ -87,7 +87,7 @@ contract ProposeBorgResolutionScript is SafeTxHelper, Script {
         vm.startBroadcast(proposerPrivateKey);
 
         bytes32 contractId = config.registry.createContract(
-            config.borgResolutionTemplateId,
+            config.borgResolutionTemplate.id,
             agreementSalt,
             globalValues,
             parties,

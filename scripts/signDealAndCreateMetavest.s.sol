@@ -24,6 +24,7 @@ contract SignDealAndCreateMetavestScript is SafeTxHelper, Script {
     /// @dev For running from `forge script`. Provide the deployer private key through env var.
     function run() public virtual {
         uint256 granteePrivateKey = vm.envUint("GRANTEE_PRIVATE_KEY");
+        ZkSyncGuardianCompensation2024_2025.Config memory defaultConfig = ZkSyncGuardianCompensation2024_2025.getDefault(vm);
         run(
 //            granteePrivateKey,
 //            0x0000000000000000000000000000000000000000000000000000000000000000, // TODO TBD
@@ -31,19 +32,13 @@ contract SignDealAndCreateMetavestScript is SafeTxHelper, Script {
 //                name: "Alice",
 //                evmAddress: vm.addr(granteePrivateKey)
 //            }),
-//            ZkSyncGuardianCompensation2024_2025.getDefault()
+//            ZkSyncGuardianCompensation2024_2025.getDefault(vm)
 
             // zkSync Sepolia
             granteePrivateKey,
             0xd0d7610ca18b8a76a36c7e1241929641c06cce69ddc1161beebe69b72dae6cbf,
-            ZkSyncGuardianCompensation2024_2025.GuardianCompInfo({
-                compTemplateId: bytes32(uint256(201)), // TODO TBD
-                partyInfo: ZkSyncGuardianCompensation2024_2025.PartyInfo({
-                    name: "Alice",
-                    evmAddress: vm.addr(granteePrivateKey)
-                })
-            }),
-            ZkSyncGuardianCompensationSepolia2024_2025.getDefault()
+            defaultConfig.guardians[0],
+            defaultConfig
         );
     }
 
@@ -71,7 +66,7 @@ contract SignDealAndCreateMetavestScript is SafeTxHelper, Script {
         
         // Sign the deal and create MetaVesT
 
-        (string memory agreementUri, ) = config.registry.templates(granteeInfo.compTemplateId);
+        (string memory agreementUri, ) = config.registry.templates(granteeInfo.compTemplate.id);
 
         string[] memory granteePartyValues = ZkSyncGuardianCompensation2024_2025.formatPartyValues(vm, granteeInfo.partyInfo);
         bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
@@ -80,8 +75,8 @@ contract SignDealAndCreateMetavestScript is SafeTxHelper, Script {
             config.registry.SIGNATUREDATA_TYPEHASH(),
             agreementId,
             agreementUri,
-            config.compGlobalFields,
-            config.compPartyFields,
+            granteeInfo.compTemplate.globalFields,
+            granteeInfo.compTemplate.partyFields,
             config.formatCompGlobalValues(vm, granteeInfo.partyInfo.evmAddress),
             granteePartyValues,
             granteePrivateKey

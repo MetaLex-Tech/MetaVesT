@@ -35,24 +35,22 @@ library ZkSyncGuardianCompensation2024_2025 {
 
         // zkSync Guardian BORG Resolution
 
-        string borgResolutionUri;
-        string borgResolutionTemplateName;
-        bytes32 borgResolutionTemplateId;
-        string[] borgResolutionGlobalFields;
-        string[] borgResolutionPartyFields;
+        TemplateInfo borgResolutionTemplate;
 
-        // zkSync Guardian Compensation Agreement
-
-        string compAgreementUri;
-        string compTemplateName;
-        bytes32 compTemplateId;
-        string[] compGlobalFields;
-        string[] compPartyFields;
+        // zkSync Guardian Compensation Agreement (one template per guardian for now)
 
         GuardianCompInfo[] guardians;
         uint256 fixedAnnualCompensation;
         uint48 metavestVestingAndUnlockStartTime;
         BaseAllocation.Milestone[] milestones;
+    }
+
+    struct TemplateInfo {
+        bytes32 id;
+        string agreementUri;
+        string name;
+        string[] globalFields;
+        string[] partyFields;
     }
 
     struct PartyInfo {
@@ -61,38 +59,13 @@ library ZkSyncGuardianCompensation2024_2025 {
     }
 
     struct GuardianCompInfo {
-        bytes32 compTemplateId;
         PartyInfo partyInfo;
+        TemplateInfo compTemplate;
     }
     
-    function getDefault() internal view returns(Config memory) {
-        string[] memory borgResolutionGlobalFields = new string[](0);
-
-        string[] memory borgResolutionPartyFields = new string[](2);
-        borgResolutionPartyFields[0] = "name";
-        borgResolutionPartyFields[1] = "evmAddress";
-
-        string[] memory compGlobalFields = new string[](11);
-        compGlobalFields[0] = "metavestType";
-        compGlobalFields[1] = "grantor";
-        compGlobalFields[2] = "grantee";
-        compGlobalFields[3] = "tokenContract";
-        compGlobalFields[4] = "tokenStreamTotal";
-        compGlobalFields[5] = "vestingCliffCredit";
-        compGlobalFields[6] = "unlockingCliffCredit";
-        compGlobalFields[7] = "vestingRate";
-        compGlobalFields[8] = "vestingStartTime";
-        compGlobalFields[9] = "unlockRate";
-        compGlobalFields[10] = "unlockStartTime";
-
-        string[] memory compPartyFields = new string[](2);
-        compPartyFields[0] = "name";
-        compPartyFields[1] = "evmAddress";
-
+    function getDefault(Vm vm) internal view returns(Config memory) {
         IGnosisSafe guardianSafe = IGnosisSafe(0x06E19F3CEafBC373329973821ee738021A58F0E3);
         IGnosisSafe metalexSafe = IGnosisSafe(0x99ba28257DbDB399b53bF59Aa5656480f3bdc5bc);
-
-        GuardianCompInfo[] memory guardians = new GuardianCompInfo[](6); // TBD
 
         return Config({
 
@@ -111,34 +84,78 @@ library ZkSyncGuardianCompensation2024_2025 {
             }),
 
             // MetaLeX
-        
+
             metalexSafe: metalexSafe,
             registry: CyberAgreementRegistry(0x07E0a0BeC742f90f7879830bC917E783dA6a6357),
             vestingAllocationFactory: VestingAllocationFactory(0xD1c48D8866d81CC0f6567f3E3fbbb8eF48E30D99),
-            controller: metavestController(address(0)), // TODO TBD
+            controller: metavestController(0xD509349AF986E7202f2Bc4ae49C203E354faafCD),
 
             // zkSync Guardian BORG Resolution
 
-            borgResolutionUri: "ipfs://bafybeiangqvqenqkvybrbxu2npv6mlqreunxxygsh3377mpwwjao64qpse", // TODO TBD
-            borgResolutionTemplateName: "ZKsync Guardians Board Resolutions Compensation Amendments Transmission",
-            borgResolutionTemplateId: bytes32(uint256(200)),
-            borgResolutionGlobalFields: borgResolutionGlobalFields,
-            borgResolutionPartyFields: borgResolutionPartyFields,
+            borgResolutionTemplate: loadBorgResolutionTemplate(vm),
 
             // zkSync Guardian Compensation Agreement
-            // TODO WIP
 
-            compAgreementUri: "ipfs://bafybeiangqvqenqkvybrbxu2npv6mlqreunxxygsh3377mpwwjao64qpse", // TODO TBD
-            compTemplateName: "Guardians Compensation Amendment",
-            compTemplateId: bytes32(uint256(201)),
-            compGlobalFields: compGlobalFields,
-            compPartyFields: compPartyFields,
-
-            guardians: guardians,
+            guardians: loadGuardianAndComps(vm),
             fixedAnnualCompensation: 625e3 ether,
             metavestVestingAndUnlockStartTime: 1725148800, // 2024/09/01 00:00 UTC (means by the deployment @ 2025/09/01 it would've been fully unlocked)
             milestones: new BaseAllocation.Milestone[](0)
         });
+    }
+
+    function loadBorgResolutionTemplate(Vm vm) internal view returns(TemplateInfo memory) {
+        string[] memory borgResolutionGlobalFields = new string[](0);
+
+        string[] memory borgResolutionPartyFields = new string[](2);
+        borgResolutionPartyFields[0] = "name";
+        borgResolutionPartyFields[1] = "evmAddress";
+
+        return TemplateInfo({
+            id: bytes32(vm.envUint("BORG_RESOLUTION_TEMPLATE_ID")),
+            agreementUri: vm.envString("BORG_RESOLUTION_URI"),
+            name: vm.envString("BORG_RESOLUTION_TEMPLATE_NAME"),
+            globalFields: borgResolutionGlobalFields,
+            partyFields: borgResolutionPartyFields
+        });
+    }
+
+    function loadGuardianAndComps(Vm vm) internal view returns(GuardianCompInfo[] memory) {
+        string[] memory compGlobalFields = new string[](11);
+        compGlobalFields[0] = "metavestType";
+        compGlobalFields[1] = "grantor";
+        compGlobalFields[2] = "grantee";
+        compGlobalFields[3] = "tokenContract";
+        compGlobalFields[4] = "tokenStreamTotal";
+        compGlobalFields[5] = "vestingCliffCredit";
+        compGlobalFields[6] = "unlockingCliffCredit";
+        compGlobalFields[7] = "vestingRate";
+        compGlobalFields[8] = "vestingStartTime";
+        compGlobalFields[9] = "unlockRate";
+        compGlobalFields[10] = "unlockStartTime";
+
+        string[] memory compPartyFields = new string[](2);
+        compPartyFields[0] = "name";
+        compPartyFields[1] = "evmAddress";
+
+        uint256 numGuardians = vm.envUint("NUM_GUARDIANS");
+
+        GuardianCompInfo[] memory guardians = new GuardianCompInfo[](numGuardians);
+        for (uint i = 0; i < guardians.length ; i++) {
+            guardians[i] = GuardianCompInfo({
+                partyInfo: PartyInfo({
+                    name: vm.envString(string(abi.encodePacked("GUARDIAN_NAME_", vm.toString(i)))),
+                    evmAddress: address(uint160(vm.envUint(string(abi.encodePacked("GUARDIAN_ADDR_", vm.toString(i))))))
+                }),
+                compTemplate: TemplateInfo({
+                    id: bytes32(vm.envUint(string(abi.encodePacked("GUARDIAN_TEMPLATE_ID_", vm.toString(i))))),
+                    agreementUri: vm.envString(string(abi.encodePacked("GUARDIAN_AGREEMENT_URI_", vm.toString(i)))),
+                    name: vm.envString(string(abi.encodePacked("GUARDIAN_TEMPLATE_NAME_", vm.toString(i)))),
+                    globalFields: compGlobalFields,
+                    partyFields: compPartyFields
+                })
+            });
+        }
+        return guardians;
     }
 
     function parseAllocation(Config memory config) internal view returns(BaseAllocation.Allocation memory) {

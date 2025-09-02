@@ -22,16 +22,11 @@ contract ProposeMetaVestDealScript is SafeTxHelper, Script {
 
     /// @dev For running from `forge script`. Provide the deployer private key through env var.
     function run() public virtual {
+        ZkSyncGuardianCompensation2024_2025.Config memory defaultConfig = ZkSyncGuardianCompensation2024_2025.getDefault(vm);
         run(
             vm.envUint("GUARDIAN_BORG_DELEGATE_PRIVATE_KEY"),
-            ZkSyncGuardianCompensation2024_2025.GuardianCompInfo({
-                compTemplateId: bytes32(uint256(201)),
-                partyInfo: ZkSyncGuardianCompensation2024_2025.PartyInfo({
-                    name: "Alice",
-                    evmAddress: 0x48d206948C366396a86A449DdD085FDbfC280B4b
-                })
-            }),
-            ZkSyncGuardianCompensation2024_2025.getDefault()
+            defaultConfig.guardians[0],
+            defaultConfig
         );
     }
 
@@ -91,14 +86,14 @@ contract ProposeMetaVestDealScript is SafeTxHelper, Script {
 
         bytes32 expectedContractId = keccak256(
             abi.encode(
-                config.compTemplateId,
+                guardianInfo.compTemplate.id,
                 agreementSalt, // salt,
                 globalValues,
                 parties
             )
         );
 
-        (string memory agreementUri, ) = config.registry.templates(guardianInfo.compTemplateId);
+        (string memory agreementUri, ) = config.registry.templates(guardianInfo.compTemplate.id);
 
         bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
             vm,
@@ -106,8 +101,8 @@ contract ProposeMetaVestDealScript is SafeTxHelper, Script {
             config.registry.SIGNATUREDATA_TYPEHASH(),
             expectedContractId,
             agreementUri,
-            config.compGlobalFields,
-            config.compPartyFields,
+            guardianInfo.compTemplate.globalFields,
+            guardianInfo.compTemplate.partyFields,
             globalValues,
             partyValues[0],
             proposerPrivateKey
@@ -116,7 +111,7 @@ contract ProposeMetaVestDealScript is SafeTxHelper, Script {
         vm.startBroadcast(proposerPrivateKey);
 
         bytes32 contractId = config.controller.proposeAndSignDeal(
-            config.compTemplateId,
+            guardianInfo.compTemplate.id,
             agreementSalt,
             metavestController.metavestType.Vesting,
             guardianInfo.partyInfo.evmAddress,

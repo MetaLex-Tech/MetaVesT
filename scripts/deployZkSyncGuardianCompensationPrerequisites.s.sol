@@ -27,11 +27,11 @@ contract DeployZkSyncGuardianCompensationPrerequisitesScript is SafeTxHelper, Sc
 
             // zkSync Era
             "MetaLexMetaVestZkSyncGuardianCompensationLaunchV1.0",
-            ZkSyncGuardianCompensation2024_2025.getDefault()
+            ZkSyncGuardianCompensation2024_2025.getDefault(vm)
 
 //            // zkSync Sepolia
 //            "MetaLexMetaVestZkSyncGuardianCompensationTestnetV0.1.1",
-//            ZkSyncGuardianCompensationSepolia2024_2025.getDefault()
+//            ZkSyncGuardianCompensationSepolia2024_2025.getDefault(vm)
         );
     }
 

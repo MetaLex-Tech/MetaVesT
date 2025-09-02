@@ -21,18 +21,18 @@ contract ExecuteSafeTxScript is SafeTxHelper, Script {
         run(
             vm.envUint("DEPLOYER_PRIVATE_KEY"),
 
-//            ZkSyncGuardianCompensationSepolia2024_2025.getDefault().guardianSafe, // safe
+//            ZkSyncGuardianCompensationSepolia2024_2025.getDefault(vm).guardianSafe, // safe
 //            0x6F26e588f28bf67C016EEA19CA90c4E41B70d499, // to
 //            0, // value
 //            hex"2f2ff15d9f2df0fed2c77648de5860a4cc508cd0818c85b8b8a1ab4ceeef8d981c8956a6000000000000000000000000856a8aea8a37a338e2490384bb790cd87b5caae4" // data
 
-//            ZkSyncGuardianCompensationSepolia2024_2025.getDefault().guardianSafe, // safe
+//            ZkSyncGuardianCompensationSepolia2024_2025.getDefault(vm).guardianSafe, // safe
 //            0x856A8Aea8a37A338e2490384Bb790cD87b5CaaE4, // to
 //            0, // value
 //            hex"66e261840000000000000000000000006f26e588f28bf67c016eea19ca90c4e41b70d499" // data
 
-            ZkSyncGuardianCompensationSepolia2024_2025.getDefault().guardianSafe, // safe
-            address(ZkSyncGuardianCompensationSepolia2024_2025.getDefault().registry), // to
+            ZkSyncGuardianCompensationSepolia2024_2025.getDefault(vm).guardianSafe, // safe
+            address(ZkSyncGuardianCompensationSepolia2024_2025.getDefault(vm).registry), // to
             0, // value
             abi.encodeWithSelector(
                 CyberAgreementRegistry.setDelegation.selector,

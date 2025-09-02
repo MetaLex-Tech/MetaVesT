@@ -11,6 +11,7 @@ import {console2} from "forge-std/console2.sol";
 import {CyberAgreementRegistry} from "cybercorps-contracts/src/CyberAgreementRegistry.sol";
 import {DeployZkSyncGuardianCompensationPrerequisitesScript} from "../scripts/deployZkSyncGuardianCompensationPrerequisites.s.sol";
 import {DeployZkSyncGuardianCompensationScript} from "../scripts/deployZkSyncGuardianCompensation.s.sol";
+import {CreateAllTemplatesScript} from "../scripts/createAllTemplates.s.sol";
 import {ProposeBorgResolutionScript} from "../scripts/proposeBorgResolution.s.sol";
 import {ProposeMetaVestDealScript} from "../scripts/proposeMetavestDeal.s.sol";
 import {SignDealAndCreateMetavestScript} from "../scripts/signDealAndCreateMetavest.s.sol";
@@ -22,6 +23,7 @@ import {GnosisTransaction} from "./lib/safe.sol";
 contract ZkSyncGuardianCompensationTest is
     DeployZkSyncGuardianCompensationPrerequisitesScript,
     DeployZkSyncGuardianCompensationScript,
+    CreateAllTemplatesScript,
     ProposeBorgResolutionScript,
     ProposeMetaVestDealScript,
     SignDealAndCreateMetavestScript,
@@ -69,11 +71,19 @@ contract ZkSyncGuardianCompensationTest is
         CyberAgreementRegistry registry;
         VestingAllocationFactory vestingAllocationFactory;
         metavestController controller;
+        GnosisTransaction[] memory safeTxsCreateAllTemplates;
         GnosisTransaction[] memory safeTxs2024_2025;
         GnosisTransaction[] memory safeTxs2025_2026;
 
-        config2024_2025 = ZkSyncGuardianCompensation2024_2025.getDefault();
-        config2025_2026 = ZkSyncGuardianCompensation2025_2026.getDefault();
+        config2024_2025 = ZkSyncGuardianCompensation2024_2025.getDefault(vm);
+        config2025_2026 = ZkSyncGuardianCompensation2025_2026.getDefault(vm);
+
+        // Update guardian info
+        
+        assertEq(config2024_2025.guardians.length, 1, "Unexpected number of guardians (2024-2025)");
+        config2024_2025.guardians[0].partyInfo.evmAddress = alice;
+        assertEq(config2025_2026.guardians.length, 1, "Unexpected number of guardians (2025-2026)");
+        config2025_2026.guardians[0].partyInfo.evmAddress = alice;
 
         (auth, registry, vestingAllocationFactory) = DeployZkSyncGuardianCompensationPrerequisitesScript.deployPrerequisites(
             deployerPrivateKey,
@@ -103,6 +113,15 @@ contract ZkSyncGuardianCompensationTest is
         );
         config2025_2026.controller = controller; // Update configs with deployed contracts
 
+        // Create all templates
+        safeTxsCreateAllTemplates = CreateAllTemplatesScript.run(config2025_2026);
+
+        // Simulate MetaLeX SAFE to execute txs as instructed
+        for (uint256 i = 0; i < safeTxsCreateAllTemplates.length; i++) {
+            vm.prank(address(config2024_2025.metalexSafe));
+            (safeTxsCreateAllTemplates[i].to).call{value: safeTxsCreateAllTemplates[i].value}(safeTxsCreateAllTemplates[i].data);
+        }
+
         // Simulate Guardian SAFE to execute txs as instructed
 
         for (uint256 i = 0; i < safeTxs2024_2025.length; i++) {
@@ -119,28 +138,33 @@ contract ZkSyncGuardianCompensationTest is
         vm.startPrank(address(config2024_2025.metalexSafe));
 
         registry.createTemplate(
-            config2024_2025.borgResolutionTemplateId,
-            config2024_2025.borgResolutionTemplateName,
-            config2024_2025.borgResolutionUri,
-            config2024_2025.borgResolutionGlobalFields,
-            config2024_2025.borgResolutionPartyFields
+            config2024_2025.borgResolutionTemplate.id,
+            config2024_2025.borgResolutionTemplate.name,
+            config2024_2025.borgResolutionTemplate.agreementUri,
+            config2024_2025.borgResolutionTemplate.globalFields,
+            config2024_2025.borgResolutionTemplate.partyFields
         );
 
-        registry.createTemplate(
-            config2024_2025.compTemplateId,
-            config2024_2025.compTemplateName,
-            config2024_2025.compAgreementUri,
-            config2024_2025.compGlobalFields,
-            config2024_2025.compPartyFields
-        );
+        for (uint256 i = 0; i < config2024_2025.guardians.length; i ++) {
+            ZkSyncGuardianCompensation2024_2025.GuardianCompInfo memory guardian = config2024_2025.guardians[i];
+            registry.createTemplate(
+                guardian.compTemplate.id,
+                guardian.compTemplate.name,
+                guardian.compTemplate.agreementUri,
+                guardian.compTemplate.globalFields,
+                guardian.compTemplate.partyFields
+            );
+        }
 
         vm.stopPrank();
 
         // Simulate vote pass (https://vote.zknation.io/dao/proposal/14920227315823844313255249182525601975564035647349569740836448589354658768084?govId=eip155:324:0xb83FF6501214ddF40C91C9565d095400f3F45746)
 
+        masterMinter = IZkCappedMinterV2(config2024_2025.zkCappedMinter.MINTABLE());
+
+        // Comment out below after vote has been executed as of block 64423211
         vm.startPrank(zkTokenAdmin);
 
-        masterMinter = IZkCappedMinterV2(config2024_2025.zkCappedMinter.MINTABLE());
         masterMinter.grantRole(masterMinter.MINTER_ROLE(), address(config2024_2025.zkCappedMinter));
         masterMinter.grantRole(masterMinter.MINTER_ROLE(), address(config2025_2026.zkCappedMinter));
 
@@ -153,6 +177,7 @@ contract ZkSyncGuardianCompensationTest is
     function run() public override(
         DeployZkSyncGuardianCompensationPrerequisitesScript,
         DeployZkSyncGuardianCompensationScript,
+        CreateAllTemplatesScript,
         ProposeBorgResolutionScript,
         ProposeMetaVestDealScript,
         SignDealAndCreateMetavestScript
@@ -173,20 +198,23 @@ contract ZkSyncGuardianCompensationTest is
 
         _assertTemplate(
             config2024_2025.registry,
-            config2024_2025.compTemplateId,
-            config2024_2025.compAgreementUri,
-            config2024_2025.compTemplateName,
-            config2024_2025.compGlobalFields,
-            config2024_2025.compPartyFields
+            config2024_2025.borgResolutionTemplate.id,
+            config2024_2025.borgResolutionTemplate.agreementUri,
+            config2024_2025.borgResolutionTemplate.name,
+            config2024_2025.borgResolutionTemplate.globalFields,
+            config2024_2025.borgResolutionTemplate.partyFields
         );
-        _assertTemplate(
-            config2024_2025.registry,
-            config2024_2025.borgResolutionTemplateId,
-            config2024_2025.borgResolutionUri,
-            config2024_2025.borgResolutionTemplateName,
-            config2024_2025.borgResolutionGlobalFields,
-            config2024_2025.borgResolutionPartyFields
-        );
+        for (uint256 i = 0; i < config2024_2025.guardians.length; i ++) {
+            ZkSyncGuardianCompensation2024_2025.GuardianCompInfo memory guardian = config2024_2025.guardians[i];
+            _assertTemplate(
+                config2024_2025.registry,
+                guardian.compTemplate.id,
+                guardian.compTemplate.agreementUri,
+                guardian.compTemplate.name,
+                guardian.compTemplate.globalFields,
+                guardian.compTemplate.partyFields
+            );
+        }
 
         // MetaVesT deployments
 
@@ -194,14 +222,14 @@ contract ZkSyncGuardianCompensationTest is
         vm.assertEq(config2024_2025.controller.dao(), address(config2024_2025.guardianSafe), "2024-2025 MetaVesTController's DAO should be Guardian SAFE");
         vm.assertEq(config2024_2025.controller.registry(), address(config2024_2025.registry), "2024-2025 Unexpected MetaVesTController registry");
         vm.assertEq(config2024_2025.controller.vestingFactory(), address(config2024_2025.vestingAllocationFactory), "2024-2025 Unexpected MetaVesTController vesting allocation factory");
-        vm.assertEq(config2024_2025.controller.zkCappedMinter(), address(config2024_2025.zkCappedMinter), "2024-2025 MetaVesTController should have ZK Capped Minter should set");
+        vm.assertEq(config2024_2025.controller.zkCappedMinter(), address(config2024_2025.zkCappedMinter), "2024-2025 MetaVesTController should have ZK Capped Minter set");
         vm.assertTrue(config2024_2025.zkCappedMinter.hasRole(config2024_2025.zkCappedMinter.MINTER_ROLE(), address(config2024_2025.controller)), "2024-2025 ZK Capped Minter should grant MetaVesTController MINTER role");
 
         vm.assertEq(config2025_2026.controller.authority(), address(config2025_2026.guardianSafe), "2025-2026 MetaVesTController's authority should be Guardian SAFE");
         vm.assertEq(config2025_2026.controller.dao(), address(config2025_2026.guardianSafe), "2025-2026 MetaVesTController's DAO should be Guardian SAFE");
         vm.assertEq(config2025_2026.controller.registry(), address(config2025_2026.registry), "2025-2026 Unexpected MetaVesTController registry");
         vm.assertEq(config2025_2026.controller.vestingFactory(), address(config2025_2026.vestingAllocationFactory), "2025-2026 Unexpected MetaVesTController vesting allocation factory");
-        vm.assertEq(config2025_2026.controller.zkCappedMinter(), address(config2025_2026.zkCappedMinter), "2025-2026 MetaVesTController should have ZK Capped Minter should set");
+        vm.assertEq(config2025_2026.controller.zkCappedMinter(), address(config2025_2026.zkCappedMinter), "2025-2026 MetaVesTController should have ZK Capped Minter set");
         vm.assertTrue(config2025_2026.zkCappedMinter.hasRole(config2025_2026.zkCappedMinter.MINTER_ROLE(), address(config2025_2026.controller)), "2025-2026 ZK Capped Minter should grant MetaVesTController MINTER role");
     }
 
@@ -214,13 +242,7 @@ contract ZkSyncGuardianCompensationTest is
         // Run scripts to propose deals
         bytes32 agreementId = ProposeMetaVestDealScript.run(
             guardianDelegatePrivateKey,
-            ZkSyncGuardianCompensation2024_2025.GuardianCompInfo({
-                compTemplateId: config2024_2025.compTemplateId,
-                partyInfo: ZkSyncGuardianCompensation2024_2025.PartyInfo({
-                    name: "Alice",
-                    evmAddress: alice
-                })
-            }),
+            config2024_2025.guardians[0], // alice
             config2024_2025
         );
 
@@ -243,7 +265,7 @@ contract ZkSyncGuardianCompensationTest is
         // Verify agreement
 
         (bytes32 templateId, , , , , , uint256 expiry) = config2024_2025.registry.agreements(agreementId);
-        assertEq(templateId, config2024_2025.borgResolutionTemplateId, "Unexpected borg Resolution template ID");
+        assertEq(templateId, config2024_2025.borgResolutionTemplate.id, "Unexpected borg Resolution template ID");
 
         (, , , , , address[] memory parties, , , , ) = config2024_2025.registry.getContractDetails(agreementId);
         vm.assertEq(parties.length, 1, "Should be single-party");
@@ -293,7 +315,7 @@ contract ZkSyncGuardianCompensationTest is
         assertTrue(config2024_2025.registry.isValidDelegate(address(config2024_2025.guardianSafe), guardianDelegate), "should be Guardian SAFE's delegate");
 
         ZkSyncGuardianCompensation2024_2025.GuardianCompInfo memory chadInfo = ZkSyncGuardianCompensation2024_2025.GuardianCompInfo({
-            compTemplateId: config2024_2025.compTemplateId,
+            compTemplate: config2024_2025.guardians[0].compTemplate, // Re-use Alice's template just for test
             partyInfo: ZkSyncGuardianCompensation2024_2025.PartyInfo({
                 name: "Chad",
                 evmAddress: chad
@@ -332,13 +354,7 @@ contract ZkSyncGuardianCompensationTest is
 
         // Run scripts to propose deals
 
-        ZkSyncGuardianCompensation2024_2025.GuardianCompInfo memory aliceInfo = ZkSyncGuardianCompensation2024_2025.GuardianCompInfo({
-            compTemplateId: config2024_2025.compTemplateId,
-            partyInfo: ZkSyncGuardianCompensation2024_2025.PartyInfo({
-                name: "Alice",
-                evmAddress: alice
-            })
-        });
+        ZkSyncGuardianCompensation2024_2025.GuardianCompInfo memory aliceInfo = config2024_2025.guardians[0];
 
         bytes32 contractIdAlice2024_2025 = ProposeMetaVestDealScript.run(
             guardianDelegatePrivateKey,

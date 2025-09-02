@@ -24,13 +24,13 @@ contract VoidAgreementScript is SafeTxHelper, Script {
         run(
             // zkSync Era
 //            vm.envUint("GRANTEE_PRIVATE_KEY"),
-//            ZkSyncGuardianCompensation2024_2025.getDefault()
+//            ZkSyncGuardianCompensation2024_2025.getDefault(vm)
 
             // zkSync Sepolia
             vm.envUint("GUARDIAN_BORG_DELEGATE_PRIVATE_KEY"),
 //            vm.envUint("GRANTEE_PRIVATE_KEY"),
             0xc519e4ce6730ae9167f4e080f47ac1544405756cf301f0c8316578fc90f95e0a,
-            ZkSyncGuardianCompensationSepolia2024_2025.getDefault()
+            ZkSyncGuardianCompensationSepolia2024_2025.getDefault(vm)
         );
     }
 
