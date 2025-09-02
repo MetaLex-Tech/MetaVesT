@@ -23,7 +23,7 @@ contract ProposeMetaVestDealScript is SafeTxHelper, Script {
     /// @dev For running from `forge script`. Provide the deployer private key through env var.
     function run() public virtual {
         ZkSyncGuardianCompensation2024_2025.Config memory defaultConfig = ZkSyncGuardianCompensation2024_2025.getDefault(vm);
-        run(
+        runSingle(
             vm.envUint("GUARDIAN_BORG_DELEGATE_PRIVATE_KEY"),
             defaultConfig.guardians[0],
             defaultConfig
@@ -31,12 +31,12 @@ contract ProposeMetaVestDealScript is SafeTxHelper, Script {
     }
 
     /// @dev For running in tests
-    function run(
+    function runSingle(
         uint256 proposerPrivateKey,
         ZkSyncGuardianCompensation2024_2025.GuardianCompInfo memory guardianInfo,
         ZkSyncGuardianCompensation2024_2025.Config memory config
     ) public virtual returns(bytes32) {
-        return run(
+        return runSingle(
             proposerPrivateKey, guardianInfo,
             // Default guardian allocations
             config.parseAllocation(),
@@ -45,7 +45,7 @@ contract ProposeMetaVestDealScript is SafeTxHelper, Script {
     }
 
     /// @dev For running in tests
-    function run(
+    function runSingle(
         uint256 proposerPrivateKey,
         ZkSyncGuardianCompensation2024_2025.GuardianCompInfo memory guardianInfo,
         BaseAllocation.Allocation memory allocation,

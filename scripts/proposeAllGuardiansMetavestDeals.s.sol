@@ -21,8 +21,8 @@ import {metavestController} from "../src/MetaVesTController.sol";
 
 contract ProposeAllGuardiansMetaVestDealScript is ProposeMetaVestDealScript {
     /// @dev For running from `forge script`. Provide the deployer private key through env var.
-    function run() public override {
-        run(
+    function run() public virtual override {
+        runAll(
             vm.envUint("GUARDIAN_BORG_DELEGATE_PRIVATE_KEY"),
 
             // zkSync Sepolia for 2024-2025
@@ -31,7 +31,7 @@ contract ProposeAllGuardiansMetaVestDealScript is ProposeMetaVestDealScript {
     }
 
     /// @dev For running in tests
-    function run(
+    function runAll(
         uint256 proposerPrivateKey,
         ZkSyncGuardianCompensation2024_2025.Config memory config
     ) public virtual returns(bytes32[] memory) {
@@ -50,11 +50,11 @@ contract ProposeAllGuardiansMetaVestDealScript is ProposeMetaVestDealScript {
 
         for (uint256 i = 0; i < config.guardians.length; i++) {
             console2.log("Proposing to Guardian #%d", i + 1);
-            console2.log("  name:", config.guardians[i].name);
-            console2.log("  address:", config.guardians[i].evmAddress);
+            console2.log("  name:", config.guardians[i].partyInfo.name);
+            console2.log("  address:", config.guardians[i].partyInfo.evmAddress);
             console2.log("");
 
-            agreementIds[i] = run(
+            agreementIds[i] = runSingle(
                 proposerPrivateKey,
                 config.guardians[i],
                 config
@@ -69,5 +69,31 @@ contract ProposeAllGuardiansMetaVestDealScript is ProposeMetaVestDealScript {
         }
 
         return agreementIds;
+    }
+
+    function runSingle(
+        uint256 proposerPrivateKey,
+        ZkSyncGuardianCompensation2024_2025.GuardianCompInfo memory guardianInfo,
+        ZkSyncGuardianCompensation2024_2025.Config memory config
+    ) public override returns(bytes32) {
+        return ProposeMetaVestDealScript.runSingle(
+            proposerPrivateKey,
+            guardianInfo,
+            config
+        );
+    }
+
+    function runSingle(
+        uint256 proposerPrivateKey,
+        ZkSyncGuardianCompensation2024_2025.GuardianCompInfo memory guardianInfo,
+        BaseAllocation.Allocation memory allocation,
+        ZkSyncGuardianCompensation2024_2025.Config memory config
+    ) public override returns(bytes32) {
+        return ProposeMetaVestDealScript.runSingle(
+            proposerPrivateKey,
+            guardianInfo,
+            allocation,
+            config
+        );
     }
 }

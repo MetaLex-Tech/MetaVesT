@@ -240,7 +240,7 @@ contract ZkSyncGuardianCompensationTest is
         assertTrue(config2024_2025.registry.isValidDelegate(address(config2024_2025.guardianSafe), guardianDelegate), "delegate should be Guardian SAFE's delegate");
 
         // Run scripts to propose deals
-        bytes32 agreementId = ProposeMetaVestDealScript.run(
+        bytes32 agreementId = ProposeMetaVestDealScript.runSingle(
             guardianDelegatePrivateKey,
             config2024_2025.guardians[0], // alice
             config2024_2025
@@ -321,7 +321,7 @@ contract ZkSyncGuardianCompensationTest is
                 evmAddress: chad
             })
         });
-        bytes32 contractIdChad = ProposeMetaVestDealScript.run(
+        bytes32 contractIdChad = ProposeMetaVestDealScript.runSingle(
             guardianDelegatePrivateKey,
             chadInfo,
             BaseAllocation.Allocation({
@@ -356,12 +356,12 @@ contract ZkSyncGuardianCompensationTest is
 
         ZkSyncGuardianCompensation2024_2025.GuardianCompInfo memory aliceInfo = config2024_2025.guardians[0];
 
-        bytes32 contractIdAlice2024_2025 = ProposeMetaVestDealScript.run(
+        bytes32 contractIdAlice2024_2025 = ProposeMetaVestDealScript.runSingle(
             guardianDelegatePrivateKey,
             aliceInfo,
             config2024_2025
         );
-        bytes32 contractIdAlice2025_2026 = ProposeMetaVestDealScript.run(
+        bytes32 contractIdAlice2025_2026 = ProposeMetaVestDealScript.runSingle(
             guardianDelegatePrivateKey,
             aliceInfo,
             config2025_2026
