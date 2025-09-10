@@ -267,6 +267,7 @@ contract ZkSyncGuardianCompensationTest is
 
         // Run scripts to propose deals
         bytes32 agreementId = ProposeAllGuardiansMetaVestDealScript.runSingle(
+            deployerPrivateKey,
             guardianDelegatePrivateKey,
             config2024_2025.guardians[0], // alice
             config2024_2025
@@ -345,9 +346,11 @@ contract ZkSyncGuardianCompensationTest is
             partyInfo: ZkSyncGuardianCompensation2024_2025.PartyInfo({
                 name: "Chad",
                 evmAddress: chad
-            })
+            }),
+            signature: ""
         });
         bytes32 contractIdChad = ProposeAllGuardiansMetaVestDealScript.runSingle(
+            deployerPrivateKey,
             guardianDelegatePrivateKey,
             chadInfo,
             BaseAllocation.Allocation({
@@ -381,10 +384,12 @@ contract ZkSyncGuardianCompensationTest is
         // Run scripts to propose deals
 
         bytes32[] memory agreementIds2024_2025 = ProposeAllGuardiansMetaVestDealScript.runAll(
+            deployerPrivateKey,
             guardianDelegatePrivateKey,
             config2024_2025
         );
         bytes32[] memory agreementIds2025_2026 = ProposeAllGuardiansMetaVestDealScript.runAll(
+            deployerPrivateKey,
             guardianDelegatePrivateKey,
             config2025_2026
         );

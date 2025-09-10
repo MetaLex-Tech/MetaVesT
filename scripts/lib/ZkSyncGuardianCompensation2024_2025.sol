@@ -61,6 +61,7 @@ library ZkSyncGuardianCompensation2024_2025 {
     struct GuardianCompInfo {
         PartyInfo partyInfo;
         TemplateInfo compTemplate;
+        bytes signature;
     }
     
     function getDefault(Vm vm) internal view returns(Config memory) {
@@ -152,7 +153,8 @@ library ZkSyncGuardianCompensation2024_2025 {
                     name: vm.envString(string(abi.encodePacked("GUARDIAN_TEMPLATE_NAME_", vm.toString(i)))),
                     globalFields: compGlobalFields,
                     partyFields: compPartyFields
-                })
+                }),
+                signature: vm.envBytes(string(abi.encodePacked("GUARDIAN_SAFE_DELEGATE_SIGNATURE_", vm.toString(i))))
             });
         }
         return guardians;

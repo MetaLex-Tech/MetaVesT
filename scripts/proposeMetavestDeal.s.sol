@@ -24,7 +24,8 @@ contract ProposeMetaVestDealScript is SafeTxHelper, Script {
     function run() public virtual {
         ZkSyncGuardianCompensation2024_2025.Config memory defaultConfig = ZkSyncGuardianCompensation2024_2025.getDefault(vm);
         runSingle(
-            vm.envUint("GUARDIAN_BORG_DELEGATE_PRIVATE_KEY"),
+            vm.envUint("DEPLOYER_PRIVATE_KEY"), // proposerPrivateKey
+            vm.envUint("GUARDIAN_BORG_DELEGATE_PRIVATE_KEY"), // guardianSafeDelegatePrivateKey
             defaultConfig.guardians[0],
             defaultConfig
         );
@@ -33,11 +34,14 @@ contract ProposeMetaVestDealScript is SafeTxHelper, Script {
     /// @dev For running in tests
     function runSingle(
         uint256 proposerPrivateKey,
+        uint256 guardianSafeDelegatePrivateKey,
         ZkSyncGuardianCompensation2024_2025.GuardianCompInfo memory guardianInfo,
         ZkSyncGuardianCompensation2024_2025.Config memory config
     ) public virtual returns(bytes32) {
         return runSingle(
-            proposerPrivateKey, guardianInfo,
+            proposerPrivateKey,
+            guardianSafeDelegatePrivateKey,
+            guardianInfo,
             // Default guardian allocations
             config.parseAllocation(),
             config
@@ -47,16 +51,21 @@ contract ProposeMetaVestDealScript is SafeTxHelper, Script {
     /// @dev For running in tests
     function runSingle(
         uint256 proposerPrivateKey,
+        uint256 guardianSafeDelegatePrivateKey,
         ZkSyncGuardianCompensation2024_2025.GuardianCompInfo memory guardianInfo,
         BaseAllocation.Allocation memory allocation,
         ZkSyncGuardianCompensation2024_2025.Config memory config
     ) public virtual returns(bytes32) {
 
+        address guardianSafeDelegate = guardianSafeDelegatePrivateKey != 0
+            ? vm.addr(guardianSafeDelegatePrivateKey)
+            : address(0);
         address proposer = vm.addr(proposerPrivateKey);
 
         console2.log("");
         console2.log("=== ProposeMetaVestDealScript ===");
         console2.log("Proposer: ", proposer);
+        console2.log("Guardian SAFE Delegate (if private key available): ", guardianSafeDelegate);
         console2.log("Guardian Safe: ", address(config.guardianSafe));
         console2.log("ZK token: ", address(config.zkToken));
         console2.log("CyberAgreementRegistry: ", address(config.registry));
@@ -95,18 +104,20 @@ contract ProposeMetaVestDealScript is SafeTxHelper, Script {
 
         (string memory agreementUri, ) = config.registry.templates(guardianInfo.compTemplate.id);
 
-        bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
-            vm,
-            config.registry.DOMAIN_SEPARATOR(),
-            config.registry.SIGNATUREDATA_TYPEHASH(),
-            expectedContractId,
-            agreementUri,
-            guardianInfo.compTemplate.globalFields,
-            guardianInfo.compTemplate.partyFields,
-            globalValues,
-            partyValues[0],
-            proposerPrivateKey
-        );
+        bytes memory signature = (guardianSafeDelegatePrivateKey != 0)
+            ? CyberAgreementUtils.signAgreementTypedData(
+                vm,
+                config.registry.DOMAIN_SEPARATOR(),
+                config.registry.SIGNATUREDATA_TYPEHASH(),
+                expectedContractId,
+                agreementUri,
+                guardianInfo.compTemplate.globalFields,
+                guardianInfo.compTemplate.partyFields,
+                globalValues,
+                partyValues[0],
+                guardianSafeDelegatePrivateKey
+            )
+            : guardianInfo.signature;
 
         vm.startBroadcast(proposerPrivateKey);
 
