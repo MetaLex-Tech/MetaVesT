@@ -36,8 +36,8 @@ contract ExecuteSafeTxScript is SafeTxHelper, Script {
             0, // value
             abi.encodeWithSelector(
                 CyberAgreementRegistry.setDelegation.selector,
-                0x5ff4e90Efa2B88cf3cA92D63d244a78a88219Abf,
-                block.timestamp + 365 days * 3 // This is a hack, one should not delegate signing for this long
+                0xD63383fBf9F3FDf3759acA89dA00c4c0CF3A0865,
+                1765401725
             ) // data
         );
     }

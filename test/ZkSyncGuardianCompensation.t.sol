@@ -270,6 +270,7 @@ contract ZkSyncGuardianCompensationTest is
             deployerPrivateKey,
             guardianDelegatePrivateKey,
             config2024_2025.guardians[0], // alice
+            block.timestamp, // agreementSalt
             config2024_2025
         );
 
@@ -353,6 +354,7 @@ contract ZkSyncGuardianCompensationTest is
             deployerPrivateKey,
             guardianDelegatePrivateKey,
             chadInfo,
+            block.timestamp, // agreementSalt
             BaseAllocation.Allocation({
                 tokenContract: address(config2024_2025.zkToken),
                 // 10k ZK total in one cliff
@@ -386,11 +388,13 @@ contract ZkSyncGuardianCompensationTest is
         bytes32[] memory agreementIds2024_2025 = ProposeAllGuardiansMetaVestDealScript.runAll(
             deployerPrivateKey,
             guardianDelegatePrivateKey,
+            block.timestamp, // agreementSalt
             config2024_2025
         );
         bytes32[] memory agreementIds2025_2026 = ProposeAllGuardiansMetaVestDealScript.runAll(
             deployerPrivateKey,
             guardianDelegatePrivateKey,
+            block.timestamp, // agreementSalt
             config2025_2026
         );
 

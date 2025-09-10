@@ -24,7 +24,8 @@ contract ProposeAllGuardiansMetaVestDealScript is ProposeMetaVestDealScript {
     function run() public virtual override {
         runAll(
             vm.envUint("DEPLOYER_PRIVATE_KEY"), // proposerPrivateKey
-            vm.envUint("GUARDIAN_BORG_DELEGATE_PRIVATE_KEY"), // guardianSafeDelegatePrivateKey
+            vm.envOr("GUARDIAN_BORG_DELEGATE_PRIVATE_KEY", uint256(0)), // guardianSafeDelegatePrivateKey
+            vm.envUint("AGREEMENT_SALT"), // agreementSalt
 
             // zkSync Sepolia for 2024-2025
             ZkSyncGuardianCompensationSepolia2024_2025.getDefault(vm)
@@ -35,6 +36,7 @@ contract ProposeAllGuardiansMetaVestDealScript is ProposeMetaVestDealScript {
     function runAll(
         uint256 proposerPrivateKey,
         uint256 guardianSafeDelegatePrivateKey,
+        uint256 agreementSalt,
         ZkSyncGuardianCompensation2024_2025.Config memory config
     ) public virtual returns(bytes32[] memory) {
 
@@ -60,6 +62,7 @@ contract ProposeAllGuardiansMetaVestDealScript is ProposeMetaVestDealScript {
                 proposerPrivateKey,
                 guardianSafeDelegatePrivateKey,
                 config.guardians[i],
+                agreementSalt,
                 config
             );
         }
@@ -78,12 +81,14 @@ contract ProposeAllGuardiansMetaVestDealScript is ProposeMetaVestDealScript {
         uint256 proposerPrivateKey,
         uint256 guardianSafeDelegatePrivateKey,
         ZkSyncGuardianCompensation2024_2025.GuardianCompInfo memory guardianInfo,
+        uint256 agreementSalt,
         ZkSyncGuardianCompensation2024_2025.Config memory config
     ) public override returns(bytes32) {
         return ProposeMetaVestDealScript.runSingle(
             proposerPrivateKey,
             guardianSafeDelegatePrivateKey,
             guardianInfo,
+            agreementSalt,
             config
         );
     }
@@ -92,6 +97,7 @@ contract ProposeAllGuardiansMetaVestDealScript is ProposeMetaVestDealScript {
         uint256 proposerPrivateKey,
         uint256 guardianSafeDelegatePrivateKey,
         ZkSyncGuardianCompensation2024_2025.GuardianCompInfo memory guardianInfo,
+        uint256 agreementSalt,
         BaseAllocation.Allocation memory allocation,
         ZkSyncGuardianCompensation2024_2025.Config memory config
     ) public override returns(bytes32) {
@@ -99,6 +105,7 @@ contract ProposeAllGuardiansMetaVestDealScript is ProposeMetaVestDealScript {
             proposerPrivateKey,
             guardianSafeDelegatePrivateKey,
             guardianInfo,
+            agreementSalt,
             allocation,
             config
         );

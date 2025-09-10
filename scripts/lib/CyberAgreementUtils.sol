@@ -42,12 +42,38 @@ except with the express prior written permission of the copyright holder.*/
 pragma solidity 0.8.28;
 
 import {Vm} from "forge-std/Test.sol";
+import {CyberAgreementRegistry} from "cybercorps-contracts/src/CyberAgreementRegistry.sol";
+
+// Access hidden cheatcodes
+interface EnhancedVm is Vm {
+    function serializeJsonType(string calldata typeDescription, bytes memory value) external pure returns (string memory json);
+}
 
 library CyberAgreementUtils {
+    EnhancedVm constant vm = EnhancedVm(address(uint160(uint256(keccak256("hevm cheat code")))));
+
+    // Hard-coded since we don't have programmatic access to CyberAgreementRegistry's underlying types
+    string constant DOMAIN_SEPARATOR_TYPE = "EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)";
+    string constant SIGNATUREDATA_TYPE = "SignatureData(bytes32 contractId,string legalContractUri,string[] globalFields,string[] partyFields,string[] globalValues,string[] partyValues)";
+
+    struct DomainSeparator {
+        string name;
+        string version;
+        uint256 chainId;
+        address verifyingContract;
+    }
+
+    struct SignatureData {
+        bytes32 contractId;
+        string legalContractUri;
+        string[] globalFields;
+        string[] partyFields;
+        string[] globalValues;
+        string[] partyValues;
+    }
+
     function signAgreementTypedData(
-        Vm vm,
-        bytes32 _domainSeparator,
-        bytes32 _typeHash,
+        CyberAgreementRegistry registry,
         bytes32 contractId,
         string memory contractUri,
         string[] memory globalFields,
@@ -55,7 +81,7 @@ library CyberAgreementUtils {
         string[] memory globalValues,
         string[] memory partyValues,
         uint256 privKey
-    ) internal pure returns (bytes memory signature) {
+    ) internal view returns (bytes memory signature) {
         // Hash string arrays the same way as the contract
         bytes32 contractUriHash = keccak256(bytes(contractUri));
         bytes32 globalFieldsHash = _hashStringArray(globalFields);
@@ -66,7 +92,7 @@ library CyberAgreementUtils {
         // Create the message hash using the same approach as the contract
         bytes32 structHash = keccak256(
             abi.encode(
-                _typeHash,
+                registry.SIGNATUREDATA_TYPEHASH(),
                 contractId,
                 contractUriHash,
                 globalFieldsHash,
@@ -77,7 +103,7 @@ library CyberAgreementUtils {
         );
 
         bytes32 digest = keccak256(
-            abi.encodePacked("\x19\x01", _domainSeparator, structHash)
+            abi.encodePacked("\x19\x01", registry.DOMAIN_SEPARATOR(), structHash)
         );
 
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(privKey, digest);
@@ -86,24 +112,22 @@ library CyberAgreementUtils {
     }
 
     function signVoidTypedData(
-        Vm vm,
-        bytes32 _domainSeparator,
-        bytes32 _typeHash,
+        CyberAgreementRegistry registry,
         bytes32 contractId,
         address party,
         uint256 privKey
-    ) internal pure returns (bytes memory signature) {
+    ) internal view returns (bytes memory signature) {
         // Create the message hash using the same approach as the contract
         bytes32 structHash = keccak256(
             abi.encode(
-                _typeHash,
+                registry.VOIDSIGNATUREDATA_TYPEHASH(),
                 contractId,
                 party
             )
         );
 
         bytes32 digest = keccak256(
-            abi.encodePacked("\x19\x01", _domainSeparator, structHash)
+            abi.encodePacked("\x19\x01", registry.DOMAIN_SEPARATOR(), structHash)
         );
 
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(privKey, digest);
@@ -120,5 +144,43 @@ library CyberAgreementUtils {
             hashes[i] = keccak256(bytes(array[i]));
         }
         return keccak256(abi.encodePacked(hashes));
+    }
+
+    function formatAgreementTypedDataJson(
+        CyberAgreementRegistry registry,
+        bytes32 contractId,
+        string memory contractUri,
+        string[] memory globalFields,
+        string[] memory partyFields,
+        string[] memory globalValues,
+        string[] memory partyValues
+    ) internal returns (string memory) {
+        string memory domainSeparatorJson = vm.serializeJsonType(
+            DOMAIN_SEPARATOR_TYPE,
+            abi.encode(DomainSeparator({
+                name: registry.name(),
+                version: registry.version(),
+                chainId: block.chainid,
+                verifyingContract: address(registry)
+            }))
+        );
+
+        string memory signatureDataJson = vm.serializeJsonType(
+            SIGNATUREDATA_TYPE,
+            abi.encode(SignatureData({
+                contractId: contractId,
+                legalContractUri: contractUri,
+                globalFields: globalFields,
+                partyFields: partyFields,
+                globalValues: globalValues,
+                partyValues: partyValues
+            }))
+        );
+
+        // Build the json string with the temporary buffer at key "outputKey"
+        vm.serializeString("outputKey", "domain", domainSeparatorJson);
+        vm.serializeString("outputKey", "message", signatureDataJson);
+        vm.serializeString("outputKey", "primaryType", "SignatureData");
+        return vm.serializeString("outputKey", "types", "{\"EIP712Domain\":[{\"name\":\"name\",\"type\":\"string\"},{\"name\":\"version\",\"type\":\"string\"},{\"name\":\"chainId\",\"type\":\"uint256\"},{\"name\":\"verifyingContract\",\"type\":\"address\"}],\"SignatureData\":[{\"name\":\"contractId\",\"type\":\"bytes32\"},{\"name\":\"legalContractUri\",\"type\":\"string\"},{\"name\":\"globalFields\",\"type\":\"string[]\"},{\"name\":\"partyFields\",\"type\":\"string[]\"},{\"name\":\"globalValues\",\"type\":\"string[]\"},{\"name\":\"partyValues\",\"type\":\"string[]\"}]}");
     }
 }

@@ -2,13 +2,14 @@
 pragma solidity ^0.8.24;
 
 import {ZkSyncGuardianCompensation2024_2025} from "./lib/ZkSyncGuardianCompensation2024_2025.sol";
+import {ZkSyncGuardianCompensationSepolia2024_2025} from "./lib/ZkSyncGuardianCompensationSepolia2024_2025.sol";
 import {BaseAllocation} from "../src/BaseAllocation.sol";
 import {BorgAuth} from "cybercorps-contracts/src/libs/auth.sol";
 import {CyberAgreementRegistry} from "cybercorps-contracts/src/CyberAgreementRegistry.sol";
-import {CyberAgreementUtils} from "cybercorps-contracts/test/libs/CyberAgreementUtils.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {ISafeProxyFactory, IGnosisSafe} from "../test/lib/safe.sol";
 import {IZkCappedMinterV2Factory} from "../src/interfaces/zk-governance/IZkCappedMinterV2Factory.sol";
+import {CyberAgreementUtils} from "./lib/CyberAgreementUtils.sol";
 import {SafeTxHelper} from "./lib/SafeTxHelper.sol";
 import {Script} from "forge-std/Script.sol";
 import {VestingAllocationFactory} from "../src/VestingAllocationFactory.sol";
@@ -22,11 +23,12 @@ contract ProposeMetaVestDealScript is SafeTxHelper, Script {
 
     /// @dev For running from `forge script`. Provide the deployer private key through env var.
     function run() public virtual {
-        ZkSyncGuardianCompensation2024_2025.Config memory defaultConfig = ZkSyncGuardianCompensation2024_2025.getDefault(vm);
+        ZkSyncGuardianCompensation2024_2025.Config memory defaultConfig = ZkSyncGuardianCompensationSepolia2024_2025.getDefault(vm);
         runSingle(
             vm.envUint("DEPLOYER_PRIVATE_KEY"), // proposerPrivateKey
-            vm.envUint("GUARDIAN_BORG_DELEGATE_PRIVATE_KEY"), // guardianSafeDelegatePrivateKey
+            vm.envOr("GUARDIAN_BORG_DELEGATE_PRIVATE_KEY", uint256(0)), // guardianSafeDelegatePrivateKey
             defaultConfig.guardians[0],
+            vm.envUint("AGREEMENT_SALT"), // agreementSalt
             defaultConfig
         );
     }
@@ -36,12 +38,14 @@ contract ProposeMetaVestDealScript is SafeTxHelper, Script {
         uint256 proposerPrivateKey,
         uint256 guardianSafeDelegatePrivateKey,
         ZkSyncGuardianCompensation2024_2025.GuardianCompInfo memory guardianInfo,
+        uint256 agreementSalt,
         ZkSyncGuardianCompensation2024_2025.Config memory config
     ) public virtual returns(bytes32) {
         return runSingle(
             proposerPrivateKey,
             guardianSafeDelegatePrivateKey,
             guardianInfo,
+            agreementSalt,
             // Default guardian allocations
             config.parseAllocation(),
             config
@@ -53,6 +57,7 @@ contract ProposeMetaVestDealScript is SafeTxHelper, Script {
         uint256 proposerPrivateKey,
         uint256 guardianSafeDelegatePrivateKey,
         ZkSyncGuardianCompensation2024_2025.GuardianCompInfo memory guardianInfo,
+        uint256 agreementSalt,
         BaseAllocation.Allocation memory allocation,
         ZkSyncGuardianCompensation2024_2025.Config memory config
     ) public virtual returns(bytes32) {
@@ -91,8 +96,6 @@ contract ProposeMetaVestDealScript is SafeTxHelper, Script {
             guardianInfo.partyInfo
         );
 
-        uint256 agreementSalt = block.timestamp;
-
         bytes32 expectedContractId = keccak256(
             abi.encode(
                 guardianInfo.compTemplate.id,
@@ -106,9 +109,7 @@ contract ProposeMetaVestDealScript is SafeTxHelper, Script {
 
         bytes memory signature = (guardianSafeDelegatePrivateKey != 0)
             ? CyberAgreementUtils.signAgreementTypedData(
-                vm,
-                config.registry.DOMAIN_SEPARATOR(),
-                config.registry.SIGNATUREDATA_TYPEHASH(),
+                config.registry,
                 expectedContractId,
                 agreementUri,
                 guardianInfo.compTemplate.globalFields,
@@ -119,30 +120,51 @@ contract ProposeMetaVestDealScript is SafeTxHelper, Script {
             )
             : guardianInfo.signature;
 
-        vm.startBroadcast(proposerPrivateKey);
+        if (signature.length > 0) {
+            // Has valid signature, proceed to proposal
+            vm.startBroadcast(proposerPrivateKey);
 
-        bytes32 contractId = config.controller.proposeAndSignDeal(
-            guardianInfo.compTemplate.id,
-            agreementSalt,
-            metavestController.metavestType.Vesting,
-            guardianInfo.partyInfo.evmAddress,
-            allocation,
-            config.milestones,
-            globalValues,
-            parties,
-            partyValues,
-            signature,
-            bytes32(0), // no secrets
-            block.timestamp + 365 days * 2 // 2 years after deployment
-        );
+            bytes32 contractId = config.controller.proposeAndSignDeal(
+                guardianInfo.compTemplate.id,
+                agreementSalt,
+                metavestController.metavestType.Vesting,
+                guardianInfo.partyInfo.evmAddress,
+                allocation,
+                config.milestones,
+                globalValues,
+                parties,
+                partyValues,
+                signature,
+                bytes32(0), // no secrets
+                block.timestamp + 365 days * 2 // 2 years after deployment
+            );
 
-        vm.stopBroadcast();
-        
-        console2.log("Created:");
-        console2.log("  Agreement ID:");
-        console2.logBytes32(contractId);
-        console2.log("");
+            vm.stopBroadcast();
 
-        return contractId;
+            console2.log("Created:");
+            console2.log("  Agreement ID:");
+            console2.logBytes32(contractId);
+            console2.log("");
+
+            return contractId;
+
+        } else {
+            // Does not have valid signature, prompt for offline signing
+            console2.log("Signature required: please sign the following EIP-712 typed data:");
+            console2.log("  (can be signed with command `cast wallet sign --data '<paste json string here>'`)");
+            console2.log("==== JSON data start ====");
+            console2.log(CyberAgreementUtils.formatAgreementTypedDataJson(
+                config.registry,
+                expectedContractId,
+                agreementUri,
+                guardianInfo.compTemplate.globalFields,
+                guardianInfo.compTemplate.partyFields,
+                globalValues,
+                partyValues[0]
+            ));
+            console2.log("==== JSON data end ====");
+
+            return bytes32(0);
+        }
     }
 }
