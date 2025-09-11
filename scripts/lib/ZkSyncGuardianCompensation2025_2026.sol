@@ -38,9 +38,10 @@ library ZkSyncGuardianCompensation2025_2026 {
             vestingAllocationFactory: defaultConfig.vestingAllocationFactory,
             controller: metavestController(0x570d31F59bD0C96a9e1CC889E7E4dBd585D6915b),
 
-            // zkSync Guardian BORG Resolution
-
-            borgResolutionTemplate: defaultConfig.borgResolutionTemplate,
+            // TODO deprecated
+//            // zkSync Guardian BORG Resolution
+//
+//            borgResolutionTemplate: defaultConfig.borgResolutionTemplate,
 
             // zkSync Guardian Compensation Agreement
 

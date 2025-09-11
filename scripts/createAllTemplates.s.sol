@@ -33,22 +33,41 @@ contract CreateAllTemplatesScript is SafeTxHelper, Script {
         config = ZkSyncGuardianCompensation2024_2025.getDefault(vm);
 
         safe = config.guardianSafe;
-        GnosisTransaction[] memory safeTxs = new GnosisTransaction[](config.guardians.length + 1);
-        safeTxs[0] = GnosisTransaction({
-            to: address(config.registry),
-            value: 0 ether,
-            data: abi.encodeWithSelector(
-                CyberAgreementRegistry.createTemplate.selector,
-                config.borgResolutionTemplate.id,
-                config.borgResolutionTemplate.name,
-                config.borgResolutionTemplate.agreementUri,
-                config.borgResolutionTemplate.globalFields,
-                config.borgResolutionTemplate.partyFields
-            )
-        });
+
+        // TODO deprecated
+//        GnosisTransaction[] memory safeTxs = new GnosisTransaction[](config.guardians.length + 1);
+//        safeTxs[0] = GnosisTransaction({
+//            to: address(config.registry),
+//            value: 0 ether,
+//            data: abi.encodeWithSelector(
+//                CyberAgreementRegistry.createTemplate.selector,
+//                config.borgResolutionTemplate.id,
+//                config.borgResolutionTemplate.name,
+//                config.borgResolutionTemplate.agreementUri,
+//                config.borgResolutionTemplate.globalFields,
+//                config.borgResolutionTemplate.partyFields
+//            )
+//        });
+//        for (uint i = 0; i < config.guardians.length ; i++) {
+//            ZkSyncGuardianCompensation2024_2025.GuardianCompInfo memory guardian = config.guardians[i];
+//            safeTxs[i + 1] = GnosisTransaction({
+//                to: address(config.registry),
+//                value: 0 ether,
+//                data: abi.encodeWithSelector(
+//                    CyberAgreementRegistry.createTemplate.selector,
+//                    guardian.compTemplate.id,
+//                    guardian.compTemplate.name,
+//                    guardian.compTemplate.agreementUri,
+//                    guardian.compTemplate.globalFields,
+//                    guardian.compTemplate.partyFields
+//                )
+//            });
+//        }
+
+        GnosisTransaction[] memory safeTxs = new GnosisTransaction[](config.guardians.length);
         for (uint i = 0; i < config.guardians.length ; i++) {
             ZkSyncGuardianCompensation2024_2025.GuardianCompInfo memory guardian = config.guardians[i];
-            safeTxs[i + 1] = GnosisTransaction({
+            safeTxs[i] = GnosisTransaction({
                 to: address(config.registry),
                 value: 0 ether,
                 data: abi.encodeWithSelector(

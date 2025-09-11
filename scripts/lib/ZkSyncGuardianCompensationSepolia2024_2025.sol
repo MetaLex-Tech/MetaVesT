@@ -43,9 +43,10 @@ library ZkSyncGuardianCompensationSepolia2024_2025 {
             vestingAllocationFactory: VestingAllocationFactory(0x3fFd990dB0E398235456A720501E6007003a6cdf),
             controller: metavestController(0x856A8Aea8a37A338e2490384Bb790cD87b5CaaE4),
 
-            // zkSync Guardian BORG Resolution
-
-            borgResolutionTemplate: ZkSyncGuardianCompensation2024_2025.loadBorgResolutionTemplate(vm),
+            // TODO deprecated
+//            // zkSync Guardian BORG Resolution
+//
+//            borgResolutionTemplate: ZkSyncGuardianCompensation2024_2025.loadBorgResolutionTemplate(vm),
 
             // zkSync Guardian Compensation Agreement
 
