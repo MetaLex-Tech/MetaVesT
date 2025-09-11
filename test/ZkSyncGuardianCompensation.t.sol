@@ -302,7 +302,7 @@ contract ZkSyncGuardianCompensationTest is
         _granteeWithdrawAndAsserts(config2025_2026.zkToken, config2025_2026.zkCappedMinter, vestingAllocationAlice2025_2026, 312.5e3 ether, "Alice 2025-2026 remaining");
     }
 
-    function test_AdminToolingCompensation() public {
+    function test_AdminToolingCompensation() virtual public {
         (address[] memory metavestAddresses2024_2025, ) = _proposeAndFinalizeAllGuardianDeals();
         VestingAllocation vestingAllocationAlice = VestingAllocation(metavestAddresses2024_2025[0]);
 

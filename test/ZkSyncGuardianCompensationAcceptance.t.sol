@@ -36,8 +36,11 @@ contract ZkSyncGuardianCompensationAcceptanceTest is ZkSyncGuardianCompensationT
         deployerPrivateKey = vm.envUint("DEPLOYER_PRIVATE_KEY");
         deployer = vm.addr(deployerPrivateKey);
 
-        // TODO WIP: Use real Guardians SAFE delegate. We don't have his private key and will use offline signatures instead
-//        address guardianDelegate = 0xa376AaF645dbd9b4f501B2A8a97bc21DcA15B001;
+        // Use real Guardians SAFE delegate. We don't have his private key and will use offline signatures instead
+        // TODO WIP: using dev account first to test
+//        guardianDelegate = 0xa376AaF645dbd9b4f501B2A8a97bc21DcA15B001;
+        guardianDelegate = 0xD63383fBf9F3FDf3759acA89dA00c4c0CF3A0865;
+        guardianDelegatePrivateKey = 0;
 
         // Prepare funds for accounts used by the actual deployment scripts
         deal(deployer, 1 ether);
@@ -50,17 +53,24 @@ contract ZkSyncGuardianCompensationAcceptanceTest is ZkSyncGuardianCompensationT
         config2024_2025 = ZkSyncGuardianCompensation2024_2025.getDefault(vm);
         config2025_2026 = ZkSyncGuardianCompensation2025_2026.getDefault(vm);
 
-        guardianPrivateKeys = new uint256[](config2024_2025.guardians.length);
-        for (uint256 i = 0; i < config2024_2025.guardians.length; i++) {
-            // Note we override all guardians with the same address to simplify offline signing
-            guardianPrivateKeys[i] = privateKeySalt + 100;
-            address guardian = vm.addr(guardianPrivateKeys[i]);
-            // Override guardian address with one we control
-            config2024_2025.guardians[i].partyInfo.evmAddress = guardian;
-            config2025_2026.guardians[i].partyInfo.evmAddress = guardian;
-            // Prepare funds for guardians
-            deal(guardian, 1 ether);
-        }
+        // Override guardian info for tests
+        // We can't load two-year worth of offline signatures at the same time, so we will
+        // load the first year through env vars and load the seconds through constants.
+        // Also, for simplicity we will reduce the number of guardians to one for each year.
+        assertEq(config2024_2025.guardians.length, 1, "There should be just one test guardian");
+
+        guardianPrivateKeys = new uint256[](1);
+        guardianPrivateKeys[0] = privateKeySalt + 100;
+        address guardian = vm.addr(guardianPrivateKeys[0]);
+        // Prepare funds for guardians
+        deal(guardian, 1 ether);
+
+        // Override guardian address with one we control
+        config2024_2025.guardians[0].partyInfo.evmAddress = guardian;
+
+        // Override guardian address with one we control, and its offline signature
+        config2025_2026.guardians[0].partyInfo.evmAddress = guardian;
+        config2025_2026.guardians[0].signature = hex"1407f5c50c3ca1f6178f2f6c9254a2513dc8c6846135f5de7c4aee81b8275a523b46b8a983f3ec8741729ca81af7d898a44acdbd35c3665777f53f6bb0051fa31c";
 
         // Assume prerequisites have been deployed
         auth = config2024_2025.registry.AUTH();
@@ -113,5 +123,9 @@ contract ZkSyncGuardianCompensationAcceptanceTest is ZkSyncGuardianCompensationT
         vm.prank(address(config2024_2025.guardianSafe));
         config2024_2025.registry.setDelegation(guardianDelegate, block.timestamp + 60 days); // A bit longer to accommodate test cases
         assertTrue(config2024_2025.registry.isValidDelegate(address(config2024_2025.guardianSafe), guardianDelegate), "delegate should be Guardian SAFE's delegate");
+    }
+
+    function test_AdminToolingCompensation() override public {
+        // No-op: disabled since we won't have signatures for it
     }
 }
