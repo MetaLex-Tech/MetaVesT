@@ -52,20 +52,28 @@ contract ZkSyncGuardianCompensationAcceptanceTest is ZkSyncGuardianCompensationT
         config2025_2026 = ZkSyncGuardianCompensation2025_2026.getDefault(vm);
 
         // Override guardian info for tests
-        // We can't load two-year worth of offline signatures at the same time, so we will
-        // load the first year through env vars and load the seconds through constants.
-        // Also, for simplicity we will reduce the number of guardians to one for each year.
-        assertEq(config2024_2025.guardians.length, 1, "There should be just one test guardian");
 
+        // There will be only one guardian for test
         guardianPrivateKeys = new uint256[](1);
         guardianPrivateKeys[0] = privateKeySalt + 100;
         address guardian = vm.addr(guardianPrivateKeys[0]);
         // Prepare funds for guardians
         deal(guardian, 1 ether);
 
-        // Override guardian address with one we control
-        config2024_2025.guardians[0].partyInfo.evmAddress = guardian;
+        ZkSyncGuardianCompensation2024_2025.GuardianCompInfo memory tempGuardianInfo;
 
+        // Reduce guardians to the first one
+        tempGuardianInfo = config2024_2025.guardians[0];
+        config2024_2025.guardians = new ZkSyncGuardianCompensation2024_2025.GuardianCompInfo[](1);
+        config2024_2025.guardians[0] = tempGuardianInfo;
+        // Override guardian address with one we control, and its offline signature
+        config2024_2025.guardians[0].partyInfo.evmAddress = guardian;
+        config2024_2025.guardians[0].signature = hex"7b3492d39b39cfbbc4c134ff06f4cc68afcb224d6f94c5813ffae53db94d5c8b622457c2abaa2403aba84711f37ae17ffa367f3574cb7cd3a51da4461c017d331b";
+
+        // Reduce guardians to the first one
+        tempGuardianInfo = config2025_2026.guardians[0];
+        config2025_2026.guardians = new ZkSyncGuardianCompensation2024_2025.GuardianCompInfo[](1);
+        config2025_2026.guardians[0] = tempGuardianInfo;
         // Override guardian address with one we control, and its offline signature
         config2025_2026.guardians[0].partyInfo.evmAddress = guardian;
         config2025_2026.guardians[0].signature = hex"144ca44344bc709c156abaa532dd3f049fced51ce43a0aecd888c574ba75e31a47b17f3db279933e2918f3ba11c21e09dc1d5d5652ef9576c7d57ffd4fad546f1c";
