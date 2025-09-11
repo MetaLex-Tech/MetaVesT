@@ -37,9 +37,7 @@ contract ZkSyncGuardianCompensationAcceptanceTest is ZkSyncGuardianCompensationT
         deployer = vm.addr(deployerPrivateKey);
 
         // Use real Guardians SAFE delegate. We don't have his private key and will use offline signatures instead
-        // TODO WIP: using dev account first to test
-//        guardianDelegate = 0xa376AaF645dbd9b4f501B2A8a97bc21DcA15B001;
-        guardianDelegate = 0xD63383fBf9F3FDf3759acA89dA00c4c0CF3A0865;
+        guardianDelegate = 0xa376AaF645dbd9b4f501B2A8a97bc21DcA15B001;
         guardianDelegatePrivateKey = 0;
 
         // Prepare funds for accounts used by the actual deployment scripts
@@ -70,7 +68,7 @@ contract ZkSyncGuardianCompensationAcceptanceTest is ZkSyncGuardianCompensationT
 
         // Override guardian address with one we control, and its offline signature
         config2025_2026.guardians[0].partyInfo.evmAddress = guardian;
-        config2025_2026.guardians[0].signature = hex"1407f5c50c3ca1f6178f2f6c9254a2513dc8c6846135f5de7c4aee81b8275a523b46b8a983f3ec8741729ca81af7d898a44acdbd35c3665777f53f6bb0051fa31c";
+        config2025_2026.guardians[0].signature = hex"144ca44344bc709c156abaa532dd3f049fced51ce43a0aecd888c574ba75e31a47b17f3db279933e2918f3ba11c21e09dc1d5d5652ef9576c7d57ffd4fad546f1c";
 
         // Assume prerequisites have been deployed
         auth = config2024_2025.registry.AUTH();
