@@ -2,6 +2,7 @@
 pragma solidity ^0.8.24;
 
 import {ZkSyncGuardianCompensation2024_2025} from "./lib/ZkSyncGuardianCompensation2024_2025.sol";
+import {ZkSyncGuardianCompensation2025_2026} from "./lib/ZkSyncGuardianCompensation2025_2026.sol";
 import {ZkSyncGuardianCompensationSepolia2024_2025} from "./lib/ZkSyncGuardianCompensationSepolia2024_2025.sol";
 import {ProposeMetaVestDealScript} from "./proposeMetavestDeal.s.sol";
 import {BaseAllocation} from "../src/BaseAllocation.sol";
@@ -23,12 +24,17 @@ contract ProposeAllGuardiansMetaVestDealScript is ProposeMetaVestDealScript {
     /// @dev For running from `forge script`. Provide the deployer private key through env var.
     function run() public virtual override {
         runAll(
+            // zkSync Era for 2024-2025
             vm.envUint("DEPLOYER_PRIVATE_KEY"), // proposerPrivateKey
-            vm.envOr("GUARDIAN_BORG_DELEGATE_PRIVATE_KEY", uint256(0)), // guardianSafeDelegatePrivateKey
-            vm.envUint("AGREEMENT_SALT"), // agreementSalt
+            uint256(0), // delegate will sign offline
+            uint256(keccak256("MetaLexMetaVestZkSyncGuardianCompensationLaunchV1.0.2024-2025")), // agreementSalt
+            ZkSyncGuardianCompensation2024_2025.getDefault(vm)
 
-            // zkSync Sepolia for 2024-2025
-            ZkSyncGuardianCompensationSepolia2024_2025.getDefault(vm)
+            // zkSync Era for 2025-2026
+//            vm.envUint("DEPLOYER_PRIVATE_KEY"), // proposerPrivateKey
+//            uint256(0), // delegate will sign offline
+//            uint256(keccak256("MetaLexMetaVestZkSyncGuardianCompensationLaunchV1.0.2025-2026")), // agreementSalt
+//            ZkSyncGuardianCompensation2025_2026.getDefault(vm)
         );
     }
 
