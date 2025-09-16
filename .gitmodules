@@ -4,3 +4,6 @@
 [submodule "lib/zk-governance"]
 	path = lib/zk-governance
 	url = https://github.com/zksync-association/zk-governance
+[submodule "lib/cybercorps-contracts"]
+	path = lib/cybercorps-contracts
+	url = https://github.com/MetaLex-Tech/cybercorps-contracts

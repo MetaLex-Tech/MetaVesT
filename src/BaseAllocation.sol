@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-pragma solidity 0.8.24;
+pragma solidity ^0.8.24;
 
-import "./interfaces/IZkCappedMinter.sol";
+import "./interfaces/zk-governance/IZkCappedMinterV2.sol";
 
 /// @notice interface to a MetaLeX condition contract
 /// @dev see https://github.com/MetaLex-Tech/BORG-CORE/tree/main/src/libs/conditions
@@ -17,6 +17,7 @@ interface IERC20M {
 
 interface IController { 
     function authority() external view returns (address);
+    function mint(address recipient, uint256 amount) external;
 }
 
 /// @notice Solady's SafeTransferLib 'SafeTransfer()' and 'SafeTransferFrom()'; (https://github.com/Vectorized/solady/blob/main/src/utils/SafeTransferLib.sol)
@@ -136,9 +137,10 @@ abstract contract BaseAllocation is ReentrancyGuard, SafeTransferLib{
         event MetaVesT_TransferabilityUpdated(address indexed grantee, bool isTransferable);
         event MetaVest_TransferRightsPending(address indexed grantee, address indexed pendingGrantee);
         event MetaVesT_TransferredRights(address indexed grantee, address transferee);
+        event MetaVesT_UpdatedRecipient(address indexed grantee, address newRecipient);
         event MetaVesT_UnlockRateUpdated(address indexed grantee, uint208 unlockRate);
         event MetaVesT_VestingRateUpdated(address indexed grantee, uint208 vestingRate);
-        event MetaVesT_Withdrawn(address indexed grantee, address indexed tokenAddress, uint256 amount);
+        event MetaVesT_Withdrawn(address indexed grantee, address indexed recipient, address indexed tokenAddress, uint256 amount);
         event MetaVesT_PriceUpdated(address indexed grantee, uint256 exercisePrice);
         event MetaVesT_RepurchaseAndWithdrawal(address indexed grantee, address indexed tokenAddress, uint256 withdrawalAmount, uint256 repurchaseAmount);
         event MetaVesT_Terminated(address indexed grantee, uint256 tokensRecovered);
@@ -160,6 +162,7 @@ abstract contract BaseAllocation is ReentrancyGuard, SafeTransferLib{
 
         address public grantee; // grantee of the tokens
         address public pendingGrantee; // address of the pending grantee
+        address public recipient; // recipient of the tokens
         bool transferable; // whether grantee can transfer their MetaVesT in whole
         Milestone[] public milestones; // array of Milestone structs
         Allocation public allocation; // struct containing vesting and unlocking details
@@ -169,15 +172,16 @@ abstract contract BaseAllocation is ReentrancyGuard, SafeTransferLib{
         GovType public govType;
         bool public terminated;
         uint256 public terminationTime;
-        address public ZkCappedMinterAddress;
 
         /// @notice BaseAllocation constructor
         /// @param _grantee: address of the grantee, cannot be a zero address
         /// @param _controller: address of the MetaVesTController contract
-        constructor(address _grantee, address _controller) {
+        constructor(address _grantee, address _recipient, address _controller) {
             // Controller can be 0 for an immuatable version, but grantee cannot
             if (_grantee == address(0)) revert MetaVesT_ZeroAddress();
+            if (_recipient == address(0)) revert MetaVesT_ZeroAddress();
             grantee = _grantee;
+            recipient = _recipient;
             controller = _controller;
             govType = GovType.vested;
         }
@@ -227,10 +231,6 @@ abstract contract BaseAllocation is ReentrancyGuard, SafeTransferLib{
             emit MetaVesT_UnlockRateUpdated(grantee, _newUnlockRate);
         }
 
-        function setZkCappedMinterAddress(address _ZkCappedMinterAddress) external onlyController {
-            ZkCappedMinterAddress = _ZkCappedMinterAddress;
-        }
-
         /// @notice Sets the governing power type for the MetaVesT
         /// @param _govType: the type of governing power to be used
         function setGovVariables(GovType _govType) external onlyController {
@@ -271,8 +271,7 @@ abstract contract BaseAllocation is ReentrancyGuard, SafeTransferLib{
             if(terminated) revert MetaVesT_AlreadyTerminated();
             if (_milestoneIndex >= milestones.length) revert MetaVesT_MilestoneIndexOutOfRange();
             uint256 _milestoneAward = milestones[_milestoneIndex].milestoneAward;
-            //transfer the milestone award back to the authority, we check in the controller to ensure only uncompleted milestones can be removed
-            safeTransfer(allocation.tokenContract, getAuthority(), _milestoneAward);
+            // No need to transfer the milestone award back to the authority since the tokens are minted on-demand
             delete milestones[_milestoneIndex];
             milestones[_milestoneIndex] = milestones[milestones.length - 1];
             milestones.pop();
@@ -307,15 +306,24 @@ abstract contract BaseAllocation is ReentrancyGuard, SafeTransferLib{
             pendingGrantee = address(0);
         }
 
+        /// @notice update the recipient to a new address
+        /// @dev onlyGrantee -- must be called by the grantee
+        /// @param _newRecipient - the address of the new recipient
+        function updateRecipient(address _newRecipient) external onlyGrantee {
+            if(_newRecipient == address(0)) revert MetaVesT_ZeroAddress();
+            emit MetaVesT_UpdatedRecipient(grantee, _newRecipient);
+            recipient = _newRecipient;
+        }
+
         /// @notice withdraws tokens from the VestingAllocation
         /// @dev onlyGrantee -- must be called by the grantee
         /// @param _amount - the amount of tokens to withdraw
         function withdraw(uint256 _amount) external nonReentrant onlyGrantee {
             if (_amount == 0) revert MetaVesT_ZeroAmount();
-            if (_amount > getAmountWithdrawable() || _amount > IERC20M(allocation.tokenContract).balanceOf(address(this))) revert MetaVesT_MoreThanAvailable();
+            if (_amount > getAmountWithdrawable()) revert MetaVesT_MoreThanAvailable();
             tokensWithdrawn += _amount;
-            IZkCappedMinter(ZkCappedMinterAddress).mint(msg.sender, _amount);
-            emit MetaVesT_Withdrawn(msg.sender, allocation.tokenContract, _amount);
+            IController(controller).mint(recipient, _amount);
+            emit MetaVesT_Withdrawn(msg.sender, recipient, allocation.tokenContract, _amount);
         }
 
         /// @notice gets the details of the vest
