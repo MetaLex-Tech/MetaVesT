@@ -1,10 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity ^0.8.24;
 
-import {ZkSyncGuardianCompensation2024_2025} from "./lib/ZkSyncGuardianCompensation2024_2025.sol";
-import {ZkSyncGuardianCompensation2025_2026} from "./lib/ZkSyncGuardianCompensation2025_2026.sol";
-import {ZkSyncGuardianCompensationSepolia2024_2025} from "./lib/ZkSyncGuardianCompensationSepolia2024_2025.sol";
-import {ProposeMetaVestDealScript} from "./proposeMetavestDeal.s.sol";
+import {GnosisTransaction} from "../test/lib/safe.sol";
 import {BaseAllocation} from "../src/BaseAllocation.sol";
 import {BorgAuth} from "cybercorps-contracts/src/libs/auth.sol";
 import {CyberAgreementRegistry} from "cybercorps-contracts/src/CyberAgreementRegistry.sol";
@@ -12,10 +9,14 @@ import {CyberAgreementUtils} from "cybercorps-contracts/test/libs/CyberAgreement
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {ISafeProxyFactory, IGnosisSafe} from "../test/lib/safe.sol";
 import {IZkCappedMinterV2Factory} from "../src/interfaces/zk-governance/IZkCappedMinterV2Factory.sol";
+import {ProposeMetaVestDealScript} from "./proposeMetavestDeal.s.sol";
 import {SafeTxHelper} from "./lib/SafeTxHelper.sol";
 import {Script} from "forge-std/Script.sol";
 import {VestingAllocationFactory} from "../src/VestingAllocationFactory.sol";
 import {ZkCappedMinterV2} from "zk-governance/l2-contracts/src/ZkCappedMinterV2.sol";
+import {ZkSyncGuardianCompensation2024_2025} from "./lib/ZkSyncGuardianCompensation2024_2025.sol";
+import {ZkSyncGuardianCompensation2025_2026} from "./lib/ZkSyncGuardianCompensation2025_2026.sol";
+import {ZkSyncGuardianCompensationSepolia2024_2025} from "./lib/ZkSyncGuardianCompensationSepolia2024_2025.sol";
 import {ZkTokenV2} from "zk-governance/l2-contracts/src/ZkTokenV2.sol";
 import {console2} from "forge-std/console2.sol";
 import {metavestController} from "../src/MetaVesTController.sol";
@@ -23,6 +24,23 @@ import {metavestController} from "../src/MetaVesTController.sol";
 contract ProposeAllGuardiansMetaVestDealScript is ProposeMetaVestDealScript {
     /// @dev For running from `forge script`. Provide the deployer private key through env var.
     function run() public virtual override {
+//        ZkSyncGuardianCompensation2024_2025.Config memory config = ZkSyncGuardianCompensation2024_2025.getDefault(vm);
+//
+//        // Simulate Guardian SAFE delegation as instructed (payloads are copied directly from a recent production deployment)
+//        GnosisTransaction[] memory guardianSafeTxs = new GnosisTransaction[](1);
+//        guardianSafeTxs[0] = GnosisTransaction({
+//            to: 0x07E0a0BeC742f90f7879830bC917E783dA6a6357,
+//            value: 0,
+//            data: hex"e988dc91000000000000000000000000a376aaf645dbd9b4f501b2a8a97bc21dca15b0010000000000000000000000000000000000000000000000000000000068db1d80"
+//        });
+//        for (uint256 i = 0; i < guardianSafeTxs.length; i++) {
+//            vm.prank(address(config.guardianSafe));
+//            (guardianSafeTxs[i].to).call{value: guardianSafeTxs[i].value}(guardianSafeTxs[i].data);
+//        }
+//
+//        // Verify Guardian SAFE has delegated signing
+//        vm.assertTrue(config.registry.isValidDelegate(address(config.guardianSafe), 0xa376AaF645dbd9b4f501B2A8a97bc21DcA15B001), "delegate should be Guardian SAFE's delegate");
+
         runAll(
             // zkSync Era for 2024-2025
             vm.envUint("DEPLOYER_PRIVATE_KEY"), // proposerPrivateKey

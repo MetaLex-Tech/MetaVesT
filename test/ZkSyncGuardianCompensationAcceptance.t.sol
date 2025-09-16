@@ -85,7 +85,7 @@ contract ZkSyncGuardianCompensationAcceptanceTest is ZkSyncGuardianCompensationT
 
         // Assume all all templates have been deployed
 
-        // Simulate MetaLeX SAFE to execute txs as instructed (payloads are copied directly from a recent production deployment)
+        // Simulate Guardian SAFE to execute txs as instructed (payloads are copied directly from a recent production deployment)
 
         guardianSafeTxs = new GnosisTransaction[](5);
         guardianSafeTxs[0] = GnosisTransaction({
