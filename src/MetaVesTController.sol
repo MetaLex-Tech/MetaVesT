@@ -14,8 +14,6 @@ import "./BaseAllocation.sol";
 //import "./RestrictedTokenAllocation.sol";
 import "./interfaces/IAllocationFactory.sol";
 import "./interfaces/IPriceAllocation.sol";
-import "./interfaces/zk-governance/IZkCappedMinterV2.sol";
-import "./interfaces/zk-governance/IZkCappedMinterV2Factory.sol";
 import "./lib/EnumberableSet.sol";
 
 //interface deleted
@@ -117,7 +115,6 @@ contract metavestController is UUPSUpgradeable, SafeTransferLib {
     event MetaVesTController_SetRemoved(string indexed set);
     event MetaVesTController_AddressAddedToSet(string set, address indexed grantee);
     event MetaVesTController_AddressRemovedFromSet(string set, address indexed grantee);
-    event MetaVesTController_ZkCappedMinterUpdated(address zkCappedMinter);
     event MetaVesTController_DealProposed(
         bytes32 indexed agreementId,
         address indexed grantee,
@@ -132,7 +129,7 @@ contract metavestController is UUPSUpgradeable, SafeTransferLib {
         address indexed recipient,
         address metavest
     );
-    event MetaVesTController_Minted(address indexed metavest, address indexed recipient, address zkCappedMinter, uint256 amount);
+
 
     ///
     /// ERRORS
@@ -390,7 +387,6 @@ contract metavestController is UUPSUpgradeable, SafeTransferLib {
         {
             revert MetaVesTController_IncorrectMetaVesTType();
         }
-        // Grant MetaVesT minter privilege
         metavestAgreementIds[deal.metavest] = agreementId;
 
         return deal.metavest;
@@ -427,6 +423,13 @@ contract metavestController is UUPSUpgradeable, SafeTransferLib {
                 _milestoneTotal += _milestones[i].milestoneAward;
             }
         }
+    }
+
+    function validateTokenApprovalAndBalance(address tokenContract, uint256 total) internal view {
+        if (
+            IERC20M(tokenContract).allowance(authority, address(this)) < total ||
+            IERC20M(tokenContract).balanceOf(authority) < total
+        ) revert MetaVesTController_AmountNotApprovedForTransferFrom();
     }
 
 //     function createAndInitializeTokenOptionAllocation(
@@ -478,6 +481,7 @@ contract metavestController is UUPSUpgradeable, SafeTransferLib {
 
         uint256 _total = _allocation.tokenStreamTotal + _milestoneTotal;
         if (_total == 0) revert MetaVesTController_ZeroAmount();
+        validateTokenApprovalAndBalance(_allocation.tokenContract, _total);
 
         address vestingAllocation = IAllocationFactory(vestingFactory).createAllocation(
             IAllocationFactory.AllocationType.Vesting,
@@ -490,6 +494,7 @@ contract metavestController is UUPSUpgradeable, SafeTransferLib {
             0,
             0
         );
+        safeTransferFrom(_allocation.tokenContract, authority, vestingAllocation, _total);
 
         return vestingAllocation;
     }
@@ -502,7 +507,7 @@ contract metavestController is UUPSUpgradeable, SafeTransferLib {
 //
 //        uint256 _total = _allocation.tokenStreamTotal + _milestoneTotal;
 //        if (_total == 0) revert MetaVesTController_ZeroAmount();
-//        //validateTokenApprovalAndBalance(_allocation.tokenContract, _total);
+//        validateTokenApprovalAndBalance(_allocation.tokenContract, _total);
 //
 //        address tokenOptionAllocation = createAndInitializeTokenOptionAllocation(
 //                _grantee,
@@ -513,7 +518,7 @@ contract metavestController is UUPSUpgradeable, SafeTransferLib {
 //                _milestones
 //            );
 //
-//            //safeTransferFrom(_allocation.tokenContract, authority, tokenOptionAllocation, _total);
+//            safeTransferFrom(_allocation.tokenContract, authority, tokenOptionAllocation, _total);
 //            return tokenOptionAllocation;
 //        }
 //
@@ -524,7 +529,7 @@ contract metavestController is UUPSUpgradeable, SafeTransferLib {
 //
 //            uint256 _total = _allocation.tokenStreamTotal + _milestoneTotal;
 //            if (_total == 0) revert MetaVesTController_ZeroAmount();
-//            //validateTokenApprovalAndBalance(_allocation.tokenContract, _total);
+//            validateTokenApprovalAndBalance(_allocation.tokenContract, _total);
 //
 //            address restrictedTokenAward = createAndInitializeRestrictedTokenAward(
 //                _grantee,
@@ -535,19 +540,9 @@ contract metavestController is UUPSUpgradeable, SafeTransferLib {
 //                _milestones
 //            );
 //
-//            //safeTransferFrom(_allocation.tokenContract, authority, restrictedTokenAward, _total);
+//            safeTransferFrom(_allocation.tokenContract, authority, restrictedTokenAward, _total);
 //            return restrictedTokenAward;
 //        }
-
-    function mint(address recipient, uint256 amount) external {
-        bytes32 agreementId = metavestAgreementIds[msg.sender];
-        if (agreementId == bytes32(0)) {
-            revert MetaVesTController_UnauthorizedToMint();
-        }
-
-        IZkCappedMinterV2(zkCappedMinter).mint(recipient, amount);
-        emit MetaVesTController_Minted(msg.sender, recipient, zkCappedMinter, amount);
-    }
     
     function getMetaVestType(address _grant) public view returns (uint256) {
         return BaseAllocation(_grant).getVestingType();
@@ -609,9 +604,13 @@ contract metavestController is UUPSUpgradeable, SafeTransferLib {
         if (_milestone.milestoneAward == 0) revert MetaVesTController_ZeroAmount();
         if (_milestone.conditionContracts.length > ARRAY_LENGTH_LIMIT) revert MetaVesTController_LengthMismatch();
         if (_milestone.complete == true) revert MetaVesTController_MilestoneIndexCompletedOrDoesNotExist();
+        if (
+            IERC20M(_tokenContract).allowance(msg.sender, address(this)) < _milestone.milestoneAward ||
+            IERC20M(_tokenContract).balanceOf(msg.sender) < _milestone.milestoneAward
+        ) revert MetaVesT_AmountNotApprovedForTransferFrom();
 
-        // No need to allocate token right now since they are minted on-demand
-        
+        // send the new milestoneAward to 'metavest'
+        safeTransferFrom(_tokenContract, msg.sender, _grant, _milestone.milestoneAward);
         BaseAllocation(_grant).addMilestone(_milestone);
     }
 
@@ -896,23 +895,6 @@ contract metavestController is UUPSUpgradeable, SafeTransferLib {
         
         sets[nameHash].remove(_metaVest);
         emit MetaVesTController_AddressRemovedFromSet(_name, _metaVest);
-    }
-
-    function setZkCappedMinter(address _zkCappedMinter) external onlyAuthority {
-        zkCappedMinter = _zkCappedMinter;
-        emit MetaVesTController_ZkCappedMinterUpdated(zkCappedMinter);
-    }
-
-    function pauseZkCappedMinter() external onlyAuthority {
-        IZkCappedMinterV2(zkCappedMinter).pause();
-    }
-
-    function unpauseZkCappedMinter() external onlyAuthority {
-        IZkCappedMinterV2(zkCappedMinter).unpause();
-    }
-
-    function closeZkCappedMinter() external onlyAuthority {
-        IZkCappedMinterV2(zkCappedMinter).close();
     }
 
     function getDeal(bytes32 agreementId) public view returns (DealData memory) {

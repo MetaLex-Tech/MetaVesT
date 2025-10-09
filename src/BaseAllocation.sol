@@ -1,7 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-pragma solidity ^0.8.24;
-
-import "./interfaces/zk-governance/IZkCappedMinterV2.sol";
+pragma solidity 0.8.24;
 
 /// @notice interface to a MetaLeX condition contract
 /// @dev see https://github.com/MetaLex-Tech/BORG-CORE/tree/main/src/libs/conditions
@@ -17,7 +15,6 @@ interface IERC20M {
 
 interface IController { 
     function authority() external view returns (address);
-    function mint(address recipient, uint256 amount) external;
 }
 
 /// @notice Solady's SafeTransferLib 'SafeTransfer()' and 'SafeTransferFrom()'; (https://github.com/Vectorized/solady/blob/main/src/utils/SafeTransferLib.sol)
@@ -271,7 +268,8 @@ abstract contract BaseAllocation is ReentrancyGuard, SafeTransferLib{
             if(terminated) revert MetaVesT_AlreadyTerminated();
             if (_milestoneIndex >= milestones.length) revert MetaVesT_MilestoneIndexOutOfRange();
             uint256 _milestoneAward = milestones[_milestoneIndex].milestoneAward;
-            // No need to transfer the milestone award back to the authority since the tokens are minted on-demand
+            //transfer the milestone award back to the authority, we check in the controller to ensure only uncompleted milestones can be removed
+            safeTransfer(allocation.tokenContract, getAuthority(), _milestoneAward);
             delete milestones[_milestoneIndex];
             milestones[_milestoneIndex] = milestones[milestones.length - 1];
             milestones.pop();
@@ -320,9 +318,9 @@ abstract contract BaseAllocation is ReentrancyGuard, SafeTransferLib{
         /// @param _amount - the amount of tokens to withdraw
         function withdraw(uint256 _amount) external nonReentrant onlyGrantee {
             if (_amount == 0) revert MetaVesT_ZeroAmount();
-            if (_amount > getAmountWithdrawable()) revert MetaVesT_MoreThanAvailable();
+            if (_amount > getAmountWithdrawable() || _amount > IERC20M(allocation.tokenContract).balanceOf(address(this))) revert MetaVesT_MoreThanAvailable();
             tokensWithdrawn += _amount;
-            IController(controller).mint(recipient, _amount);
+            safeTransfer(allocation.tokenContract, msg.sender, _amount);
             emit MetaVesT_Withdrawn(msg.sender, recipient, allocation.tokenContract, _amount);
         }
 
