@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-pragma solidity 0.8.20;
+pragma solidity 0.8.24;
 
 /// @notice interface to a MetaLeX condition contract
 /// @dev see https://github.com/MetaLex-Tech/BORG-CORE/tree/main/src/libs/conditions
@@ -134,9 +134,10 @@ abstract contract BaseAllocation is ReentrancyGuard, SafeTransferLib{
         event MetaVesT_TransferabilityUpdated(address indexed grantee, bool isTransferable);
         event MetaVest_TransferRightsPending(address indexed grantee, address indexed pendingGrantee);
         event MetaVesT_TransferredRights(address indexed grantee, address transferee);
+        event MetaVesT_UpdatedRecipient(address indexed grantee, address newRecipient);
         event MetaVesT_UnlockRateUpdated(address indexed grantee, uint208 unlockRate);
         event MetaVesT_VestingRateUpdated(address indexed grantee, uint208 vestingRate);
-        event MetaVesT_Withdrawn(address indexed grantee, address indexed tokenAddress, uint256 amount);
+        event MetaVesT_Withdrawn(address indexed grantee, address indexed recipient, address indexed tokenAddress, uint256 amount);
         event MetaVesT_PriceUpdated(address indexed grantee, uint256 exercisePrice);
         event MetaVesT_RepurchaseAndWithdrawal(address indexed grantee, address indexed tokenAddress, uint256 withdrawalAmount, uint256 repurchaseAmount);
         event MetaVesT_Terminated(address indexed grantee, uint256 tokensRecovered);
@@ -158,6 +159,7 @@ abstract contract BaseAllocation is ReentrancyGuard, SafeTransferLib{
 
         address public grantee; // grantee of the tokens
         address public pendingGrantee; // address of the pending grantee
+        address public recipient; // recipient of the tokens
         bool transferable; // whether grantee can transfer their MetaVesT in whole
         Milestone[] public milestones; // array of Milestone structs
         Allocation public allocation; // struct containing vesting and unlocking details
@@ -171,10 +173,12 @@ abstract contract BaseAllocation is ReentrancyGuard, SafeTransferLib{
         /// @notice BaseAllocation constructor
         /// @param _grantee: address of the grantee, cannot be a zero address
         /// @param _controller: address of the MetaVesTController contract
-        constructor(address _grantee, address _controller) {
+        constructor(address _grantee, address _recipient, address _controller) {
             // Controller can be 0 for an immuatable version, but grantee cannot
             if (_grantee == address(0)) revert MetaVesT_ZeroAddress();
+            if (_recipient == address(0)) revert MetaVesT_ZeroAddress();
             grantee = _grantee;
+            recipient = _recipient;
             controller = _controller;
             govType = GovType.vested;
         }
@@ -300,6 +304,15 @@ abstract contract BaseAllocation is ReentrancyGuard, SafeTransferLib{
             pendingGrantee = address(0);
         }
 
+        /// @notice update the recipient to a new address
+        /// @dev onlyGrantee -- must be called by the grantee
+        /// @param _newRecipient - the address of the new recipient
+        function updateRecipient(address _newRecipient) external onlyGrantee {
+            if(_newRecipient == address(0)) revert MetaVesT_ZeroAddress();
+            emit MetaVesT_UpdatedRecipient(grantee, _newRecipient);
+            recipient = _newRecipient;
+        }
+
         /// @notice withdraws tokens from the VestingAllocation
         /// @dev onlyGrantee -- must be called by the grantee
         /// @param _amount - the amount of tokens to withdraw
@@ -308,7 +321,7 @@ abstract contract BaseAllocation is ReentrancyGuard, SafeTransferLib{
             if (_amount > getAmountWithdrawable() || _amount > IERC20M(allocation.tokenContract).balanceOf(address(this))) revert MetaVesT_MoreThanAvailable();
             tokensWithdrawn += _amount;
             safeTransfer(allocation.tokenContract, msg.sender, _amount);
-            emit MetaVesT_Withdrawn(msg.sender, allocation.tokenContract, _amount);
+            emit MetaVesT_Withdrawn(msg.sender, recipient, allocation.tokenContract, _amount);
         }
 
         /// @notice gets the details of the vest
