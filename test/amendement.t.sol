@@ -46,9 +46,15 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
 
         vm.stopPrank();
 
-        vm.startPrank(guardianSafe);
+        // Prepare funds
+        paymentToken.mint(
+            address(guardianSafe),
+            9999 ether
+        );
+        vm.prank(address(guardianSafe));
+        paymentToken.approve(address(controller), 9999 ether);
 
-        controller.createSet("testSet");
+        vm.startPrank(guardianSafe);
 
         // Guardian SAFE to delegate signing to an EOA
         registry.setDelegation(delegate, block.timestamp + 365 days * 3); // This is a hack. One should not delegate signing for this long
@@ -57,11 +63,6 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
         vm.stopPrank();
 
         vestingAllocation = createDummyVestingAllocation();
-
-        // TODO WIP: review needed
-        paymentToken.mint(authority, 1000000e58);
-
-        paymentToken.transfer(address(grantee), 1000e25);
 
         vm.prank(authority);
         controller.createSet("testSet");
