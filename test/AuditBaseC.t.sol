@@ -7,7 +7,7 @@ import "../test/controller.t.sol";
 // TODO WIP: non-VestingAllocation tests are disabled until reviewed with new design with CyberAgreementRegistry
 contract Audit is MetaVestControllerTest {
 
-    function testFailAuditTerminateFailAfterWithdraw() public {
+    function test_RevertIf_AuditTerminateFailAfterWithdraw() public {
         // template from testTerminateVestAndRecoverSlowUnlock
         address vestingAllocation = createDummyVestingAllocationSlowUnlock();
         uint256 snapshot = paymentToken.balanceOf(authority);
