@@ -285,8 +285,8 @@ contract metavestController is UUPSUpgradeable, SafeTransferLib {
         uint256 salt,
         metavestType _metavestType,
         address grantee,
-        BaseAllocation.Allocation calldata allocation,
-        BaseAllocation.Milestone[] calldata milestones,
+        BaseAllocation.Allocation memory allocation,
+        BaseAllocation.Milestone[] memory milestones,
         string[] memory globalValues,
         address[] memory parties,
         string[][] memory partyValues,
@@ -295,14 +295,14 @@ contract metavestController is UUPSUpgradeable, SafeTransferLib {
         uint256 expiry
     ) external returns (bytes32) {
 
-        bytes32 agreementId = ICyberAgreementRegistry(registry).createContract(
+        // Call internal function to avoid stack-too-deep errors
+        bytes32 agreementId = _createAgreement(
             templateId,
             salt,
             globalValues,
             parties,
             partyValues,
             secretHash,
-            address(this),
             expiry
         );
 
@@ -335,6 +335,27 @@ contract metavestController is UUPSUpgradeable, SafeTransferLib {
             registry
         );
         return agreementId;
+    }
+
+    function _createAgreement(
+        bytes32 templateId,
+        uint256 salt,
+        string[] memory globalValues,
+        address[] memory parties,
+        string[][] memory partyValues,
+        bytes32 secretHash,
+        uint256 expiry
+    ) internal returns (bytes32) {
+        return ICyberAgreementRegistry(registry).createContract(
+            templateId,
+            salt,
+            globalValues,
+            parties,
+            partyValues,
+            secretHash,
+            address(this),
+            expiry
+        );
     }
 
     function signDealAndCreateMetavest(
