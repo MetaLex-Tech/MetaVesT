@@ -9,7 +9,7 @@
 pragma solidity ^0.8.24;
 
 import {ICyberAgreementRegistry} from "cybercorps-contracts/src/interfaces/ICyberAgreementRegistry.sol";
-import {UUPSUpgradeable} from "zk-governance/l2-contracts/lib/openzeppelin-contracts-upgradeable/contracts/proxy/utils/UUPSUpgradeable.sol";
+import {UUPSUpgradeable} from "openzeppelin-contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "./BaseAllocation.sol";
 //import "./RestrictedTokenAllocation.sol";
 import "./interfaces/IAllocationFactory.sol";

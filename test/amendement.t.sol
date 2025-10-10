@@ -8,10 +8,9 @@ import "../src/interfaces/IAllocationFactory.sol";
 import "../src/VestingAllocationFactory.sol";
 //import "../src/TokenOptionFactory.sol";
 //import "../src/RestrictedTokenFactory.sol";
-import "../src/interfaces/zk-governance/IZkTokenV1.sol";
 import "./lib/MetaVesTControllerTestBase.sol";
 
-// TODO WIP: non-VestingAllocation tests are disabled until adopted ZkCappedMinter
+// TODO WIP: non-VestingAllocation tests are disabled until reviewed with new design with CyberAgreementRegistry
 contract MetaVestControllerTest is MetaVesTControllerTestBase {
     address public authority = guardianSafe;
     address public dao = guardianSafe;
@@ -27,7 +26,7 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
 
     function setUp() public override {
         MetaVesTControllerTestBase.setUp();
-        
+
         vm.startPrank(deployer);
 
         // Deploy MetaVesT controller
@@ -45,22 +44,10 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
             )
         )));
 
-        // Deploy ZK Capped Minter v2
-
-        zkCappedMinter = IZkCappedMinterV2(zkCappedMinterFactory.createCappedMinter(
-            address(zkToken),
-            address(controller), // Grant controller admin privilege so it can grant minter privilege to deployed MetaVesT
-            cap,
-            cappedMinterStartTime,
-            cappedMinterExpirationTime,
-            uint256(salt)
-        ));
-
         vm.stopPrank();
 
         vm.startPrank(guardianSafe);
 
-        controller.setZkCappedMinter(address(zkCappedMinter));
         controller.createSet("testSet");
 
         // Guardian SAFE to delegate signing to an EOA
@@ -70,6 +57,14 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
         vm.stopPrank();
 
         vestingAllocation = createDummyVestingAllocation();
+
+        // TODO WIP: review needed
+        paymentToken.mint(authority, 1000000e58);
+
+        paymentToken.transfer(address(grantee), 1000e25);
+
+        vm.prank(authority);
+        controller.createSet("testSet");
     }
 
     function testProposeMetavestAmendment() public {
@@ -380,7 +375,7 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
             delegatePrivateKey,
             alice, // = grantee
             BaseAllocation.Allocation({
-                tokenContract: address(zkToken),
+                tokenContract: address(paymentToken),
                 tokenStreamTotal: 1000 ether,
                 vestingCliffCredit: 100 ether,
                 unlockingCliffCredit: 100 ether,
@@ -393,11 +388,6 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
             "Alice",
             cappedMinterExpirationTime // Same expiry as the minter so grantee can defer vesting contract creation as much as possible
         );
-
-        // TPP to review agreements and on-chain parameters, then approve by granting our ZkCappedMinter permissions
-        bytes32 minterRole = zkToken.MINTER_ROLE();
-        vm.prank(zkTokenAdmin);
-        zkToken.grantRole(minterRole, address(zkCappedMinter));
 
         return _granteeSignDeal(
             contractIdAlice,

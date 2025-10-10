@@ -2,26 +2,18 @@
 pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
-import {ZkCappedMinterV2, IMintable} from "zk-governance/l2-contracts/src/ZkCappedMinterV2.sol";
-import {ZkTokenV1} from "zk-governance/l2-contracts/src/ZkTokenV1.sol";
+import {MockERC20} from "./mocks/MockERC20.sol";
 import {BaseAllocation} from "../src/BaseAllocation.sol";
 import {VestingAllocation} from "../src/VestingAllocation.sol";
 import {metavestController} from "../src/MetaVesTController.sol";
 
 contract MockMetaVesTController {
     address public authority;
-    address public zkCappedMinter;
 
     constructor(
-        address _authority,
-        address _zkCappedMinter
+        address _authority
     ) {
         authority = _authority;
-        zkCappedMinter = _zkCappedMinter;
-    }
-
-    function mint(address recipient, uint256 amount) external {
-        ZkCappedMinterV2(zkCappedMinter).mint(recipient, amount);
     }
 
     function updateMetavestVestingRate(
@@ -38,35 +30,16 @@ contract VestingAllocationTest is Test {
     address recipient = address(0xb);
     address newRecipient = address(0xc);
 
-    ZkTokenV1 zkToken;
+    MockERC20 paymentToken;
 
     MockMetaVesTController mockController;
     VestingAllocation vestingAllocation;
 
     function setUp() public {
-        zkToken = new ZkTokenV1();
-        zkToken.initialize(address(this), address(this), 0 ether);
-
-        // Deploy ZK Capped Minter v2
-        ZkCappedMinterV2 zkCappedMinter = new ZkCappedMinterV2(
-            IMintable(address(zkToken)),
-            address(this),
-            10000 ether,
-            uint48(block.timestamp),
-            uint48(block.timestamp + 365 days * 10)
-        );
-
-        // Grant ZkCappedMinter permissions
-        zkToken.grantRole(zkToken.MINTER_ROLE(), address(zkCappedMinter));
+        paymentToken = new MockERC20("Payment Token", "PAY");
 
         // Create mock controller
-        mockController = new MockMetaVesTController(address(this), address(zkCappedMinter));
-
-        // Grant controller minter privilege
-        zkCappedMinter.grantRole(
-            zkCappedMinter.MINTER_ROLE(),
-            address(mockController)
-        );
+        mockController = new MockMetaVesTController(address(this));
 
         BaseAllocation.Milestone[] memory milestones = new BaseAllocation.Milestone[](1);
         milestones[0] = BaseAllocation.Milestone({
@@ -81,7 +54,7 @@ contract VestingAllocationTest is Test {
             recipient,
             address(mockController),
             BaseAllocation.Allocation({
-                tokenContract: address(zkToken),
+                tokenContract: address(paymentToken),
                 tokenStreamTotal: 1000 ether,
                 vestingCliffCredit: 100 ether,
                 unlockingCliffCredit: 100 ether,
@@ -101,14 +74,14 @@ contract VestingAllocationTest is Test {
 
     function test_Withdraw() public {
         // Should withdraw to recipient by default
-        uint256 balanceBefore = zkToken.balanceOf(recipient);
+        uint256 balanceBefore = paymentToken.balanceOf(recipient);
 
         vm.expectEmit(true, true, true, true);
-        emit BaseAllocation.MetaVesT_Withdrawn(grantee, recipient, address(zkToken), 100 ether);
+        emit BaseAllocation.MetaVesT_Withdrawn(grantee, recipient, address(paymentToken), 100 ether);
         vm.prank(grantee);
         VestingAllocation(vestingAllocation).withdraw(100 ether);
 
-        assertEq(zkToken.balanceOf(recipient), balanceBefore + 100 ether);
+        assertEq(paymentToken.balanceOf(recipient), balanceBefore + 100 ether);
     }
 
     function test_RevertIf_WithdrawTooMuch() public {
@@ -125,10 +98,10 @@ contract VestingAllocationTest is Test {
         VestingAllocation(vestingAllocation).updateRecipient(newRecipient);
 
         // Should withdraw to new recipient now
-        uint256 balanceBefore = zkToken.balanceOf(newRecipient);
+        uint256 balanceBefore = paymentToken.balanceOf(newRecipient);
         vm.prank(grantee);
         VestingAllocation(vestingAllocation).withdraw(100 ether);
-        assertEq(zkToken.balanceOf(newRecipient), balanceBefore + 100 ether);
+        assertEq(paymentToken.balanceOf(newRecipient), balanceBefore + 100 ether);
     }
 
     function test_RevertIf_UpdateRecipientNonGrantee() public {

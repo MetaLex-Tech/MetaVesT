@@ -14,7 +14,7 @@ contract EvilGrant {
     }
 }
 
-// TODO WIP: non-VestingAllocation tests are disabled until adopted ZkCappedMinter
+// TODO WIP: non-VestingAllocation tests are disabled until reviewed with new design with CyberAgreementRegistry
 contract Audit is MetaVestControllerTest {
     function test_RevertIf_AuditArbitraryVote() public {
         // template from testVoteOnMetavestAmendment
