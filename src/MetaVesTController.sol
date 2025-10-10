@@ -589,19 +589,19 @@ contract metavestController is UUPSUpgradeable, SafeTransferLib {
         BaseAllocation(_grant).updateTransferability(_isTransferable);
     }
 
-    /// @notice for the controller to update either exercisePrice or repurchasePrice for a '_grantee' and their transferees, as applicable depending on the '_grantee''s MetaVesTType
-    /// @param _grant address of grantee whose applicable price is being updated
-    /// @param _newPrice new exercisePrice (if token option) or (repurchase price if restricted token award) as 'paymentToken' per 1 metavested token in vesting token decimals but only up to payment decimal precision
-    function updateExerciseOrRepurchasePrice(
-        address _grant,
-        uint256 _newPrice
-    ) external onlyAuthority conditionCheck consentCheck(_grant, msg.data) {
-        if (_newPrice == 0) revert MetaVesTController_ZeroPrice();
-        IPriceAllocation grant = IPriceAllocation(_grant);
-        if(grant.getVestingType()!=2 && grant.getVestingType()!=3) revert MetaVesTController_IncorrectMetaVesTType();
-        _resetAmendmentParams(_grant, msg.sig);
-        grant.updatePrice(_newPrice);
-    }
+//    /// @notice for the controller to update either exercisePrice or repurchasePrice for a '_grantee' and their transferees, as applicable depending on the '_grantee''s MetaVesTType
+//    /// @param _grant address of grantee whose applicable price is being updated
+//    /// @param _newPrice new exercisePrice (if token option) or (repurchase price if restricted token award) as 'paymentToken' per 1 metavested token in vesting token decimals but only up to payment decimal precision
+//    function updateExerciseOrRepurchasePrice(
+//        address _grant,
+//        uint256 _newPrice
+//    ) external onlyAuthority conditionCheck consentCheck(_grant, msg.data) {
+//        if (_newPrice == 0) revert MetaVesTController_ZeroPrice();
+//        IPriceAllocation grant = IPriceAllocation(_grant);
+//        if(grant.getVestingType()!=2 && grant.getVestingType()!=3) revert MetaVesTController_IncorrectMetaVesTType();
+//        _resetAmendmentParams(_grant, msg.sig);
+//        grant.updatePrice(_newPrice);
+//    }
 
     /// @notice removes a milestone from '_grantee''s MetaVesT if such milestone has not yet been confirmed, also making the corresponding 'milestoneAward' tokens withdrawable by controller
     /// @param _grant address of grantee whose MetaVesT is being updated
