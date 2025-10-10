@@ -1,37 +1,28 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity ^0.8.24;
 
-import {ZkSyncGuardianCompensation2024_2025} from "./lib/ZkSyncGuardianCompensation2024_2025.sol";
-import {ZkSyncGuardianCompensation2025_2026} from "./lib/ZkSyncGuardianCompensation2025_2026.sol";
-import {ZkSyncGuardianCompensationSepolia2024_2025} from "./lib/ZkSyncGuardianCompensationSepolia2024_2025.sol";
+import {YearnBorgCompensation2025_2026} from "./lib/YearnBorgCompensation2025_2026.sol";
 import {ISafeProxyFactory, IGnosisSafe, GnosisTransaction} from "../test/lib/safe.sol";
 import {BorgAuth} from "cybercorps-contracts/src/libs/auth.sol";
 import {CyberAgreementRegistry} from "cybercorps-contracts/src/CyberAgreementRegistry.sol";
-import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
-import {IZkCappedMinterV2Factory} from "../src/interfaces/zk-governance/IZkCappedMinterV2Factory.sol";
+import {ERC1967Proxy} from "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {SafeTxHelper} from "./lib/SafeTxHelper.sol";
 import {Script} from "forge-std/Script.sol";
 import {VestingAllocationFactory} from "../src/VestingAllocationFactory.sol";
-import {ZkCappedMinterV2} from "zk-governance/l2-contracts/src/ZkCappedMinterV2.sol";
-import {ZkTokenV2} from "zk-governance/l2-contracts/src/ZkTokenV2.sol";
 import {console2} from "forge-std/console2.sol";
 import {metavestController} from "../src/MetaVesTController.sol";
 
-contract DeployZkSyncGuardianCompensationPrerequisitesScript is SafeTxHelper, Script {
-    using ZkSyncGuardianCompensation2024_2025 for ZkSyncGuardianCompensation2024_2025.Config;
+contract DeployYearnBorgCompensationPrerequisitesScript is SafeTxHelper, Script {
+    using YearnBorgCompensation2025_2026 for YearnBorgCompensation2025_2026.Config;
 
     /// @dev For running from `forge script`. Provide the deployer private key through env var.
     function run() public virtual {
         deployPrerequisites(
             vm.envUint("DEPLOYER_PRIVATE_KEY"),
 
-            // zkSync Era
-            "MetaLexMetaVestZkSyncGuardianCompensationLaunchV1.0",
-            ZkSyncGuardianCompensation2024_2025.getDefault(vm)
-
-//            // zkSync Sepolia
-//            "MetaLexMetaVestZkSyncGuardianCompensationTestnetV0.1.1",
-//            ZkSyncGuardianCompensationSepolia2024_2025.getDefault(vm)
+            // Ethereum mainnet
+            "MetaLexMetaVestYearnBorgCompensationLaunchV1.0",
+            YearnBorgCompensation2025_2026.getDefault(vm)
         );
     }
 
@@ -39,7 +30,7 @@ contract DeployZkSyncGuardianCompensationPrerequisitesScript is SafeTxHelper, Sc
     function deployPrerequisites(
         uint256 deployerPrivateKey,
         string memory saltStr,
-        ZkSyncGuardianCompensation2024_2025.Config memory config
+        YearnBorgCompensation2025_2026.Config memory config
     ) public virtual returns(
         BorgAuth,
         CyberAgreementRegistry,
@@ -48,7 +39,7 @@ contract DeployZkSyncGuardianCompensationPrerequisitesScript is SafeTxHelper, Sc
         address deployer = vm.addr(deployerPrivateKey);
 
         console2.log("");
-        console2.log("=== DeployZkSyncGuardianCompensationPrerequisitesScript ===");
+        console2.log("=== DeployYearnBorgCompensationPrerequisitesScript ===");
         console2.log("Deployer: ", deployer);
         console2.log("Salt string: ", saltStr);
         console2.log("MetaLeX SAFE: ", address(config.metalexSafe));
@@ -69,25 +60,6 @@ contract DeployZkSyncGuardianCompensationPrerequisitesScript is SafeTxHelper, Sc
                 address(auth)
             )
         )));
-
-        // We will create the templates later
-//        // Create zkSync Guardian Compensation Agreement template
-//        registry.createTemplate(
-//            config.compTemplateId,
-//            config.compTemplateName,
-//            config.compAgreementUri,
-//            config.compGlobalFields,
-//            config.compPartyFields
-//        );
-//
-//        // Create MetaLeX <> zkSync Guardian BORG Service Agreement template
-//        registry.createTemplate(
-//            config.serviceTemplateId,
-//            config.serviceTemplateName,
-//            config.serviceAgreementUri,
-//            config.serviceGlobalFields,
-//            config.servicePartyFields
-//        );
 
         // Transfer CyberAgreementRegistry ownership to MetaLeX SAFE
 
