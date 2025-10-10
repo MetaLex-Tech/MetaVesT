@@ -320,7 +320,7 @@ abstract contract BaseAllocation is ReentrancyGuard, SafeTransferLib{
             if (_amount == 0) revert MetaVesT_ZeroAmount();
             if (_amount > getAmountWithdrawable() || _amount > IERC20M(allocation.tokenContract).balanceOf(address(this))) revert MetaVesT_MoreThanAvailable();
             tokensWithdrawn += _amount;
-            safeTransfer(allocation.tokenContract, msg.sender, _amount);
+            safeTransfer(allocation.tokenContract, recipient, _amount);
             emit MetaVesT_Withdrawn(msg.sender, recipient, allocation.tokenContract, _amount);
         }
 

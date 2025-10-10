@@ -36,6 +36,7 @@ contract VestingAllocationTest is Test {
     VestingAllocation vestingAllocation;
 
     function setUp() public {
+        // Provision payment token
         paymentToken = new MockERC20("Payment Token", "PAY");
 
         // Create mock controller
@@ -49,6 +50,7 @@ contract VestingAllocationTest is Test {
             conditionContracts: new address[](0)
         });
 
+        // Provision the vesting contract
         vestingAllocation = new VestingAllocation(
             grantee,
             recipient,
@@ -64,6 +66,10 @@ contract VestingAllocationTest is Test {
                 unlockStartTime: uint48(block.timestamp)
             }),
             milestones
+        );
+        paymentToken.mint(
+            address(vestingAllocation),
+            1000 ether + 2000 ether // allocation.tokenStreamTotal + milestones[].milestoneAward
         );
     }
 
@@ -114,7 +120,10 @@ contract VestingAllocationTest is Test {
         assertFalse(vestingAllocation.terminated(), "vesting contract should not be terminated yet");
         vm.prank(address(mockController));
         vm.expectEmit(true, true, true, true);
-        emit BaseAllocation.MetaVesT_Terminated(grantee, 0); // No token recovered because it is mint-on-demand
+        emit BaseAllocation.MetaVesT_Terminated(
+            grantee,
+            2900 ether // 1000 + 2000 - 100 (vested cliff)
+        );
         vestingAllocation.terminate();
         assertTrue(vestingAllocation.terminated(), "vesting contract should be terminated");
     }
