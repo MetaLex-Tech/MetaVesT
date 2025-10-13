@@ -32,8 +32,6 @@ contract DeployYearnBorgCompensationPrerequisitesScript is SafeTxHelper, Script 
         string memory saltStr,
         YearnBorgCompensation2025_2026.Config memory config
     ) public virtual returns(
-        BorgAuth,
-        CyberAgreementRegistry,
         VestingAllocationFactory
     ) {
         address deployer = vm.addr(deployerPrivateKey);
@@ -42,29 +40,11 @@ contract DeployYearnBorgCompensationPrerequisitesScript is SafeTxHelper, Script 
         console2.log("=== DeployYearnBorgCompensationPrerequisitesScript ===");
         console2.log("Deployer: ", deployer);
         console2.log("Salt string: ", saltStr);
-        console2.log("MetaLeX SAFE: ", address(config.metalexSafe));
         console2.log("");
 
         bytes32 salt = keccak256(bytes(saltStr));
 
         vm.startBroadcast(deployerPrivateKey);
-
-        // Deploy CyberAgreementRegistry and create templates
-        // MetaLeX does not have a CyberAgreementRegistry on zkSync Era yet, so we will deploy it here
-
-        BorgAuth auth = new BorgAuth{salt: salt}(deployer);
-        CyberAgreementRegistry registry = CyberAgreementRegistry(address(new ERC1967Proxy{salt: salt}(
-            address(new CyberAgreementRegistry{salt: salt}()),
-            abi.encodeWithSelector(
-                CyberAgreementRegistry.initialize.selector,
-                address(auth)
-            )
-        )));
-
-        // Transfer CyberAgreementRegistry ownership to MetaLeX SAFE
-
-        auth.updateRole(address(config.metalexSafe), auth.OWNER_ROLE());
-        auth.zeroOwner();
 
         // Deploy MetaVesT pre-requisites
 
@@ -75,11 +55,9 @@ contract DeployYearnBorgCompensationPrerequisitesScript is SafeTxHelper, Script 
         // Output logs
 
         console2.log("Deployed addresses:");
-        console2.log("  BorgAuth: ", address(auth));
-        console2.log("  CyberAgreementRegistry: ", address(registry));
         console2.log("  VestingAllocationFactory: ", address(vestingAllocationFactory));
         console2.log("");
 
-        return (auth, registry, vestingAllocationFactory);
+        return vestingAllocationFactory;
     }
 }

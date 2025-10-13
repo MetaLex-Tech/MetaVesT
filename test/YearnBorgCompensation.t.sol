@@ -54,16 +54,14 @@ contract YearnBorgCompensationTest is
         deal(borgDelegate, 1 ether);
         deal(chad, 1 ether);
 
-        CyberAgreementRegistry registry;
         VestingAllocationFactory vestingAllocationFactory;
         metavestController controller;
         GnosisTransaction[] memory safeTxsCreateAllTemplates;
-        GnosisTransaction[] memory safeTxs2024_2025;
         GnosisTransaction[] memory safeTxs2025_2026;
 
         config2025_2026 = YearnBorgCompensation2025_2026.getDefault(vm);
 
-        // Override guardian info for tests
+        // Override recipient info for tests
 
         borgRecipientPrivateKeys = new uint256[](1);
         borgRecipientPrivateKeys[0] = privateKeySalt + 100;
@@ -84,17 +82,21 @@ contract YearnBorgCompensationTest is
         });
         deal(config2025_2026.compRecipients[0].partyInfo.evmAddress, 1 ether); // Prepare gas for compRecipients
 
-        // Deploy prerequisites
+        // Update known info
+        auth = config2025_2026.registry.AUTH();
 
-        (auth, registry, vestingAllocationFactory) = DeployYearnBorgCompensationPrerequisitesScript.deployPrerequisites(
+        // Deploy prerequisites
+        vestingAllocationFactory = DeployYearnBorgCompensationPrerequisitesScript.deployPrerequisites(
             deployerPrivateKey,
             saltStr,
             config2025_2026
         );
 
         // Update configs with deployed contracts
-        config2025_2026.registry = registry;
         config2025_2026.vestingAllocationFactory = vestingAllocationFactory;
+
+        // Update configs with test BORG delegate
+        config2025_2026.borgAgreementDelegate = borgDelegate;
 
         // Deploy 2025-2026 compensation contracts
         (controller, safeTxs2025_2026) = DeployYearnBorgCompensationScript.deployCompensation(
@@ -114,42 +116,13 @@ contract YearnBorgCompensationTest is
         }
 
         // Simulate BORG SAFE to execute txs as instructed
-
-        for (uint256 i = 0; i < safeTxs2024_2025.length; i++) {
-            vm.prank(address(config2025_2026.borgSafe));
-            (safeTxs2024_2025[i].to).call{value: safeTxs2024_2025[i].value}(safeTxs2024_2025[i].data);
-        }
         for (uint256 i = 0; i < safeTxs2025_2026.length; i++) {
             vm.prank(address(config2025_2026.borgSafe));
             (safeTxs2025_2026[i].to).call{value: safeTxs2025_2026[i].value}(safeTxs2025_2026[i].data);
         }
 
-        // Simulate MetaLeX SAFE create templates for Guardian Compensation and Service Agreement
-
-        vm.startPrank(address(config2025_2026.metalexSafe));
-
-        for (uint256 i = 0; i < config2025_2026.compRecipients.length; i ++) {
-            YearnBorgCompensation2025_2026.CompInfo memory compRecipient = config2025_2026.compRecipients[i];
-            config2025_2026.registry.createTemplate(
-                compRecipient.compTemplate.id,
-                compRecipient.compTemplate.name,
-                compRecipient.compTemplate.agreementUri,
-                compRecipient.compTemplate.globalFields,
-                compRecipient.compTemplate.partyFields
-            );
-        }
-
-        vm.stopPrank();
-
-        // Simulate BORG SAFE to delegate signing to an EOA
-        vm.prank(address(config2025_2026.borgSafe));
-        config2025_2026.registry.setDelegation(borgDelegate, block.timestamp + 60 days); // A bit longer to accommodate test cases
-        assertTrue(config2025_2026.registry.isValidDelegate(address(config2025_2026.borgSafe), borgDelegate), "delegate should be BORG SAFE's delegate");
-        
-        // Simulate fund BORG with USDC
+        // Simulate BORG SAFE to prepare USDC
         deal(config2025_2026.paymentToken, address(config2025_2026.borgSafe), 5000e6);
-        vm.prank(address(config2025_2026.borgSafe));
-        ERC20(config2025_2026.paymentToken).approve(address(config2025_2026.controller), 5000e6);
     }
 
     function run() public override(
@@ -187,6 +160,14 @@ contract YearnBorgCompensationTest is
         vm.assertEq(config2025_2026.controller.dao(), address(config2025_2026.borgSafe), "2025-2026 MetaVesTController's DAO should be BORG SAFE");
         vm.assertEq(config2025_2026.controller.registry(), address(config2025_2026.registry), "2025-2026 Unexpected MetaVesTController registry");
         vm.assertEq(config2025_2026.controller.vestingFactory(), address(config2025_2026.vestingAllocationFactory), "2025-2026 Unexpected MetaVesTController vesting allocation factory");
+
+        // BORG provisioning
+        assertTrue(config2025_2026.registry.isValidDelegate(address(config2025_2026.borgSafe), borgDelegate), "delegate should be BORG SAFE's delegate");
+        assertEq(
+            ERC20(config2025_2026.paymentToken).allowance(address(config2025_2026.borgSafe), address(config2025_2026.controller)),
+            config2025_2026.paymentTokenApprovalCap,
+            "BORG should approve metavestController to transfer USDC"
+        );
     }
 
     function test_AgreementDeadline() public {

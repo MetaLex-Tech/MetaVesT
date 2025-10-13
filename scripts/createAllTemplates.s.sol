@@ -23,27 +23,19 @@ contract CreateAllTemplatesScript is SafeTxHelper, Script {
     function run(
         YearnBorgCompensation2025_2026.Config memory config
     ) public virtual returns(GnosisTransaction[] memory) {
-        IGnosisSafe safe;
-        YearnBorgCompensation2025_2026.Config memory config;
-
-        // zkSync Era (zkSync Guardians)
-        config = YearnBorgCompensation2025_2026.getDefault(vm);
-
-        safe = config.borgSafe;
-
         GnosisTransaction[] memory safeTxs = new GnosisTransaction[](config.compRecipients.length);
         for (uint i = 0; i < config.compRecipients.length ; i++) {
-            YearnBorgCompensation2025_2026.CompInfo memory guardian = config.compRecipients[i];
+            YearnBorgCompensation2025_2026.CompInfo memory compRecipient = config.compRecipients[i];
             safeTxs[i] = GnosisTransaction({
                 to: address(config.registry),
                 value: 0 ether,
                 data: abi.encodeWithSelector(
                     CyberAgreementRegistry.createTemplate.selector,
-                    guardian.compTemplate.id,
-                    guardian.compTemplate.name,
-                    guardian.compTemplate.agreementUri,
-                    guardian.compTemplate.globalFields,
-                    guardian.compTemplate.partyFields
+                    compRecipient.compTemplate.id,
+                    compRecipient.compTemplate.name,
+                    compRecipient.compTemplate.agreementUri,
+                    compRecipient.compTemplate.globalFields,
+                    compRecipient.compTemplate.partyFields
                 )
             });
         }
@@ -52,7 +44,7 @@ contract CreateAllTemplatesScript is SafeTxHelper, Script {
 
         console2.log("");
         console2.log("=== CreateAllTemplatesScript ===");
-        console2.log("Safe: ", address(safe));
+        console2.log("Safe: ", address(config.metalexSafe));
         console2.log("Safe TXs:");
         for (uint256 i = 0 ; i < safeTxs.length ; i++) {
             console2.log("  #", i);

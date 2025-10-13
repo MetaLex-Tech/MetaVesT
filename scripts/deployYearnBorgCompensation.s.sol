@@ -6,6 +6,7 @@ import {ISafeProxyFactory, IGnosisSafe, GnosisTransaction} from "../test/lib/saf
 import {BorgAuth} from "cybercorps-contracts/src/libs/auth.sol";
 import {CyberAgreementRegistry} from "cybercorps-contracts/src/CyberAgreementRegistry.sol";
 import {ERC1967Proxy} from "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import {ERC20} from "openzeppelin-contracts/token/ERC20/ERC20.sol";
 import {SafeTxHelper} from "./lib/SafeTxHelper.sol";
 import {Script} from "forge-std/Script.sol";
 import {VestingAllocationFactory} from "../src/VestingAllocationFactory.sol";
@@ -63,28 +64,28 @@ contract DeployYearnBorgCompensationScript is SafeTxHelper, Script {
 
         vm.stopBroadcast();
 
-        // TODO WIP: re-purpose to provision USDC funds
-        // Prepare Guardian SAFE txs to:
-        // 1. Grant MetaVesT Controller MINTER ROLE
-        // 2. Set MetaVesT Controller's ZK Capped Minter
+        // Prepare BORG SAFE txs to:
+        // 1. Approve paymentToken spending from metavestController
+        // 2. Delegate agreement signing to an EOA
         GnosisTransaction[] memory safeTxs = new GnosisTransaction[](2);
-//        safeTxs[0] = GnosisTransaction({
-//            to: address(config.zkCappedMinter),
-//            value: 0,
-//            data: abi.encodeWithSelector(
-//                IZkCappedMinterV2.grantRole.selector,
-//                config.zkCappedMinter.MINTER_ROLE(),
-//                address(controller)
-//            )
-//        });
-//        safeTxs[1] = GnosisTransaction({
-//            to: address(controller),
-//            value: 0,
-//            data: abi.encodeWithSelector(
-//                controller.setZkCappedMinter.selector,
-//                address(config.zkCappedMinter)
-//            )
-//        });
+        safeTxs[0] = GnosisTransaction({
+            to: address(config.paymentToken),
+            value: 0,
+            data: abi.encodeWithSelector(
+                ERC20.approve.selector,
+                address(controller),
+                config.paymentTokenApprovalCap
+            )
+        });
+        safeTxs[1] = GnosisTransaction({
+            to: address(config.registry),
+            value: 0,
+            data: abi.encodeWithSelector(
+                CyberAgreementRegistry.setDelegation.selector,
+                config.borgAgreementDelegate,
+                block.timestamp + 14 days
+            )
+        });
 
         // Output logs
 

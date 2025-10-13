@@ -15,12 +15,13 @@ library YearnBorgCompensation2025_2026 {
 
         // External dependencies
 
-        address paymentToken;
+        address paymentToken; // USDC
 
         // Yearn BORG
 
         IGnosisSafe borgSafe;
         PartyInfo borgSafeInfo;
+        address borgAgreementDelegate; // Delegate EOA for signing agreement on BORG's behalf
 
         // MetaLeX
 
@@ -32,7 +33,8 @@ library YearnBorgCompensation2025_2026 {
         // Yearn BORG Director Compensation Agreement (one template per director for now)
 
         CompInfo[] compRecipients;
-        uint256 fixedAnnualCompensation;
+        uint256 paymentTokenApprovalCap; // Maximum `paymentToken` allowance borgSafe should approve metavestController to spend
+        uint256 fixedAnnualCompensation; // Expected annual compensation (in `paymentToken`) per recipient
         uint48 metavestVestingAndUnlockStartTime;
         BaseAllocation.Milestone[] milestones;
     }
@@ -73,6 +75,7 @@ library YearnBorgCompensation2025_2026 {
                 name: "Yearn BORG",
                 evmAddress: address(borgSafe)
             }),
+            borgAgreementDelegate: 0xDeaDbeefdEAdbeefdEadbEEFdeadbeEFdEaDbeeF, // TODO TBD
 
             // MetaLeX
 
@@ -84,6 +87,7 @@ library YearnBorgCompensation2025_2026 {
             // Yearn BORG Compensation Agreement
 
             compRecipients: loadGuardianAndComps(vm),
+            paymentTokenApprovalCap: 5000e6, // 5000 USDC * 1 recipient
             fixedAnnualCompensation: 5000e6, // 5000 USDC
             metavestVestingAndUnlockStartTime: 1756684800, // TODO TBD: for now it is 2025/09/01 00:00 UTC
             milestones: new BaseAllocation.Milestone[](0)
