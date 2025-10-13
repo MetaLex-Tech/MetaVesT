@@ -41,8 +41,6 @@ contract metavestController is UUPSUpgradeable, SafeTransferLib {
     address public vestingFactory;
 //    address public tokenOptionFactory;
 //    address public restrictedTokenFactory;
-    address public zkCappedMinter;
-    address public ZkTokenAddress;
     address internal _pendingAuthority;
     address internal _pendingDao;
 
