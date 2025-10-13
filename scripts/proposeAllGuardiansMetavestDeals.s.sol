@@ -13,6 +13,7 @@ import {SafeTxHelper} from "./lib/SafeTxHelper.sol";
 import {Script} from "forge-std/Script.sol";
 import {VestingAllocationFactory} from "../src/VestingAllocationFactory.sol";
 import {YearnBorgCompensation2025_2026} from "./lib/YearnBorgCompensation2025_2026.sol";
+import {YearnBorgCompensationSepolia2025_2026} from "./lib/YearnBorgCompensationSepolia2025_2026.sol";
 import {console2} from "forge-std/console2.sol";
 import {metavestController} from "../src/MetaVesTController.sol";
 
@@ -21,10 +22,16 @@ contract ProposeAllGuardiansMetaVestDealScript is ProposeMetaVestDealScript {
     function run() public virtual override {
         runAll(
             // Ethereum mainnet for 2025-2026
+//            vm.envUint("DEPLOYER_PRIVATE_KEY"), // proposerPrivateKey
+//            uint256(0), // delegate will sign offline
+//            uint256(keccak256("MetaLexMetaVestYearnBorgCompensationLaunchV1.0.2025-2026")), // agreementSalt
+//            YearnBorgCompensation2025_2026.getDefault(vm)
+
+            // Sepolia testnet for 2025-2026
             vm.envUint("DEPLOYER_PRIVATE_KEY"), // proposerPrivateKey
             uint256(0), // delegate will sign offline
-            uint256(keccak256("MetaLexMetaVestYearnBorgCompensationLaunchV1.0.2025-2026")), // agreementSalt
-            YearnBorgCompensation2025_2026.getDefault(vm)
+            uint256(keccak256("MetaLexMetaVestYearnBorgCompensationLaunch-testnet-V0.1")), // agreementSalt
+            YearnBorgCompensationSepolia2025_2026.getDefault(vm)
         );
     }
 

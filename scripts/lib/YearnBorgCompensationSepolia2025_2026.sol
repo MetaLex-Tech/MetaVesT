@@ -20,7 +20,7 @@ library YearnBorgCompensationSepolia2025_2026 {
 
             // External dependencies
 
-            paymentToken: 0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238, // testnet USDC by Circle
+            paymentToken: 0xF450eF4F268eaF2d3D8F9eD0354852E255A5EAEF, // mintable test USDC
             
             // Yearn BORG
 
@@ -35,8 +35,8 @@ library YearnBorgCompensationSepolia2025_2026 {
 
             metalexSafe: metalexSafe,
             registry: CyberAgreementRegistry(0xa9E808B8eCBB60Bb19abF026B5b863215BC4c134),
-            vestingAllocationFactory: VestingAllocationFactory(0xDeaDbeefdEAdbeefdEadbEEFdeadbeEFdEaDbeeF), // TODO TBD
-            controller: metavestController(0xDeaDbeefdEAdbeefdEadbEEFdeadbeEFdEaDbeeF), // TODO TBD
+            vestingAllocationFactory: VestingAllocationFactory(0x87dC5e3FBFE8B5F2B74C64eE34da8bdc9fedCb0f),
+            controller: metavestController(0xFa5Ab18bD5E02B1d6430e91C32C5CB5e7F43bB65),
 
             // Yearn BORG Compensation Agreement
 

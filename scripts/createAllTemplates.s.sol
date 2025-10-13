@@ -2,6 +2,7 @@
 pragma solidity ^0.8.24;
 
 import {YearnBorgCompensation2025_2026} from "./lib/YearnBorgCompensation2025_2026.sol";
+import {YearnBorgCompensationSepolia2025_2026} from "./lib/YearnBorgCompensationSepolia2025_2026.sol";
 import {ISafeProxyFactory, IGnosisSafe, GnosisTransaction} from "../test/lib/safe.sol";
 import {BorgAuth} from "cybercorps-contracts/src/libs/auth.sol";
 import {CyberAgreementRegistry} from "cybercorps-contracts/src/CyberAgreementRegistry.sol";
@@ -15,8 +16,13 @@ import {metavestController} from "../src/MetaVesTController.sol";
 contract CreateAllTemplatesScript is SafeTxHelper, Script {
     /// @dev For running from `forge script`
     function run() public virtual {
-        // zkSync mainnet
-        run(YearnBorgCompensation2025_2026.getDefault(vm));
+        run(
+//            // Ethereum mainnet
+//            YearnBorgCompensation2025_2026.getDefault(vm)
+
+            // Sepolia testnet
+            YearnBorgCompensationSepolia2025_2026.getDefault(vm)
+        );
     }
 
     /// @dev For running in tests

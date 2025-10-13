@@ -159,7 +159,7 @@ contract ProposeMetaVestDealScript is SafeTxHelper, Script {
             ));
             console2.log("==== JSON data end ====");
 
-            return bytes32(0);
+            return expectedContractId;
         }
     }
 }

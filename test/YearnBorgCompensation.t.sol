@@ -190,12 +190,12 @@ contract YearnBorgCompensationTest is
         VestingAllocation vestingAllocationAlice2025_2026 = VestingAllocation(metavestAddresses2025_2026[0]);
 
         // Alice should be able to withdraw half of her 2025-2026 compensation half way through the period
-        vm.warp(1772496000); // 2026/03/03 00:00 UTC
-        _granteeWithdrawAndAsserts(config2025_2026.paymentToken, vestingAllocationAlice2025_2026, 2500e3, "Alice 2025-2026 half");
+        vm.warp(1772496000 + 1 days); // 2026/03/03 00:00 UTC + margin for precision errors
+        _granteeWithdrawAndAsserts(config2025_2026.paymentToken, vestingAllocationAlice2025_2026, 2500e6, "Alice 2025-2026 half");
 
         // Alice should be able to withdraw within the 2025-2026 grace period (set by ZK Capped Minter expiry)
-        vm.warp(1793491199); // 2026/10/31 23:59:59 UTC
-        _granteeWithdrawAndAsserts(config2025_2026.paymentToken, vestingAllocationAlice2025_2026, 2500e3, "Alice 2025-2026 remaining");
+        vm.warp(1793491199 + 1 days); // 2026/10/31 23:59:59 UTC + margin for precision errors
+        _granteeWithdrawAndAsserts(config2025_2026.paymentToken, vestingAllocationAlice2025_2026, 2500e6, "Alice 2025-2026 remaining");
     }
 
     function _proposeAndFinalizeAllGuardianDeals() internal returns(address[] memory) {

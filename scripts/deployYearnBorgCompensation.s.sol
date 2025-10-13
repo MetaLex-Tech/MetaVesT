@@ -2,6 +2,7 @@
 pragma solidity ^0.8.24;
 
 import {YearnBorgCompensation2025_2026} from "./lib/YearnBorgCompensation2025_2026.sol";
+import {YearnBorgCompensationSepolia2025_2026} from "./lib/YearnBorgCompensationSepolia2025_2026.sol";
 import {ISafeProxyFactory, IGnosisSafe, GnosisTransaction} from "../test/lib/safe.sol";
 import {BorgAuth} from "cybercorps-contracts/src/libs/auth.sol";
 import {CyberAgreementRegistry} from "cybercorps-contracts/src/CyberAgreementRegistry.sol";
@@ -19,9 +20,13 @@ contract DeployYearnBorgCompensationScript is SafeTxHelper, Script {
         deployCompensation(
             vm.envUint("DEPLOYER_PRIVATE_KEY"),
 
-            // Ethereum mainnet for 2025-2026
-            "MetaLexMetaVestYearnBorgCompensationLaunchV1.0.2025-2026",
-            YearnBorgCompensation2025_2026.getDefault(vm)
+//            // Ethereum mainnet for 2025-2026
+//            "MetaLexMetaVestYearnBorgCompensationLaunchV1.0.2025-2026",
+//            YearnBorgCompensation2025_2026.getDefault(vm)
+
+            // Sepolia testnet
+            "MetaLexMetaVestYearnBorgCompensationLaunch-testnet-V0.1",
+            YearnBorgCompensationSepolia2025_2026.getDefault(vm)
         );
     }
 
