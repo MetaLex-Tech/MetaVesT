@@ -37,7 +37,7 @@ contract VestingAllocationTest is Test {
 
     function setUp() public {
         // Provision payment token
-        paymentToken = new MockERC20("Payment Token", "PAY");
+        paymentToken = new MockERC20("Payment Token", "PAY", 18);
 
         // Create mock controller
         mockController = new MockMetaVesTController(address(this));
@@ -76,6 +76,38 @@ contract VestingAllocationTest is Test {
     function test_Metadata() public {
         assertEq(vestingAllocation.grantee(), grantee, "Unexpected grantee");
         assertEq(vestingAllocation.recipient(), recipient, "Unexpected recipient");
+    }
+
+    /// @notice Since MetaVesT uses ERC20 token's native precision, one must beware of precision loss
+    /// when calculating the vesting/unlocking rates
+    function test_LowPrecisionLowAmount() public {
+        MockERC20 lowPrecisionPaymentToken = new MockERC20("Low Precision Payment Token", "LPAY", 6);
+
+        // Provision the vesting contract
+
+        // Seemingly innocent rate of 10 tokens over a year = 10 / (365 * 24 * 3600) = 0.0000003170979198 token / sec.
+        // However, it would be truncated to 0 if represented in 6 decimals
+        uint160 rate = uint160(10e6) / 365 days;
+
+        vestingAllocation = new VestingAllocation(
+            grantee,
+            recipient,
+            address(mockController),
+            BaseAllocation.Allocation({
+                tokenContract: address(lowPrecisionPaymentToken),
+                tokenStreamTotal: 10e6,
+                vestingCliffCredit: 0e6,
+                unlockingCliffCredit: 0e6,
+                vestingRate: rate,
+                vestingStartTime: uint48(block.timestamp),
+                unlockRate: rate,
+                unlockStartTime: uint48(block.timestamp)
+            }),
+            new BaseAllocation.Milestone[](0)
+        );
+
+        skip(30 days);
+        assertEq(vestingAllocation.getAmountWithdrawable(), 0e6, "Expect low rate & decimals to lead to underflow");
     }
 
     function test_Withdraw() public {

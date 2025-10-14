@@ -148,8 +148,14 @@ abstract contract BaseAllocation is ReentrancyGuard, SafeTransferLib{
             uint128 vestingCliffCredit; // lump sum of tokens which become vested at 'startTime' and will be added to '_linearVested'
             uint128 unlockingCliffCredit; // lump sum of tokens which become unlocked at 'startTime' and will be added to '_linearUnlocked'
             uint160 vestingRate; // tokens per second that become vested; if RESTRICTED this amount corresponds to 'lapse rate' for tokens that become non-repurchasable
+                                 // WARNING: since it uses the token's native decimals, there's a possibility of underflow if both the rate and decimals are low
+                                 // For example, 10 tokens/year would mean 10 / (365 * 24 * 3600) = 0.0000003170979198 token/sec.
+                                 // If decimals are only 6, the rate would be truncated to 0 and leads to unexpected results.
             uint48 vestingStartTime; // if RESTRICTED this amount corresponds to 'lapse start time'
             uint160 unlockRate; // tokens per second that become unlocked;
+                                // WARNING: since it uses the token's native decimals, there's a possibility of underflow if both the rate and decimals are low
+                                // For example, 10 tokens/year would mean 10 / (365 * 24 * 3600) = 0.0000003170979198 token/sec.
+                                // If decimals are only 6, the rate would be truncated to 0 and leads to unexpected results.
             uint48 unlockStartTime; // start of the linear unlock
             address tokenContract; // contract address of the ERC20 token included in the MetaVesT
         }

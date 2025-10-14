@@ -11,8 +11,7 @@ import {CyberAgreementUtils} from "cybercorps-contracts/test/libs/CyberAgreement
 import {MockERC20} from "../mocks/MockERC20.sol";
 
 contract MetaVesTControllerTestBase is Test {
-    // TODO WIP: provision fundings
-    MockERC20 paymentToken = new MockERC20("Payment Token", "PAY");
+    MockERC20 paymentToken = new MockERC20("Payment Token", "PAY", 18);
 
     address deployer = address(0x2);
     address guardianSafe = address(0x3);
