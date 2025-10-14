@@ -28,6 +28,7 @@ contract VestingAllocation is BaseAllocation {
         if (_grantee == address(0)) revert MetaVesT_ZeroAddress();
         if (_recipient == address(0)) revert MetaVesT_ZeroAddress();
         if (_allocation.vestingRate >  1000*1e18 || _allocation.unlockRate > 1000*1e18) revert MetaVesT_RateTooHigh();
+        if (_allocation.vestingRate <  100 || _allocation.unlockRate < 100) revert MetaVesT_RateTooLow();
 
         //set vesting allocation variables
         allocation.tokenContract = _allocation.tokenContract;

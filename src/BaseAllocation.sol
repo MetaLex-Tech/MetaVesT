@@ -111,6 +111,7 @@ abstract contract BaseAllocation is ReentrancyGuard, SafeTransferLib{
         error MetaVesT_OnlyAuthority();
         error MetaVesT_ZeroAddress();
         error MetaVesT_RateTooHigh();
+        error MetaVesT_RateTooLow();
         error MetaVesT_ZeroAmount();
         error MetaVesT_MilestoneIndexOutOfRange();
         error MetaVesT_NotTerminated();

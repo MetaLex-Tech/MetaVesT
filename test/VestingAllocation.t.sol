@@ -80,7 +80,7 @@ contract VestingAllocationTest is Test {
 
     /// @notice Since MetaVesT uses ERC20 token's native precision, one must beware of precision loss
     /// when calculating the vesting/unlocking rates
-    function test_LowPrecisionLowAmount() public {
+    function test_RevertIf_LowPrecisionLowAmount() public {
         MockERC20 lowPrecisionPaymentToken = new MockERC20("Low Precision Payment Token", "LPAY", 6);
 
         // Provision the vesting contract
@@ -89,6 +89,7 @@ contract VestingAllocationTest is Test {
         // However, it would be truncated to 0 if represented in 6 decimals
         uint160 rate = uint160(10e6) / 365 days;
 
+        vm.expectRevert(BaseAllocation.MetaVesT_RateTooLow.selector);
         vestingAllocation = new VestingAllocation(
             grantee,
             recipient,
@@ -105,9 +106,6 @@ contract VestingAllocationTest is Test {
             }),
             new BaseAllocation.Milestone[](0)
         );
-
-        skip(30 days);
-        assertEq(vestingAllocation.getAmountWithdrawable(), 0e6, "Expect low rate & decimals to lead to underflow");
     }
 
     function test_Withdraw() public {
