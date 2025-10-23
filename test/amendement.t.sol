@@ -423,7 +423,7 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
 //        token.approve(address(controller), 1100e18);
 //
 //        return controller.createMetavest(
-//            metavestController.metavestType.TokenOption,
+//            MetaVestType.TokenOption,
 //            grantee,
 //            allocation,
 //            milestones,
@@ -457,7 +457,7 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
 //        token.approve(address(controller), 1100e18);
 //
 //        return controller.createMetavest(
-//            metavestController.metavestType.RestrictedTokenAward,
+//            MetaVestType.RestrictedTokenAward,
 //            grantee,
 //            allocation,
 //            milestones,

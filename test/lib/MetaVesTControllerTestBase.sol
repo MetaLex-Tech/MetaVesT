@@ -9,8 +9,11 @@ import {BorgAuth} from "cybercorps-contracts/src/libs/auth.sol";
 import {CyberAgreementRegistry} from "cybercorps-contracts/src/CyberAgreementRegistry.sol";
 import {CyberAgreementUtils} from "cybercorps-contracts/test/libs/CyberAgreementUtils.sol";
 import {MockERC20} from "../mocks/MockERC20.sol";
+import {MetaVestDealLib, MetaVestDeal} from "../../src/lib/MetaVestDealLib.sol";
 
 contract MetaVesTControllerTestBase is Test {
+    using MetaVestDealLib for MetaVestDeal;
+
     MockERC20 paymentToken = new MockERC20("Payment Token", "PAY", 18);
 
     address deployer = address(0x2);
@@ -180,10 +183,11 @@ contract MetaVesTControllerTestBase is Test {
         bytes32 contractId = controller.proposeAndSignDeal(
             templateId,
             agreementSalt,
-            metavestController.metavestType.Vesting,
-            grantee,
-            allocation,
-            milestones,
+            MetaVestDealLib.draft().setVesting(
+                grantee,
+                allocation,
+                milestones
+            ),
             globalValues,
             parties,
             partyValues,
@@ -221,7 +225,7 @@ contract MetaVesTControllerTestBase is Test {
         string memory partyName,
         bytes memory expectRevertData
     ) internal returns(address) {
-        metavestController.DealData memory deal = controller.getDeal(contractId);
+        MetaVestDeal memory deal = controller.getDeal(contractId);
 
         string[] memory globalValues = new string[](11);
         globalValues[0] = "0"; // metavestType: Vesting

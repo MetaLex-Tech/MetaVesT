@@ -122,7 +122,7 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
 //        });
 //
 //        address tokenOptionAllocation = controller.createMetavest(
-//            metavestController.metavestType.TokenOption,
+//            MetaVestType.TokenOption,
 //            grantee,
 //            allocation,
 //            milestones,
@@ -159,7 +159,7 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
 //        token.approve(address(controller), 1100e18);
 //
 //        address restrictedTokenAward = controller.createMetavest(
-//            metavestController.metavestType.RestrictedTokenAward,
+//            MetaVestType.RestrictedTokenAward,
 //            grantee,
 //            allocation,
 //            milestones,
@@ -754,7 +754,7 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
 //        token.approve(address(controller), 2000e18);
 //
 //        return controller.createMetavest(
-//            metavestController.metavestType.TokenOption,
+//            MetaVestType.TokenOption,
 //            grantee,
 //            allocation,
 //            milestones,
@@ -789,7 +789,7 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
 //        token.approve(address(controller), 2100e18);
 //
 //        return controller.createMetavest(
-//            metavestController.metavestType.RestrictedTokenAward,
+//            MetaVestType.RestrictedTokenAward,
 //            grantee,
 //            allocation,
 //            milestones,
@@ -824,7 +824,7 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
 //        token.approve(address(controller), 2100e18);
 //
 //        return controller.createMetavest(
-//            metavestController.metavestType.RestrictedTokenAward,
+//            MetaVestType.RestrictedTokenAward,
 //            grantee,
 //            allocation,
 //            milestones,

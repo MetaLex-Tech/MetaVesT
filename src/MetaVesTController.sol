@@ -10,6 +10,7 @@ pragma solidity ^0.8.24;
 
 import {ICyberAgreementRegistry} from "cybercorps-contracts/src/interfaces/ICyberAgreementRegistry.sol";
 import {UUPSUpgradeable} from "openzeppelin-contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import {MetaVestDealLib, MetaVestDeal, MetaVestType} from "./lib/MetaVestDealLib.sol";
 import "./BaseAllocation.sol";
 //import "./RestrictedTokenAllocation.sol";
 import "./interfaces/IAllocationFactory.sol";
@@ -63,22 +64,7 @@ contract metavestController is UUPSUpgradeable, SafeTransferLib {
         mapping(address => uint256) appliedProposalCreatedAt;
         mapping(address => uint256) voterPower;
     }
-
-    struct DealData {
-        bytes32 agreementId;
-        metavestType _metavestType;
-        address grantee;
-        address paymentToken;
-        uint256 exercisePrice;
-        uint256 shortStopDuration;
-        uint256 longStopDate;
-        BaseAllocation.Allocation allocation;
-        BaseAllocation.Milestone[] milestones;
-        address metavest;
-    }
-
-    enum metavestType { Vesting, TokenOption, RestrictedTokenAward }
-
+    
     /// @notice maps a function's signature to a Condition contract address
     mapping(bytes4 => address[]) public functionToConditions;
 
@@ -94,7 +80,7 @@ contract metavestController is UUPSUpgradeable, SafeTransferLib {
     mapping(bytes32 => bool) public setMajorityVoteActive;
 
     /// @notice granteeId => granteeData
-    mapping(bytes32 => DealData) public deals;
+    mapping(bytes32 => MetaVestDeal) public deals;
 
     /// @notice Maps agreement IDs to arrays of counter party values for closed deals.
     mapping(bytes32 => string[]) public counterPartyValues;
@@ -120,7 +106,7 @@ contract metavestController is UUPSUpgradeable, SafeTransferLib {
     event MetaVesTController_DealProposed(
         bytes32 indexed agreementId,
         address indexed grantee,
-        metavestType metavestType,
+        MetaVestType MetaVestType,
         BaseAllocation.Allocation allocation,
         BaseAllocation.Milestone[] milestones,
         bool hasSecret,
@@ -166,7 +152,7 @@ contract metavestController is UUPSUpgradeable, SafeTransferLib {
     error MetaVestController_MetaVestNotInSet();
     error MetaVesTController_SetAlreadyExists();
     error MetaVesTController_StringTooLong();
-    error MetaVesTController_TypeNotSupported(metavestType _type);
+    error MetaVesTController_TypeNotSupported(MetaVestType _type);
     error MetaVesTController_DealAlreadyFinalized();
     error MetaVesTController_DealVoided();
     error MetaVesTController_CounterPartyNotFound();
@@ -285,10 +271,7 @@ contract metavestController is UUPSUpgradeable, SafeTransferLib {
     function proposeAndSignDeal(
         bytes32 templateId,
         uint256 salt,
-        metavestType _metavestType,
-        address grantee,
-        BaseAllocation.Allocation memory allocation,
-        BaseAllocation.Milestone[] memory milestones,
+        MetaVestDeal memory dealDraft,
         string[] memory globalValues,
         address[] memory parties,
         string[][] memory partyValues,
@@ -297,62 +280,10 @@ contract metavestController is UUPSUpgradeable, SafeTransferLib {
         uint256 expiry
     ) external returns (bytes32) {
 
+        // TODO validate parties against deal
+
         // Call internal function to avoid stack-too-deep errors
-        bytes32 agreementId = _createAgreement(
-            templateId,
-            salt,
-            globalValues,
-            parties,
-            partyValues,
-            secretHash,
-            expiry
-        );
-
-        if (partyValues.length < 2) revert MetaVesTController_CounterPartyNotFound();
-        if (partyValues[1].length != partyValues[0].length) revert MetaVesTController_PartyValuesLengthMismatch();
-        counterPartyValues[agreementId] = partyValues[1];
-
-        ICyberAgreementRegistry(registry).signContractFor(
-            authority, // First party (grantor) should always be the authority
-            agreementId,
-            partyValues[0],
-            signature,
-            false, // Not meant for anyone else other than the signer
-            "" // Signer == proposer, no secret needed
-        );
-
-        deals[agreementId] = DealData({
-            agreementId: agreementId,
-            _metavestType: _metavestType,
-            grantee: grantee,
-            paymentToken: address(0), // TODO WIP
-            exercisePrice: 0, // TODO WIP
-            shortStopDuration: 0, // TODO WIP
-            longStopDate: 0, // TODO WIP
-            allocation: allocation,
-            milestones: milestones,
-            metavest: address(0) // Not deployed yet
-        });
-        dealIds.push(agreementId);
-
-        emit MetaVesTController_DealProposed(
-            agreementId, grantee, _metavestType, allocation, milestones,
-            secretHash > 0,
-            registry
-        );
-        return agreementId;
-    }
-
-    function _createAgreement(
-        bytes32 templateId,
-        uint256 salt,
-        string[] memory globalValues,
-        address[] memory parties,
-        string[][] memory partyValues,
-        bytes32 secretHash,
-        uint256 expiry
-    ) internal returns (bytes32) {
-        return ICyberAgreementRegistry(registry).createContract(
+        dealDraft.agreementId = ICyberAgreementRegistry(registry).createContract(
             templateId,
             salt,
             globalValues,
@@ -362,8 +293,32 @@ contract metavestController is UUPSUpgradeable, SafeTransferLib {
             address(this),
             expiry
         );
+
+        if (partyValues.length < 2) revert MetaVesTController_CounterPartyNotFound();
+        if (partyValues[1].length != partyValues[0].length) revert MetaVesTController_PartyValuesLengthMismatch();
+        counterPartyValues[dealDraft.agreementId] = partyValues[1];
+
+        ICyberAgreementRegistry(registry).signContractFor(
+            authority, // First party (grantor) should always be the authority
+            dealDraft.agreementId,
+            partyValues[0],
+            signature,
+            false, // Not meant for anyone else other than the signer
+            "" // Signer == proposer, no secret needed
+        );
+
+        deals[dealDraft.agreementId] = dealDraft;
+        dealIds.push(dealDraft.agreementId);
+
+        emit MetaVesTController_DealProposed(
+            dealDraft.agreementId, dealDraft.grantee, dealDraft.metavestType, dealDraft.allocation, dealDraft.milestones,
+            secretHash > 0,
+            registry
+        );
+        return dealDraft.agreementId;
     }
 
+    // TODO handle cases when agreement is signed externally
     function signDealAndCreateMetavest(
         address grantee,
         address recipient,
@@ -394,17 +349,17 @@ contract metavestController is UUPSUpgradeable, SafeTransferLib {
     }
 
     function _createMetavest(bytes32 agreementId, address recipient) internal returns (address) {
-        DealData storage deal = deals[agreementId];
+        MetaVestDeal storage deal = deals[agreementId];
 
-        if(deal._metavestType == metavestType.Vesting)
+        if(deal.metavestType == MetaVestType.Vesting)
         {
             deal.metavest = createVestingAllocation(deal, recipient);
         }
-        else if(deal._metavestType == metavestType.TokenOption)
+        else if(deal.metavestType == MetaVestType.TokenOption)
         {
             deal.metavest = createTokenOptionAllocation(deal, recipient);
         }
-        else if(deal._metavestType == metavestType.RestrictedTokenAward)
+        else if(deal.metavestType == MetaVestType.RestrictedTokenAward)
         {
             deal.metavest = createRestrictedTokenAward(deal, recipient);
         }
@@ -419,7 +374,7 @@ contract metavestController is UUPSUpgradeable, SafeTransferLib {
     
 
     function validateInputParameters(
-        DealData storage deal,
+        MetaVestDeal storage deal,
         address recipient
     ) internal view {
         // TODO must differentiate metavest types
@@ -456,7 +411,7 @@ contract metavestController is UUPSUpgradeable, SafeTransferLib {
     }
 
     // TODO why doesn't it need conditionCheck?
-    function createVestingAllocation(DealData storage deal, address recipient) internal returns (address){
+    function createVestingAllocation(MetaVestDeal storage deal, address recipient) internal returns (address){
         validateInputParameters(deal, recipient);
         validateAllocation(deal.allocation);
         uint256 _milestoneTotal = validateAndCalculateMilestones(deal.milestones);
@@ -481,7 +436,7 @@ contract metavestController is UUPSUpgradeable, SafeTransferLib {
         return vestingAllocation;
     }
 
-    function createTokenOptionAllocation(DealData storage deal, address recipient) internal conditionCheck returns (address) {
+    function createTokenOptionAllocation(MetaVestDeal storage deal, address recipient) internal conditionCheck returns (address) {
         validateInputParameters(deal, recipient);
         validateAllocation(deal.allocation);
         uint256 _milestoneTotal = validateAndCalculateMilestones(deal.milestones);
@@ -506,7 +461,7 @@ contract metavestController is UUPSUpgradeable, SafeTransferLib {
         return tokenOptionAllocation;
     }
 
-    function createRestrictedTokenAward(DealData storage deal, address recipient) internal conditionCheck returns (address){
+    function createRestrictedTokenAward(MetaVestDeal storage deal, address recipient) internal conditionCheck returns (address){
         validateInputParameters(deal, recipient);
         validateAllocation(deal.allocation);
         uint256 _milestoneTotal = validateAndCalculateMilestones(deal.milestones);
@@ -885,7 +840,7 @@ contract metavestController is UUPSUpgradeable, SafeTransferLib {
         emit MetaVesTController_AddressRemovedFromSet(_name, _metaVest);
     }
 
-    function getDeal(bytes32 agreementId) public view returns (DealData memory) {
+    function getDeal(bytes32 agreementId) public view returns (MetaVestDeal memory) {
         return deals[agreementId];
     }
 
