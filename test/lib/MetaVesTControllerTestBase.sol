@@ -4,23 +4,14 @@ pragma solidity ^0.8.24;
 import "forge-std/Test.sol";
 import "../../src/MetaVesTController.sol";
 import "../../src/VestingAllocationFactory.sol";
-import "../../src/interfaces/zk-governance/IZkTokenV1.sol";
-import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import {ERC1967Proxy} from "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {BorgAuth} from "cybercorps-contracts/src/libs/auth.sol";
 import {CyberAgreementRegistry} from "cybercorps-contracts/src/CyberAgreementRegistry.sol";
 import {CyberAgreementUtils} from "cybercorps-contracts/test/libs/CyberAgreementUtils.sol";
+import {MockERC20} from "../mocks/MockERC20.sol";
 
 contract MetaVesTControllerTestBase is Test {
-//    // zkSync Era Sepolia @ 5576300
-//    address zkTokenAdmin = 0x0d9DD6964692a0027e1645902536E7A3b34AA1d7;
-//    IZkTokenV1 zkToken = IZkTokenV1(0x69e5DC39E2bCb1C17053d2A4ee7CAEAAc5D36f96);
-//    IZkCappedMinterV2Factory zkCappedMinterFactory = IZkCappedMinterV2Factory(0x329CE320a0Ef03F8c0E01195604b5ef7D3Fb150E);
-    // zkSync Era mainnet @ 63631890
-    address zkTokenAdmin = 0xe5d21A9179CA2E1F0F327d598D464CcF60d89c3d;
-    IZkTokenV1 zkToken = IZkTokenV1(0x5A7d6b2F92C77FAD6CCaBd7EE0624E64907Eaf3E);
-    IZkCappedMinterV2Factory zkCappedMinterFactory = IZkCappedMinterV2Factory(0x0400E6bc22B68686Fb197E91f66E199C6b0DDD6a);
-
-    IZkCappedMinterV2 zkCappedMinter;
+    MockERC20 paymentToken = new MockERC20("Payment Token", "PAY", 18);
 
     address deployer = address(0x2);
     address guardianSafe = address(0x3);
@@ -95,15 +86,13 @@ contract MetaVesTControllerTestBase is Test {
 
     function _granteeWithdrawAndAsserts(VestingAllocation vestingAllocation, uint256 amount, string memory assertName) internal {
         address grantee = vestingAllocation.grantee();
-        uint256 balanceBefore = zkToken.balanceOf(grantee);
+        uint256 balanceBefore = paymentToken.balanceOf(grantee);
 
         vm.prank(grantee);
-        vm.expectEmit(true, true, true, true);
-        emit metavestController.MetaVesTController_Minted(address(vestingAllocation), grantee, address(zkCappedMinter), amount);
         vestingAllocation.withdraw(amount);
 
-        assertEq(zkToken.balanceOf(grantee), balanceBefore + amount, string(abi.encodePacked(assertName, ": unexpected received amount")));
-        assertEq(zkToken.balanceOf(address(vestingAllocation)), 0, string(abi.encodePacked(assertName, ": vesting contract should not have any token (it mints on-demand)")));
+        assertEq(paymentToken.balanceOf(grantee), balanceBefore + amount, string(abi.encodePacked(assertName, ": unexpected received amount")));
+        assertEq(paymentToken.balanceOf(address(vestingAllocation)), 0, string(abi.encodePacked(assertName, ": vesting contract should not have any token (it mints on-demand)")));
     }
 
     function _proposeAndSignDeal(

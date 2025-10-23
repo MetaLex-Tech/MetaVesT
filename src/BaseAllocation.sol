@@ -1,7 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-pragma solidity ^0.8.24;
-
-import "./interfaces/zk-governance/IZkCappedMinterV2.sol";
+pragma solidity 0.8.28;
 
 /// @notice interface to a MetaLeX condition contract
 /// @dev see https://github.com/MetaLex-Tech/BORG-CORE/tree/main/src/libs/conditions
@@ -17,7 +15,6 @@ interface IERC20M {
 
 interface IController { 
     function authority() external view returns (address);
-    function mint(address recipient, uint256 amount) external;
 }
 
 /// @notice Solady's SafeTransferLib 'SafeTransfer()' and 'SafeTransferFrom()'; (https://github.com/Vectorized/solady/blob/main/src/utils/SafeTransferLib.sol)
@@ -114,6 +111,7 @@ abstract contract BaseAllocation is ReentrancyGuard, SafeTransferLib{
         error MetaVesT_OnlyAuthority();
         error MetaVesT_ZeroAddress();
         error MetaVesT_RateTooHigh();
+        error MetaVesT_RateTooLow();
         error MetaVesT_ZeroAmount();
         error MetaVesT_MilestoneIndexOutOfRange();
         error MetaVesT_NotTerminated();
@@ -151,8 +149,14 @@ abstract contract BaseAllocation is ReentrancyGuard, SafeTransferLib{
             uint128 vestingCliffCredit; // lump sum of tokens which become vested at 'startTime' and will be added to '_linearVested'
             uint128 unlockingCliffCredit; // lump sum of tokens which become unlocked at 'startTime' and will be added to '_linearUnlocked'
             uint160 vestingRate; // tokens per second that become vested; if RESTRICTED this amount corresponds to 'lapse rate' for tokens that become non-repurchasable
+                                 // WARNING: since it uses the token's native decimals, there's a possibility of underflow if both the rate and decimals are low
+                                 // For example, 10 tokens/year would mean 10 / (365 * 24 * 3600) = 0.0000003170979198 token/sec.
+                                 // If decimals are only 6, the rate would be truncated to 0 and leads to unexpected results.
             uint48 vestingStartTime; // if RESTRICTED this amount corresponds to 'lapse start time'
             uint160 unlockRate; // tokens per second that become unlocked;
+                                // WARNING: since it uses the token's native decimals, there's a possibility of underflow if both the rate and decimals are low
+                                // For example, 10 tokens/year would mean 10 / (365 * 24 * 3600) = 0.0000003170979198 token/sec.
+                                // If decimals are only 6, the rate would be truncated to 0 and leads to unexpected results.
             uint48 unlockStartTime; // start of the linear unlock
             address tokenContract; // contract address of the ERC20 token included in the MetaVesT
         }
@@ -271,7 +275,8 @@ abstract contract BaseAllocation is ReentrancyGuard, SafeTransferLib{
             if(terminated) revert MetaVesT_AlreadyTerminated();
             if (_milestoneIndex >= milestones.length) revert MetaVesT_MilestoneIndexOutOfRange();
             uint256 _milestoneAward = milestones[_milestoneIndex].milestoneAward;
-            // No need to transfer the milestone award back to the authority since the tokens are minted on-demand
+            //transfer the milestone award back to the authority, we check in the controller to ensure only uncompleted milestones can be removed
+            safeTransfer(allocation.tokenContract, getAuthority(), _milestoneAward);
             delete milestones[_milestoneIndex];
             milestones[_milestoneIndex] = milestones[milestones.length - 1];
             milestones.pop();
@@ -320,9 +325,9 @@ abstract contract BaseAllocation is ReentrancyGuard, SafeTransferLib{
         /// @param _amount - the amount of tokens to withdraw
         function withdraw(uint256 _amount) external nonReentrant onlyGrantee {
             if (_amount == 0) revert MetaVesT_ZeroAmount();
-            if (_amount > getAmountWithdrawable()) revert MetaVesT_MoreThanAvailable();
+            if (_amount > getAmountWithdrawable() || _amount > IERC20M(allocation.tokenContract).balanceOf(address(this))) revert MetaVesT_MoreThanAvailable();
             tokensWithdrawn += _amount;
-            IController(controller).mint(recipient, _amount);
+            safeTransfer(allocation.tokenContract, recipient, _amount);
             emit MetaVesT_Withdrawn(msg.sender, recipient, allocation.tokenContract, _amount);
         }
 

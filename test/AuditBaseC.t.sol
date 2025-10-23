@@ -4,8 +4,25 @@ import "forge-std/Test.sol";
 
 import "../test/controller.t.sol";
 
-// TODO WIP: non-VestingAllocation tests are disabled until adopted ZkCappedMinter
+// TODO WIP: non-VestingAllocation tests are disabled until reviewed with new design with CyberAgreementRegistry
 contract Audit is MetaVestControllerTest {
+
+    function test_RevertIf_AuditTerminateFailAfterWithdraw() public {
+        // template from testTerminateVestAndRecoverSlowUnlock
+        address vestingAllocation = createDummyVestingAllocationSlowUnlock();
+        uint256 snapshot = paymentToken.balanceOf(authority);
+        VestingAllocation(vestingAllocation).confirmMilestone(0);
+        vm.warp(block.timestamp + 25 seconds);
+        vm.startPrank(grantee);
+        VestingAllocation(vestingAllocation).withdraw(VestingAllocation(vestingAllocation).getAmountWithdrawable());
+        vm.warp(block.timestamp + 25 seconds);
+        VestingAllocation(vestingAllocation).withdraw(VestingAllocation(vestingAllocation).getAmountWithdrawable());
+        vm.stopPrank();
+
+        // InsufficientBalance
+        vm.expectRevert();
+        controller.terminateMetavestVesting(vestingAllocation);
+    }
 
      function testAuditTerminateFailAfterWithdrawFixCheck() public {
         // template from testTerminateVestAndRecoverSlowUnlock

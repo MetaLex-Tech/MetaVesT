@@ -8,16 +8,13 @@ pragma solidity ^0.8.20;
 import "../src/VestingAllocation.sol";
 import "../src/VestingAllocationFactory.sol";
 import "../src/interfaces/IAllocationFactory.sol";
-import "../src/interfaces/zk-governance/IZkTokenV1.sol";
 import "./lib/MetaVesTControllerTestBase.sol";
 import "./mocks/MockCondition.sol";
-import {Strings} from "zk-governance/l2-contracts/lib/openzeppelin-contracts/contracts/utils/Strings.sol";
 import {ERC1967ProxyLib} from "./lib/ERC1967ProxyLib.sol";
-import {ZkCappedMinterV2} from "zk-governance/l2-contracts/src/ZkCappedMinterV2.sol";
 
 contract MetaVestControllerTest is MetaVesTControllerTestBase {
     using ERC1967ProxyLib for address;
-    
+
     address authority = guardianSafe;
     address dao = guardianSafe;
     address grantee = alice;
@@ -48,28 +45,17 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
             )
         )));
 
-        vm.startPrank(zkTokenAdmin);
-
-        // Simulate ZK Capped Minter v2 deployemnt
-        zkCappedMinter = IZkCappedMinterV2(zkCappedMinterFactory.createCappedMinter(
-            address(zkToken),
-            address(zkTokenAdmin),
-            cap,
-            cappedMinterStartTime,
-            cappedMinterExpirationTime,
-            uint256(salt)
-        ));
-
-        // Simulate TPP approval
-        zkToken.grantRole(zkToken.MINTER_ROLE(), address(zkCappedMinter));
-
-        // Simulate capped minter granting permission to MetaVesTcontroller
-        zkCappedMinter.grantRole(zkCappedMinter.MINTER_ROLE(), address(controller));
-
         vm.stopPrank();
 
+        // Prepare funds
+        paymentToken.mint(
+            address(guardianSafe),
+            9999 ether
+        );
+        vm.prank(address(guardianSafe));
+        paymentToken.approve(address(controller), 9999 ether);
+
         vm.startPrank(guardianSafe);
-        controller.setZkCappedMinter(address(zkCappedMinter)); // Guardian SAFE to set capped minter on MetaVesTController
         controller.createSet("testSet");
         vm.stopPrank();
 
@@ -86,15 +72,14 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
             delegatePrivateKey,
             alice,
             BaseAllocation.Allocation({
-                tokenContract: address(zkToken),
-                // 100k ZK total, the first half unlocks with a cliff and the second half unlocks over an year
+                tokenContract: address(paymentToken),
                 tokenStreamTotal: 60 ether,
                 vestingCliffCredit: 30 ether,
                 unlockingCliffCredit: 30 ether,
                 vestingRate: 1 ether,
-                vestingStartTime: zkCappedMinter.START_TIME(), // start along with capped minter
+                vestingStartTime: uint48(block.timestamp),
                 unlockRate: 1 ether,
-                unlockStartTime: zkCappedMinter.START_TIME() // start along with capped minter
+                unlockStartTime: uint48(block.timestamp)
             }),
             new BaseAllocation.Milestone[](0),
             "Alice",
@@ -118,7 +103,7 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
 
 //    function testCreateTokenOptionAllocation() public {
 //        BaseAllocation.Allocation memory allocation = BaseAllocation.Allocation({
-//            tokenContract: address(zkToken),
+//            tokenContract: address(paymentToken),
 //            tokenStreamTotal: 1000e18,
 //            vestingCliffCredit: 100e18,
 //            unlockingCliffCredit: 100e18,
@@ -147,13 +132,13 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
 //            0
 //        );
 //
-//        assertEq(zkToken.balanceOf(address(tokenOptionAllocation)), 0, "Vesting contract should not have any token (it mints on-demand)");
+//        assertEq(paymentToken.balanceOf(address(tokenOptionAllocation)), 0, "Vesting contract should not have any token (it mints on-demand)");
 //        //assertEq(controller.tokenOptionAllocations(grantee, 0), tokenOptionAllocation);
 //    }
 
 //    function testCreateRestrictedTokenAward() public {
 //        BaseAllocation.Allocation memory allocation = BaseAllocation.Allocation({
-//            tokenContract: address(zkToken),
+//            tokenContract: address(token),
 //            tokenStreamTotal: 1000e18,
 //            vestingCliffCredit: 100e18,
 //            unlockingCliffCredit: 100e18,
@@ -171,6 +156,8 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
 //            conditionContracts: new address[](0)
 //        });
 //
+//        token.approve(address(controller), 1100e18);
+//
 //        address restrictedTokenAward = controller.createMetavest(
 //            metavestController.metavestType.RestrictedTokenAward,
 //            grantee,
@@ -183,7 +170,7 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
 //
 //        );
 //
-//        assertEq(zkToken.balanceOf(address(restrictedTokenAward)), 0, "Vesting contract should not have any token (it mints on-demand)");
+//        assertEq(token.balanceOf(restrictedTokenAward), 1100e18);
 //        //assertEq(controller.restrictedTokenAllocations(grantee, 0), restrictedTokenAward);
 //    }
 
@@ -335,17 +322,23 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
         address vestingAllocation = createDummyVestingAllocation();
 
         BaseAllocation.Milestone memory newMilestone = BaseAllocation.Milestone({
-            milestoneAward: 50e18,
+            milestoneAward: 50 ether,
             unlockOnCompletion: true,
             complete: false,
             conditionContracts: new address[](0)
         });
 
+        uint256 balanceBefore = paymentToken.balanceOf(address(vestingAllocation));
         vm.prank(authority);
         controller.addMetavestMilestone(vestingAllocation, newMilestone);
+        assertEq(
+            paymentToken.balanceOf(address(vestingAllocation)) - balanceBefore,
+            50 ether,
+            "vesting contract should receive token amount add by the milestone"
+        );
 
-       // BaseAllocation.Milestone memory addedMilestone = BaseAllocation(vestingAllocation).milestones[0];
-      //  assertEq(addedMilestone.milestoneAward, 50e18);
+        (uint256 milestoneAward, , ) = BaseAllocation(vestingAllocation).milestones(1);
+        assertEq(milestoneAward, 50 ether, "milestone should be added");
     }
 
     function testUpdateUnlockRate() public {
@@ -566,7 +559,7 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
             delegatePrivateKey,
             alice, // = grantee
             BaseAllocation.Allocation({
-                tokenContract: address(zkToken),
+                tokenContract: address(paymentToken),
                 tokenStreamTotal: 1000 ether,
                 vestingCliffCredit: 100 ether,
                 unlockingCliffCredit: 100 ether,
@@ -607,7 +600,7 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
             delegatePrivateKey,
             alice, // = grantee
             BaseAllocation.Allocation({
-                tokenContract: address(zkToken),
+                tokenContract: address(paymentToken),
                 tokenStreamTotal: 1000 ether,
                 vestingCliffCredit: 100 ether,
                 unlockingCliffCredit: 100 ether,
@@ -647,7 +640,7 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
             delegatePrivateKey,
             alice, // = grantee
             BaseAllocation.Allocation({
-                tokenContract: address(zkToken),
+                tokenContract: address(paymentToken),
                 tokenStreamTotal: 1000 ether,
                 vestingCliffCredit: 100 ether,
                 unlockingCliffCredit: 100 ether,
@@ -681,7 +674,7 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
             delegatePrivateKey,
             alice, // = grantee
             BaseAllocation.Allocation({
-                tokenContract: address(zkToken),
+                tokenContract: address(paymentToken),
                 tokenStreamTotal: 1000 ether,
                 vestingCliffCredit: 0 ether,
                 unlockingCliffCredit: 0 ether,
@@ -715,7 +708,7 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
             delegatePrivateKey,
             alice, // = grantee
             BaseAllocation.Allocation({
-                tokenContract: address(zkToken),
+                tokenContract: address(paymentToken),
                 tokenStreamTotal: 1000 ether,
                 vestingCliffCredit: 0 ether,
                 unlockingCliffCredit: 0 ether,
@@ -902,20 +895,28 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
 
     function testTerminateVestAndRecovers() public {
         address vestingAllocation = createDummyVestingAllocation();
-        uint256 snapshot = zkToken.balanceOf(authority);
+        uint256 snapshot = paymentToken.balanceOf(authority);
         VestingAllocation(vestingAllocation).confirmMilestone(0);
         vm.warp(block.timestamp + 50 seconds);
+
+        uint256 authorityBalanceBefore = paymentToken.balanceOf(address(authority));
         vm.prank(authority);
         controller.terminateMetavestVesting(vestingAllocation);
+        assertEq(paymentToken.balanceOf(
+            address(authority)) - authorityBalanceBefore,
+            400 ether, // 1000 + 1000 - 1000 - 100 - 10 * 50
+            "authority should receive unvested funds"
+        );
+
         vm.startPrank(grantee);
         VestingAllocation(vestingAllocation).withdraw(VestingAllocation(vestingAllocation).getAmountWithdrawable());
         vm.stopPrank();
-        assertEq(zkToken.balanceOf(authority), 0);
+        assertEq(paymentToken.balanceOf(vestingAllocation), 0);
     }
 
     function testTerminateVestAndRecoverSlowUnlock() public {
         address vestingAllocation = createDummyVestingAllocationSlowUnlock();
-        uint256 snapshot = zkToken.balanceOf(authority);
+        uint256 snapshot = paymentToken.balanceOf(authority);
         VestingAllocation(vestingAllocation).confirmMilestone(0);
         vm.warp(block.timestamp + 25 seconds);
         vm.prank(authority);
@@ -925,35 +926,51 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
         vm.warp(block.timestamp + 25 seconds);
         VestingAllocation(vestingAllocation).withdraw(VestingAllocation(vestingAllocation).getAmountWithdrawable());
         vm.stopPrank();
-        assertEq(zkToken.balanceOf(vestingAllocation), 0);
+        assertEq(paymentToken.balanceOf(vestingAllocation), 0);
     }
 
     function testTerminateRecoverAll() public {
         address vestingAllocation = createDummyVestingAllocationLarge();
-        uint256 snapshot = zkToken.balanceOf(authority);
-         vm.warp(block.timestamp + 25 seconds);
+        uint256 snapshot = paymentToken.balanceOf(authority);
+        vm.warp(block.timestamp + 25 seconds);
+
+        uint256 authorityBalanceBefore = paymentToken.balanceOf(address(authority));
         vm.prank(authority);
         controller.terminateMetavestVesting(vestingAllocation);
+        assertEq(paymentToken.balanceOf(
+            address(authority)) - authorityBalanceBefore,
+            750 ether, // 1000 - 10 * 25
+            "authority should receive unvested funds"
+        );
+
         vm.startPrank(grantee);
         VestingAllocation(vestingAllocation).withdraw(VestingAllocation(vestingAllocation).getAmountWithdrawable());
         vm.stopPrank();
-        assertEq(zkToken.balanceOf(authority), 0);
+        assertEq(paymentToken.balanceOf(vestingAllocation), 0);
     }
 
-        function testTerminateRecoverChunksBefore() public {
+    function testTerminateRecoverChunksBefore() public {
         address vestingAllocation = createDummyVestingAllocationLarge();
-        uint256 snapshot = zkToken.balanceOf(authority);
+        uint256 snapshot = paymentToken.balanceOf(authority);
         vm.warp(block.timestamp + 25 seconds);
         vm.startPrank(grantee);
         VestingAllocation(vestingAllocation).withdraw(VestingAllocation(vestingAllocation).getAmountWithdrawable());
         vm.stopPrank();
         vm.warp(block.timestamp + 25 seconds);
+
+        uint256 authorityBalanceBefore = paymentToken.balanceOf(address(authority));
         vm.prank(authority);
         controller.terminateMetavestVesting(vestingAllocation);
+        assertEq(paymentToken.balanceOf(
+            address(authority)) - authorityBalanceBefore,
+            500 ether, // 1000 - 10 * 50
+            "authority should receive unvested funds"
+        );
+
         vm.startPrank(grantee);
         VestingAllocation(vestingAllocation).withdraw(VestingAllocation(vestingAllocation).getAmountWithdrawable());
         vm.stopPrank();
-        assertEq(zkToken.balanceOf(authority), 0);
+        assertEq(paymentToken.balanceOf(vestingAllocation), 0);
     }
 
 //    function testConfirmingMilestoneRestrictedTokenAllocation() public {
@@ -981,7 +998,7 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
 
     function testUnlockMilestoneNotUnlocked() public {
         address vestingAllocation = createDummyVestingAllocationNoUnlock();
-        uint256 snapshot = zkToken.balanceOf(authority);
+        uint256 snapshot = paymentToken.balanceOf(authority);
         VestingAllocation(vestingAllocation).confirmMilestone(0);
         vm.warp(block.timestamp + 50 seconds);
         vm.startPrank(grantee);
@@ -1388,39 +1405,40 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
         controller.updateFunctionCondition(address(condition), functionSig);
     }
 
-    function test_RevertIf_ExceedCap() public {
-        // Add a large grant that exceeds the cap
-        bytes32 contractIdChad = _proposeAndSignDeal(
-            templateId,
-            block.timestamp, // salt
-            delegatePrivateKey,
-            chad,
-            BaseAllocation.Allocation({
-                tokenContract: address(zkToken),
-                tokenStreamTotal: 2001 ether,
-                vestingCliffCredit: 2001 ether,
-                unlockingCliffCredit: 2001 ether,
-                vestingRate: 0,
-                vestingStartTime: 0,
-                unlockRate: 0,
-                unlockStartTime: 0
-            }),
-            new BaseAllocation.Milestone[](0),
-            "Chad",
-            cappedMinterExpirationTime // Same expiry as the minter so grantee can defer vesting contract creation as much as possible
-        );
-        VestingAllocation vestingAllocationChad = VestingAllocation(_granteeSignDeal(
-            contractIdChad,
-            chad, // grantee
-            chad, // recipient
-            chadPrivateKey,
-            "Chad"
-        ));
-
-        vm.prank(chad);
-        vm.expectRevert(abi.encodeWithSelector(IZkCappedMinterV2.ZkCappedMinterV2__CapExceeded.selector, address(controller), 2001 ether));
-        vestingAllocationChad.withdraw(2001 ether);
-    }
+    // TODO deprecated: do we still need this?
+//    function test_RevertIf_ExceedCap() public {
+//        // Add a large grant that exceeds the cap
+//        bytes32 contractIdChad = _proposeAndSignDeal(
+//            templateId,
+//            block.timestamp, // salt
+//            delegatePrivateKey,
+//            chad,
+//            BaseAllocation.Allocation({
+//                tokenContract: address(paymentToken),
+//                tokenStreamTotal: 2001 ether,
+//                vestingCliffCredit: 2001 ether,
+//                unlockingCliffCredit: 2001 ether,
+//                vestingRate: 0,
+//                vestingStartTime: 0,
+//                unlockRate: 0,
+//                unlockStartTime: 0
+//            }),
+//            new BaseAllocation.Milestone[](0),
+//            "Chad",
+//            cappedMinterExpirationTime // Same expiry as the minter so grantee can defer vesting contract creation as much as possible
+//        );
+//        VestingAllocation vestingAllocationChad = VestingAllocation(_granteeSignDeal(
+//            contractIdChad,
+//            chad, // grantee
+//            chad, // recipient
+//            chadPrivateKey,
+//            "Chad"
+//        ));
+//
+//        vm.prank(chad);
+//        vm.expectRevert(abi.encodeWithSelector(IZkCappedMinterV2.ZkCappedMinterV2__CapExceeded.selector, address(controller), 2001 ether));
+//        vestingAllocationChad.withdraw(2001 ether);
+//    }
 
     function test_RevertIf_IncorrectGrantorSignature() public {
         // Should not be able to propose a deal without grantor's authorization
@@ -1430,14 +1448,14 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
             alicePrivateKey, // Should fail because Alice is not delegated by the grantor
             alice, // grantee
             BaseAllocation.Allocation({
-                tokenContract: address(zkToken),
+                tokenContract: address(paymentToken),
                 tokenStreamTotal: 100 ether,
                 vestingCliffCredit: 10 ether,
                 unlockingCliffCredit: 10 ether,
                 vestingRate: 1 ether,
-                vestingStartTime: zkCappedMinter.START_TIME(), // start along with capped minter
+                vestingStartTime: uint48(block.timestamp),
                 unlockRate: 1 ether,
-                unlockStartTime: zkCappedMinter.START_TIME() // start along with capped minter
+                unlockStartTime: uint48(block.timestamp)
             }),
             new BaseAllocation.Milestone[](0),
             "Alice",
@@ -1453,14 +1471,14 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
             delegatePrivateKey,
             alice,
             BaseAllocation.Allocation({
-                tokenContract: address(zkToken),
+                tokenContract: address(paymentToken),
                 tokenStreamTotal: 100 ether,
                 vestingCliffCredit: 10 ether,
                 unlockingCliffCredit: 10 ether,
                 vestingRate: 1 ether,
-                vestingStartTime: zkCappedMinter.START_TIME(), // start along with capped minter
+                vestingStartTime: uint48(block.timestamp),
                 unlockRate: 1 ether,
-                unlockStartTime: zkCappedMinter.START_TIME() // start along with capped minter
+                unlockStartTime: uint48(block.timestamp)
             }),
             new BaseAllocation.Milestone[](0),
             "Alice",
@@ -1491,14 +1509,14 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
             delegatePrivateKey,
             alice,
             BaseAllocation.Allocation({
-                tokenContract: address(zkToken),
+                tokenContract: address(paymentToken),
                 tokenStreamTotal: 100 ether,
                 vestingCliffCredit: 10 ether,
                 unlockingCliffCredit: 10 ether,
                 vestingRate: 1 ether,
-                vestingStartTime: zkCappedMinter.START_TIME(), // start along with capped minter
+                vestingStartTime: uint48(block.timestamp),
                 unlockRate: 1 ether,
-                unlockStartTime: zkCappedMinter.START_TIME() // start along with capped minter
+                unlockStartTime: uint48(block.timestamp)
             }),
             new BaseAllocation.Milestone[](0),
             "Alice",
@@ -1520,68 +1538,70 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
         assertFalse(registry.isValidDelegate(alice, bob), "Bob should no longer be Alice's delegate");
     }
 
-    function test_TogglePauseMinting() public {
-        IZkCappedMinterV2 controllerOwnedMinter = IZkCappedMinterV2(zkCappedMinterFactory.createCappedMinter(
-            address(zkToken),
-            address(controller), // Note MetaVesTController being the admin
-            cap,
-            cappedMinterStartTime,
-            cappedMinterExpirationTime,
-            uint256(salt)
-        ));
-        vm.prank(authority);
-        controller.setZkCappedMinter(address(controllerOwnedMinter));
+    // TODO WIP: re-purpose it for withdrawing funds from active metavest
+//    function test_TogglePauseMinting() public {
+//        IZkCappedMinterV2 controllerOwnedMinter = IZkCappedMinterV2(zkCappedMinterFactory.createCappedMinter(
+//            address(paymentToken),
+//            address(controller), // Note MetaVesTController being the admin
+//            cap,
+//            cappedMinterStartTime,
+//            cappedMinterExpirationTime,
+//            uint256(salt)
+//        ));
+//        vm.prank(authority);
+//        controller.setZkCappedMinter(address(controllerOwnedMinter));
+//
+//        assertFalse(controllerOwnedMinter.paused(), "minter should not be paused yet");
+//
+//        // Authority should be able to pause minting through controller
+//        vm.prank(authority);
+//        controller.pauseZkCappedMinter();
+//        assertTrue(controllerOwnedMinter.paused(), "minter should be paused now");
+//
+//        vm.prank(authority);
+//        controller.unpauseZkCappedMinter();
+//        assertFalse(controllerOwnedMinter.paused(), "minter should be unpaused now");
+//    }
+//
+//    function test_RevertIf_PauseMintingNonAuthority() public {
+//        // Non-authority should not be able to pause minting through controller
+//        vm.expectRevert(abi.encodeWithSelector(metavestController.MetaVesTController_OnlyAuthority.selector));
+//        controller.pauseZkCappedMinter();
+//    }
+//
+//    function test_CloseMinting() public {
+//        IZkCappedMinterV2 controllerOwnedMinter = IZkCappedMinterV2(zkCappedMinterFactory.createCappedMinter(
+//            address(paymentToken),
+//            address(controller), // Note MetaVesTController being the admin
+//            cap,
+//            cappedMinterStartTime,
+//            cappedMinterExpirationTime,
+//            uint256(salt)
+//        ));
+//        vm.prank(authority);
+//        controller.setZkCappedMinter(address(controllerOwnedMinter));
+//
+//        assertFalse(controllerOwnedMinter.closed(), "minter should not be closed yet");
+//
+//        // Authority should be able to close minting through controller
+//        vm.prank(authority);
+//        controller.closeZkCappedMinter();
+//        assertTrue(controllerOwnedMinter.closed(), "minter should be closed now");
+//    }
+//
+//    function test_RevertIf_CloseMintingNonAuthority() public {
+//        // Non-authority should not be able to close minting through controller
+//        vm.expectRevert(abi.encodeWithSelector(metavestController.MetaVesTController_OnlyAuthority.selector));
+//        controller.closeZkCappedMinter();
+//    }
 
-        assertFalse(controllerOwnedMinter.paused(), "minter should not be paused yet");
-
-        // Authority should be able to pause minting through controller
-        vm.prank(authority);
-        controller.pauseZkCappedMinter();
-        assertTrue(controllerOwnedMinter.paused(), "minter should be paused now");
-
-        vm.prank(authority);
-        controller.unpauseZkCappedMinter();
-        assertFalse(controllerOwnedMinter.paused(), "minter should be unpaused now");
-    }
-
-    function test_RevertIf_PauseMintingNonAuthority() public {
-        // Non-authority should not be able to pause minting through controller
-        vm.expectRevert(abi.encodeWithSelector(metavestController.MetaVesTController_OnlyAuthority.selector));
-        controller.pauseZkCappedMinter();
-    }
-
-    function test_CloseMinting() public {
-        IZkCappedMinterV2 controllerOwnedMinter = IZkCappedMinterV2(zkCappedMinterFactory.createCappedMinter(
-            address(zkToken),
-            address(controller), // Note MetaVesTController being the admin
-            cap,
-            cappedMinterStartTime,
-            cappedMinterExpirationTime,
-            uint256(salt)
-        ));
-        vm.prank(authority);
-        controller.setZkCappedMinter(address(controllerOwnedMinter));
-
-        assertFalse(controllerOwnedMinter.closed(), "minter should not be closed yet");
-
-        // Authority should be able to close minting through controller
-        vm.prank(authority);
-        controller.closeZkCappedMinter();
-        assertTrue(controllerOwnedMinter.closed(), "minter should be closed now");
-    }
-
-    function test_RevertIf_CloseMintingNonAuthority() public {
-        // Non-authority should not be able to close minting through controller
-        vm.expectRevert(abi.encodeWithSelector(metavestController.MetaVesTController_OnlyAuthority.selector));
-        controller.closeZkCappedMinter();
-    }
-
-    function test_RevertIf_MintUnauthorized() public {
-        // Should not be able to mint arbitrarily
-        vm.prank(alice);
-        vm.expectRevert(abi.encodeWithSelector(metavestController.MetaVesTController_UnauthorizedToMint.selector));
-        controller.mint(alice, 1 ether);
-    }
+    // TODO deprecated: can we re-purpose it?
+//    function test_RevertIf_MintUnauthorized() public {
+//        // Should not be able to mint arbitrarily
+//        vm.prank(alice);
+//        vm.expectRevert(abi.encodeWithSelector(metavestController.MetaVesTController_UnauthorizedToMint.selector));
+//        controller.mint(alice, 1 ether);
+//    }
 
     function test_UpgradeMetaVesTController() public {
         // Deploy new implementation
@@ -1606,15 +1626,15 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
             delegatePrivateKey,
             alice,
             BaseAllocation.Allocation({
-                tokenContract: address(zkToken),
+                tokenContract: address(paymentToken),
                 // 100k ZK total, the first half unlocks with a cliff and the second half unlocks over an year
                 tokenStreamTotal: 60 ether,
                 vestingCliffCredit: 30 ether,
                 unlockingCliffCredit: 30 ether,
                 vestingRate: 1 ether,
-                vestingStartTime: zkCappedMinter.START_TIME(), // start along with capped minter
+                vestingStartTime: uint48(block.timestamp),
                 unlockRate: 1 ether,
-                unlockStartTime: zkCappedMinter.START_TIME() // start along with capped minter
+                unlockStartTime: uint48(block.timestamp)
             }),
             new BaseAllocation.Milestone[](0),
             "Alice",

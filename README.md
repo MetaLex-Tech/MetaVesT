@@ -158,7 +158,7 @@ Before you begin, ensure you have the following installed:
 
 - [Node.js](https://nodejs.org/)
 - [Foundry](https://book.getfoundry.sh/getting-started/installation.html)
-- solc v0.8.20
+- solc v0.8.28
 
 ## Installation
 
@@ -176,6 +176,35 @@ To set up the project locally, follow these steps:
    ```
 3. **Compile Contracts**
 
-   ```base
-   forge build --optimize --optimizer-runs 200 --use solc:0.8.20
+   ```bash
+   forge build --via-ir --optimize --optimizer-runs 200 --use solc:0.8.28
    ```
+   
+## Deployment
+
+- `scripts/`: Scripts for deployment and maintenance. Some of them are integrated in tests to keep consistency
+- `scripts/lib`: Utilities and configs. Configs are separate by deploy targets (e.g. projects & networks)
+- `.env*`: Env vars for sensitive data. Required for most configs. Also separate by deploy targets
+
+```bash
+# You can find end-to-end tests against the following scripts in test/YearnBorgCompensation.t.sol
+
+# Setup env vars for your target
+cp .env.your-target .env
+
+# Deploy prerequisites contracts if needed (ex. factories)
+forge script scripts/deployYearnBorgCompensationPrerequisites.s.sol --rpc-url <your-target-network-rpc> --use solc:0.8.28 --via-ir --optimize --optimizer-runs 200 --broadcast
+# Deploy project-specific contracts (ex. controllers)
+forge script scripts/deployYearnBorgCompensation.s.sol --rpc-url <your-target-network-rpc> --use solc:0.8.28 --via-ir --optimize --optimizer-runs 200 --broadcast
+# Create template agreements if needed
+forge script scripts/createAllTemplates.s.sol --rpc-url <your-target-network-rpc> --use solc:0.8.28 --via-ir --optimize --optimizer-runs 200 --broadcast
+# Propose MetaVesT deals per configs
+forge script scripts/proposeAllGuardiansMetavestDeals.s.sol --rpc-url <your-target-network-rpc> --use solc:0.8.28 --via-ir --optimize --optimizer-runs 200 --broadcast
+```
+
+## Tests
+
+To run tests:
+```bash
+forge test --via-ir --fork-url <your-target-network-rpc> -vvv
+```
