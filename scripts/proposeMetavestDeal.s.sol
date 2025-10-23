@@ -58,15 +58,12 @@ contract ProposeMetaVestDealScript is SafeTxHelper, Script {
         YearnBorgCompensation2025_2026.Config memory config
     ) public virtual returns(bytes32) {
 
-        address borgSafeDelegate = borgSafeDelegatePrivateKey != 0
-            ? vm.addr(borgSafeDelegatePrivateKey)
-            : address(0);
-        address proposer = vm.addr(proposerPrivateKey);
-
         console2.log("");
         console2.log("=== ProposeMetaVestDealScript ===");
-        console2.log("Proposer: ", proposer);
-        console2.log("Guardian SAFE Delegate (if private key available): ", borgSafeDelegate);
+        console2.log("Proposer: ", vm.addr(proposerPrivateKey));
+        console2.log("Guardian SAFE Delegate (if private key available): ", borgSafeDelegatePrivateKey != 0
+            ? vm.addr(borgSafeDelegatePrivateKey)
+            : address(0));
         console2.log("Guardian Safe: ", address(config.borgSafe));
         console2.log("Payment token: ", address(config.paymentToken));
         console2.log("CyberAgreementRegistry: ", address(config.registry));
@@ -77,8 +74,6 @@ contract ProposeMetaVestDealScript is SafeTxHelper, Script {
         // Assume Guardian SAFE already delegate signing to the deployer
 
         // Propose a new deal
-
-        uint48 startTime = config.metavestVestingAndUnlockStartTime;
 
         address[] memory parties = new address[](2);
         parties[0] = address(config.borgSafe);
@@ -102,20 +97,7 @@ contract ProposeMetaVestDealScript is SafeTxHelper, Script {
 
         (string memory agreementUri, ) = config.registry.templates(guardianInfo.compTemplate.id);
 
-        bytes memory signature = (borgSafeDelegatePrivateKey != 0)
-            ? CyberAgreementUtils.signAgreementTypedData(
-                config.registry,
-                expectedContractId,
-                agreementUri,
-                guardianInfo.compTemplate.globalFields,
-                guardianInfo.compTemplate.partyFields,
-                globalValues,
-                partyValues[0],
-                borgSafeDelegatePrivateKey
-            )
-            : guardianInfo.signature;
-
-        if (signature.length > 0) {
+        if (borgSafeDelegatePrivateKey != 0 || guardianInfo.signature.length > 0) { // has signature
             // Has valid signature, proceed to proposal
             vm.startBroadcast(proposerPrivateKey);
 
@@ -129,7 +111,18 @@ contract ProposeMetaVestDealScript is SafeTxHelper, Script {
                 globalValues,
                 parties,
                 partyValues,
-                signature,
+                (borgSafeDelegatePrivateKey != 0)
+                    ? CyberAgreementUtils.signAgreementTypedData(
+                        config.registry,
+                        expectedContractId,
+                        agreementUri,
+                        guardianInfo.compTemplate.globalFields,
+                        guardianInfo.compTemplate.partyFields,
+                        globalValues,
+                        partyValues[0],
+                        borgSafeDelegatePrivateKey
+                    )
+                    : guardianInfo.signature,
                 bytes32(0), // no secrets
                 block.timestamp + 365 days * 2 // 2 years after deployment
             );
