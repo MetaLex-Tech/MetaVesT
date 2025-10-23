@@ -11,6 +11,7 @@ pragma solidity ^0.8.24;
 import {ICyberAgreementRegistry} from "cybercorps-contracts/src/interfaces/ICyberAgreementRegistry.sol";
 import {UUPSUpgradeable} from "openzeppelin-contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import {MetaVestDealLib, MetaVestDeal, MetaVestType} from "./lib/MetaVestDealLib.sol";
+import {MetaVesTControllerStorage} from "./storage/MetaVesTControllerStorage.sol";
 import "./BaseAllocation.sol";
 //import "./RestrictedTokenAllocation.sol";
 import "./interfaces/IAllocationFactory.sol";
@@ -27,66 +28,13 @@ import "./lib/EnumberableSet.sol";
  *             by an applicable affected grantee or a majority-in-governing power of similar token grantees
  **/
 contract metavestController is UUPSUpgradeable, SafeTransferLib {
+    using MetaVesTControllerStorage for MetaVesTControllerStorage.MetaVesTControllerData;
     using EnumerableSet for EnumerableSet.AddressSet;
     using EnumerableSet for EnumerableSet.Bytes32Set;
+
     /// @dev opinionated time limit for a MetaVesT amendment, one calendar week in seconds
     uint256 internal constant AMENDMENT_TIME_LIMIT = 604800;
     uint256 internal constant ARRAY_LENGTH_LIMIT = 20;
-
-    mapping(bytes32 => EnumerableSet.AddressSet) private sets;
-    EnumerableSet.Bytes32Set private setNames;
-
-    address public authority;
-    address public dao;
-    address public registry;
-    address public vestingFactory;
-    address public tokenOptionFactory;
-    address public restrictedTokenFactory;
-    address internal _pendingAuthority;
-    address internal _pendingDao;
-
-    // Simple indexer for UX
-    bytes32[] public dealIds;
-
-    struct AmendmentProposal {
-        bool isPending;
-        bytes32 dataHash;
-        bool inFavor;
-    }
-
-    struct MajorityAmendmentProposal {
-        uint256 totalVotingPower;
-        uint256 currentVotingPower;
-        uint256 time;
-        bool isPending;
-        bytes32 dataHash;
-        address[] voters;
-        mapping(address => uint256) appliedProposalCreatedAt;
-        mapping(address => uint256) voterPower;
-    }
-    
-    /// @notice maps a function's signature to a Condition contract address
-    mapping(bytes4 => address[]) public functionToConditions;
-
-    /// @notice maps a metavest-parameter-updating function's signature to token contract to whether a majority amendment is pending
-    mapping(bytes4 => mapping(bytes32 => MajorityAmendmentProposal)) public functionToSetMajorityProposal;
-
-    /// @notice maps a metavest-parameter-updating function's signature to affected grantee address to whether an amendment is pending
-    mapping(bytes4 => mapping(address => AmendmentProposal)) public functionToGranteeToAmendmentPending;
-
-    /// @notice tracks if an address has voted for an amendment by mapping a hash of the pertinent details to time they last voted for these details (voter, function and affected grantee)
-    mapping(bytes32 => uint256) internal _lastVoted;
-
-    mapping(bytes32 => bool) public setMajorityVoteActive;
-
-    /// @notice granteeId => granteeData
-    mapping(bytes32 => MetaVestDeal) public deals;
-
-    /// @notice Maps agreement IDs to arrays of counter party values for closed deals.
-    mapping(bytes32 => string[]) public counterPartyValues;
-
-    /// @notice Map MetaVesT contract address to its corresponding agreement ID
-    mapping(address => bytes32) public metavestAgreementIds;
 
     ///
     /// EVENTS
@@ -117,7 +65,6 @@ contract metavestController is UUPSUpgradeable, SafeTransferLib {
         address indexed recipient,
         address metavest
     );
-
 
     ///
     /// ERRORS
@@ -165,7 +112,8 @@ contract metavestController is UUPSUpgradeable, SafeTransferLib {
     ///
 
     modifier conditionCheck() {
-        address[] memory conditions = functionToConditions[msg.sig];
+        MetaVesTControllerStorage.MetaVesTControllerData storage st = MetaVesTControllerStorage.getStorage();
+        address[] memory conditions = st.functionToConditions[msg.sig];
         for (uint256 i; i < conditions.length; ++i) {
             if (!IConditionM(conditions[i]).checkCondition(address(this), msg.sig, "")) {
                 revert MetaVesTController_ConditionNotSatisfied(conditions[i]);
@@ -175,9 +123,10 @@ contract metavestController is UUPSUpgradeable, SafeTransferLib {
     }
 
     modifier consentCheck(address _grant, bytes calldata _data) {
+        MetaVesTControllerStorage.MetaVesTControllerData storage st = MetaVesTControllerStorage.getStorage();
         if (isMetavestInSet(_grant)) {
             bytes32 set = getSetOfMetavest(_grant);
-            MajorityAmendmentProposal storage proposal = functionToSetMajorityProposal[msg.sig][set];
+            MetaVesTControllerStorage.MajorityAmendmentProposal storage proposal = st.functionToSetMajorityProposal[msg.sig][set];
             if(proposal.appliedProposalCreatedAt[_grant] == proposal.time) revert MetaVesTController_AmendmentCanOnlyBeAppliedOnce();
             if (_data.length>32 && _data.length<69)
             {
@@ -187,7 +136,7 @@ contract metavestController is UUPSUpgradeable, SafeTransferLib {
             }
             else revert MetaVesTController_AmendmentNeitherMutualNorMajorityConsented();
         } else {
-            AmendmentProposal storage proposal = functionToGranteeToAmendmentPending[msg.sig][_grant];
+            MetaVesTControllerStorage.AmendmentProposal storage proposal = st.functionToGranteeToAmendmentPending[msg.sig][_grant];
             if (!proposal.inFavor || proposal.dataHash != keccak256(_data)) {
                 revert MetaVesTController_AmendmentNeitherMutualNorMajorityConsented();
             }
@@ -196,12 +145,12 @@ contract metavestController is UUPSUpgradeable, SafeTransferLib {
     }
 
     modifier onlyAuthority() {
-        if (msg.sender != authority) revert MetaVesTController_OnlyAuthority();
+        if (msg.sender != MetaVesTControllerStorage.getStorage().authority) revert MetaVesTController_OnlyAuthority();
         _;
     }
 
     modifier onlyDao() {
-        if (msg.sender != dao) revert MetaVesTController_OnlyDAO();
+        if (msg.sender != MetaVesTControllerStorage.getStorage().dao) revert MetaVesTController_OnlyDAO();
         _;
     }
 
@@ -219,24 +168,27 @@ contract metavestController is UUPSUpgradeable, SafeTransferLib {
         __UUPSUpgradeable_init();
 
         if (_authority == address(0)) revert MetaVesTController_ZeroAddress();
-        authority = _authority;
-        registry = _registry;
-        vestingFactory = _vestingFactory;
+
+        MetaVesTControllerStorage.MetaVesTControllerData storage st = MetaVesTControllerStorage.getStorage();
+        st.authority = _authority;
+        st.registry = _registry;
+        st.vestingFactory = _vestingFactory;
 //        tokenOptionFactory = _tokenOptionFactory;
 //        restrictedTokenFactory = _restrictedTokenFactory;
-        dao = _dao;
+        st.dao = _dao;
     }
 
     /// @notice for a grantee to consent to an update to one of their metavestDetails by 'authority' corresponding to the applicable function in this controller
     /// @param _msgSig function signature of the function in this controller which (if successfully executed) will execute the grantee's metavest detail update
     /// @param _inFavor whether msg.sender consents to the applicable amending function call (rather than assuming true, this param allows a grantee to later revoke decision should 'authority' delay or breach agreement elsewhere)
     function consentToMetavestAmendment(address _grant, bytes4 _msgSig, bool _inFavor) external {
-       if (!functionToGranteeToAmendmentPending[_msgSig][_grant].isPending)
+        MetaVesTControllerStorage.MetaVesTControllerData storage st = MetaVesTControllerStorage.getStorage();
+        if (!st.functionToGranteeToAmendmentPending[_msgSig][_grant].isPending)
             revert MetaVesTController_NoPendingAmendment(_msgSig, _grant);
-        address grantee =BaseAllocation(_grant).grantee();
-        if(msg.sender!= grantee) revert MetaVesTController_OnlyGranteeMayCall();
+        address grantee = BaseAllocation(_grant).grantee();
+        if (msg.sender != grantee) revert MetaVesTController_OnlyGranteeMayCall();
 
-        functionToGranteeToAmendmentPending[_msgSig][_grant].inFavor = _inFavor;
+        st.functionToGranteeToAmendmentPending[_msgSig][_grant].inFavor = _inFavor;
         emit MetaVesTController_AmendmentConsentUpdated(_msgSig, msg.sender, _inFavor);
     }
 
@@ -245,18 +197,20 @@ contract metavestController is UUPSUpgradeable, SafeTransferLib {
     /// @param _condition address of the applicable Condition contract-- pass address(0) to remove the requirement for '_functionSig'
     /// @param _functionSig signature of the function which is having its condition requirement updated
     function updateFunctionCondition(address _condition, bytes4 _functionSig) external onlyDao {
+        MetaVesTControllerStorage.MetaVesTControllerData storage st = MetaVesTControllerStorage.getStorage();
         //call check condition to ensure the condition is valid
         IConditionM(_condition).checkCondition(address(this), msg.sig, "");
         //check to ensure the condition is unique
-        for (uint256 i; i < functionToConditions[_functionSig].length; ++i) {
-            if (functionToConditions[_functionSig][i] == _condition) revert MetaVestController_DuplicateCondition();
+        for (uint256 i; i < st.functionToConditions[_functionSig].length; ++i) {
+            if (st.functionToConditions[_functionSig][i] == _condition) revert MetaVestController_DuplicateCondition();
         }
-        functionToConditions[_functionSig].push(_condition);
+        st.functionToConditions[_functionSig].push(_condition);
         emit MetaVesTController_ConditionUpdated(_condition, _functionSig);
     }
 
     function removeFunctionCondition(address _condition, bytes4 _functionSig) external onlyDao {
-        address[] storage conditions = functionToConditions[_functionSig];
+        MetaVesTControllerStorage.MetaVesTControllerData storage st = MetaVesTControllerStorage.getStorage();
+        address[] storage conditions = st.functionToConditions[_functionSig];
         for (uint256 i; i < conditions.length; ++i) {
             if (conditions[i] == _condition) {
                 conditions[i] = conditions[conditions.length - 1];
@@ -279,11 +233,12 @@ contract metavestController is UUPSUpgradeable, SafeTransferLib {
         bytes32 secretHash,
         uint256 expiry
     ) external returns (bytes32) {
+        MetaVesTControllerStorage.MetaVesTControllerData storage st = MetaVesTControllerStorage.getStorage();
 
         // TODO validate parties against deal
 
         // Call internal function to avoid stack-too-deep errors
-        dealDraft.agreementId = ICyberAgreementRegistry(registry).createContract(
+        dealDraft.agreementId = ICyberAgreementRegistry(st.registry).createContract(
             templateId,
             salt,
             globalValues,
@@ -296,10 +251,10 @@ contract metavestController is UUPSUpgradeable, SafeTransferLib {
 
         if (partyValues.length < 2) revert MetaVesTController_CounterPartyNotFound();
         if (partyValues[1].length != partyValues[0].length) revert MetaVesTController_PartyValuesLengthMismatch();
-        counterPartyValues[dealDraft.agreementId] = partyValues[1];
+        st.counterPartyValues[dealDraft.agreementId] = partyValues[1];
 
-        ICyberAgreementRegistry(registry).signContractFor(
-            authority, // First party (grantor) should always be the authority
+        ICyberAgreementRegistry(st.registry).signContractFor(
+            st.authority, // First party (grantor) should always be the authority
             dealDraft.agreementId,
             partyValues[0],
             signature,
@@ -307,13 +262,13 @@ contract metavestController is UUPSUpgradeable, SafeTransferLib {
             "" // Signer == proposer, no secret needed
         );
 
-        deals[dealDraft.agreementId] = dealDraft;
-        dealIds.push(dealDraft.agreementId);
+        st.deals[dealDraft.agreementId] = dealDraft;
+        st.dealIds.push(dealDraft.agreementId);
 
         emit MetaVesTController_DealProposed(
             dealDraft.agreementId, dealDraft.grantee, dealDraft.metavestType, dealDraft.allocation, dealDraft.milestones,
             secretHash > 0,
-            registry
+            st.registry
         );
         return dealDraft.agreementId;
     }
@@ -327,51 +282,50 @@ contract metavestController is UUPSUpgradeable, SafeTransferLib {
         bytes memory signature,
         string memory secret
     ) external conditionCheck returns (address) {
+        MetaVesTControllerStorage.MetaVesTControllerData storage st = MetaVesTControllerStorage.getStorage();
+
         // Finalize agreement
 
-        if(ICyberAgreementRegistry(registry).isVoided(agreementId)) revert MetaVesTController_DealVoided();
-        if(ICyberAgreementRegistry(registry).isFinalized(agreementId)) revert MetaVesTController_DealAlreadyFinalized();
+        if(ICyberAgreementRegistry(st.registry).isVoided(agreementId)) revert MetaVesTController_DealVoided();
+        if(ICyberAgreementRegistry(st.registry).isFinalized(agreementId)) revert MetaVesTController_DealAlreadyFinalized();
 
-        string[] storage counterPartyCheck = counterPartyValues[agreementId];
+        string[] storage counterPartyCheck = st.counterPartyValues[agreementId];
         if (keccak256(abi.encode(counterPartyCheck)) != keccak256(abi.encode(partyValues))) revert MetaVesTController_CounterPartyValueMismatch();
 
-        ICyberAgreementRegistry(registry).signContractFor(grantee, agreementId, partyValues, signature, false, secret);
+        ICyberAgreementRegistry(st.registry).signContractFor(grantee, agreementId, partyValues, signature, false, secret);
 
-        ICyberAgreementRegistry(registry).finalizeContract(agreementId);
+        ICyberAgreementRegistry(st.registry).finalizeContract(agreementId);
 
         // Create and provision MetaVesT
+        MetaVestDeal storage deal = MetaVesTControllerStorage.getStorage().deals[agreementId];
+        uint256 total = validate(deal, recipient);
+        address newMetavest = MetaVesTControllerStorage.createMetavest(agreementId, recipient);
 
-        address newMetavest = _createMetavest(agreementId, recipient);
+        if (newMetavest == address(0)) {
+            revert MetaVesTController_IncorrectMetaVesTType();
+        }
+
+        // Interaction: transfer tokens to escrow
+        safeTransferFrom(deal.allocation.tokenContract, st.authority, newMetavest, total);
 
         emit MetaVesTController_DealFinalizedAndMetaVestCreated(agreementId, recipient, newMetavest);
-
         return newMetavest;
     }
 
-    function _createMetavest(bytes32 agreementId, address recipient) internal returns (address) {
-        MetaVestDeal storage deal = deals[agreementId];
+    // TODO merge the unnecessary functions
+    function validate(MetaVestDeal storage deal, address recipient) internal view returns (uint256 total) {
+        validateInputParameters(deal, recipient);
+        validateAllocation(deal.allocation);
 
-        if(deal.metavestType == MetaVestType.Vesting)
-        {
-            deal.metavest = createVestingAllocation(deal, recipient);
-        }
-        else if(deal.metavestType == MetaVestType.TokenOption)
-        {
-            deal.metavest = createTokenOptionAllocation(deal, recipient);
-        }
-        else if(deal.metavestType == MetaVestType.RestrictedTokenAward)
-        {
-            deal.metavest = createRestrictedTokenAward(deal, recipient);
-        }
-        else
-        {
-            revert MetaVesTController_IncorrectMetaVesTType();
-        }
-        metavestAgreementIds[deal.metavest] = agreementId;
+        uint256 milestoneTotal = validateAndCalculateMilestones(deal.milestones);
+        total = deal.allocation.tokenStreamTotal + milestoneTotal;
 
-        return deal.metavest;
+        if (total == 0) revert MetaVesTController_ZeroAmount();
+
+        validateTokenApprovalAndBalance(deal.allocation.tokenContract, total);
+
+        return total;
     }
-    
 
     function validateInputParameters(
         MetaVestDeal storage deal,
@@ -404,88 +358,13 @@ contract metavestController is UUPSUpgradeable, SafeTransferLib {
     }
 
     function validateTokenApprovalAndBalance(address tokenContract, uint256 total) internal view {
+        MetaVesTControllerStorage.MetaVesTControllerData storage st = MetaVesTControllerStorage.getStorage();
         if (
-            IERC20M(tokenContract).allowance(authority, address(this)) < total ||
-            IERC20M(tokenContract).balanceOf(authority) < total
+            IERC20M(tokenContract).allowance(st.authority, address(this)) < total ||
+            IERC20M(tokenContract).balanceOf(st.authority) < total
         ) revert MetaVesTController_AmountNotApprovedForTransferFrom();
     }
 
-    // TODO why doesn't it need conditionCheck?
-    function createVestingAllocation(MetaVestDeal storage deal, address recipient) internal returns (address){
-        validateInputParameters(deal, recipient);
-        validateAllocation(deal.allocation);
-        uint256 _milestoneTotal = validateAndCalculateMilestones(deal.milestones);
-
-        uint256 _total = deal.allocation.tokenStreamTotal + _milestoneTotal;
-        if (_total == 0) revert MetaVesTController_ZeroAmount();
-        validateTokenApprovalAndBalance(deal.allocation.tokenContract, _total);
-
-        address vestingAllocation = IAllocationFactory(vestingFactory).createAllocation(
-            IAllocationFactory.AllocationType.Vesting,
-            deal.grantee,
-            recipient,
-            address(this),
-            deal.allocation,
-            deal.milestones,
-            address(0),
-            0,
-            0
-        );
-        safeTransferFrom(deal.allocation.tokenContract, authority, vestingAllocation, _total);
-
-        return vestingAllocation;
-    }
-
-    function createTokenOptionAllocation(MetaVestDeal storage deal, address recipient) internal conditionCheck returns (address) {
-        validateInputParameters(deal, recipient);
-        validateAllocation(deal.allocation);
-        uint256 _milestoneTotal = validateAndCalculateMilestones(deal.milestones);
-
-        uint256 _total = deal.allocation.tokenStreamTotal + _milestoneTotal;
-        if (_total == 0) revert MetaVesTController_ZeroAmount();
-        validateTokenApprovalAndBalance(deal.allocation.tokenContract, _total);
-
-        address tokenOptionAllocation = IAllocationFactory(tokenOptionFactory).createAllocation(
-            IAllocationFactory.AllocationType.TokenOption,
-            deal.grantee,
-            recipient,
-            address(this),
-            deal.allocation,
-            deal.milestones,
-            deal.paymentToken,
-            deal.exercisePrice,
-            deal.shortStopDuration
-        );
-
-        safeTransferFrom(deal.allocation.tokenContract, authority, tokenOptionAllocation, _total);
-        return tokenOptionAllocation;
-    }
-
-    function createRestrictedTokenAward(MetaVestDeal storage deal, address recipient) internal conditionCheck returns (address){
-        validateInputParameters(deal, recipient);
-        validateAllocation(deal.allocation);
-        uint256 _milestoneTotal = validateAndCalculateMilestones(deal.milestones);
-
-        uint256 _total = deal.allocation.tokenStreamTotal + _milestoneTotal;
-        if (_total == 0) revert MetaVesTController_ZeroAmount();
-        validateTokenApprovalAndBalance(deal.allocation.tokenContract, _total);
-
-        address restrictedTokenAward = IAllocationFactory(restrictedTokenFactory).createAllocation(
-            IAllocationFactory.AllocationType.RestrictedToken,
-            deal.grantee,
-            recipient,
-            address(this),
-            deal.allocation,
-            deal.milestones,
-            deal.paymentToken,
-            deal.exercisePrice,
-            deal.shortStopDuration
-        );
-
-        safeTransferFrom(deal.allocation.tokenContract, authority, restrictedTokenAward, _total);
-        return restrictedTokenAward;
-    }
-    
     function getMetaVestType(address _grant) public view returns (uint256) {
         return BaseAllocation(_grant).getVestingType();
     }
@@ -493,10 +372,11 @@ contract metavestController is UUPSUpgradeable, SafeTransferLib {
     /// @notice for 'authority' to withdraw tokens from this controller (i.e. which it has withdrawn from 'metavest', typically 'paymentToken')
     /// @param _tokenContract contract address of the token which is being withdrawn
     function withdrawFromController(address _tokenContract) external onlyAuthority {
+        MetaVesTControllerStorage.MetaVesTControllerData storage st = MetaVesTControllerStorage.getStorage();
         uint256 _balance = IERC20M(_tokenContract).balanceOf(address(this));
         if (_balance == 0) revert MetaVesTController_ZeroAmount();
 
-        safeTransfer(_tokenContract, authority, _balance);
+        safeTransfer(_tokenContract, st.authority, _balance);
     }
 
     /// @notice for 'authority' to toggle whether '_grantee''s MetaVesT is transferable-- does not revoke previous transfers, but does cause such transferees' MetaVesTs transferability to be similarly updated
@@ -624,15 +504,16 @@ contract metavestController is UUPSUpgradeable, SafeTransferLib {
     /// @param _newAuthority new address for pending 'authority', who must accept the role by calling 'acceptAuthorityRole'
     function initiateAuthorityUpdate(address _newAuthority) external onlyAuthority {
         if (_newAuthority == address(0)) revert MetaVesTController_ZeroAddress();
-        _pendingAuthority = _newAuthority;
+        MetaVesTControllerStorage.getStorage()._pendingAuthority = _newAuthority;
     }
 
     /// @notice allows the pending new authority to accept the role transfer
     /// @dev access restricted to the address stored as '_pendingauthority' to accept the two-step change. Transfers 'authority' role to the caller (reflected in 'metavest') and deletes '_pendingauthority' to reset.
     function acceptAuthorityRole() external {
-        if (msg.sender != _pendingAuthority) revert MetaVesTController_OnlyPendingAuthority();
-        delete _pendingAuthority;
-        authority = msg.sender;
+        MetaVesTControllerStorage.MetaVesTControllerData storage st = MetaVesTControllerStorage.getStorage();
+        if (msg.sender != st._pendingAuthority) revert MetaVesTController_OnlyPendingAuthority();
+        delete st._pendingAuthority;
+        st.authority = msg.sender;
         emit MetaVesTController_AuthorityUpdated(msg.sender);
     }
 
@@ -641,16 +522,17 @@ contract metavestController is UUPSUpgradeable, SafeTransferLib {
     /// @param _newDao new address for pending 'dao', who must accept the role by calling 'acceptDaoRole'
     function initiateDaoUpdate(address _newDao) external onlyDao {
         if (_newDao == address(0)) revert MetaVesTController_ZeroAddress();
-        _pendingDao = _newDao;
+        MetaVesTControllerStorage.getStorage()._pendingDao = _newDao;
     }
 
     /// @notice allows the pending new dao to accept the role transfer
     /// @dev access restricted to the address stored as '_pendingDao' to accept the two-step change. Transfers 'dao' role to the caller (reflected in 'metavest') and deletes '_pendingDao' to reset.
     /// no 'conditionCheck' necessary as it more properly contained in 'initiateAuthorityUpdate'
     function acceptDaoRole() external {
-        if (msg.sender != _pendingDao) revert MetaVesTController_OnlyPendingDao();
-        delete _pendingDao;
-        dao = msg.sender;
+        MetaVesTControllerStorage.MetaVesTControllerData storage st = MetaVesTControllerStorage.getStorage();
+        if (msg.sender != st._pendingDao) revert MetaVesTController_OnlyPendingDao();
+        delete st._pendingDao;
+        st.dao = msg.sender;
         emit MetaVesTController_DaoUpdated(msg.sender);
     }
 
@@ -662,12 +544,13 @@ contract metavestController is UUPSUpgradeable, SafeTransferLib {
         bytes4 _msgSig,
         bytes memory _callData
     ) external onlyAuthority {
-            //override existing amendment if it exists
-            functionToGranteeToAmendmentPending[_msgSig][_grant] = AmendmentProposal(
-                true,
-                keccak256(_callData),
-                false
-            );
+        MetaVesTControllerStorage.MetaVesTControllerData storage st = MetaVesTControllerStorage.getStorage();
+        //override existing amendment if it exists
+        st.functionToGranteeToAmendmentPending[_msgSig][_grant] = MetaVesTControllerStorage.AmendmentProposal(
+            true,
+            keccak256(_callData),
+            false
+        );
         emit MetaVesTController_AmendmentProposed(_grant, _msgSig);
     }
 
@@ -680,14 +563,15 @@ contract metavestController is UUPSUpgradeable, SafeTransferLib {
         bytes4 _msgSig,
         bytes calldata _callData
     ) external onlyAuthority {
+        MetaVesTControllerStorage.MetaVesTControllerData storage st = MetaVesTControllerStorage.getStorage();
         if(!doesSetExist(setName)) revert MetaVesTController_SetDoesNotExist();
         if(_callData.length!=68) revert MetaVesTController_LengthMismatch();
         bytes32 nameHash = keccak256(bytes(setName));
         //if the majority proposal is already pending and not expired, revert
-        if ((functionToSetMajorityProposal[_msgSig][nameHash].isPending && block.timestamp < functionToSetMajorityProposal[_msgSig][nameHash].time + AMENDMENT_TIME_LIMIT) || setMajorityVoteActive[nameHash])
+        if ((st.functionToSetMajorityProposal[_msgSig][nameHash].isPending && block.timestamp < st.functionToSetMajorityProposal[_msgSig][nameHash].time + AMENDMENT_TIME_LIMIT) || st.setMajorityVoteActive[nameHash])
             revert MetaVesTController_AmendmentAlreadyPending();
 
-        MajorityAmendmentProposal storage proposal = functionToSetMajorityProposal[_msgSig][nameHash];
+        MetaVesTControllerStorage.MajorityAmendmentProposal storage proposal = st.functionToSetMajorityProposal[_msgSig][nameHash];
         proposal.isPending = true;
         proposal.dataHash = keccak256(_callData[_callData.length - 32:]);
         proposal.time = block.timestamp;
@@ -695,14 +579,14 @@ contract metavestController is UUPSUpgradeable, SafeTransferLib {
         proposal.currentVotingPower = 0;
         
         uint256 totalVotingPower;
-        for (uint256 i; i < sets[nameHash].length(); ++i) {
-            uint256 _votingPower = BaseAllocation(sets[nameHash].at(i)).getMajorityVotingPower();
+        for (uint256 i; i < st.sets[nameHash].length(); ++i) {
+            uint256 _votingPower = BaseAllocation(st.sets[nameHash].at(i)).getMajorityVotingPower();
             totalVotingPower += _votingPower;
-            proposal.voterPower[sets[nameHash].at(i)] = _votingPower;
+            proposal.voterPower[st.sets[nameHash].at(i)] = _votingPower;
         }
         proposal.totalVotingPower = totalVotingPower;
 
-        setMajorityVoteActive[nameHash] = true;
+        st.setMajorityVoteActive[nameHash] = true;
         emit MetaVesTController_MajorityAmendmentProposed(setName, _msgSig, _callData, totalVotingPower);
     }
 
@@ -710,27 +594,28 @@ contract metavestController is UUPSUpgradeable, SafeTransferLib {
     /// @param _setName name of the set for majority set amendment proposal
     /// @param _msgSig function signature of the function in this controller which (if successfully executed) will execute the metavest detail update
     function cancelExpiredMajorityMetavestAmendment(string memory _setName, bytes4 _msgSig) external onlyAuthority {
+        MetaVesTControllerStorage.MetaVesTControllerData storage st = MetaVesTControllerStorage.getStorage();
         if(!doesSetExist(_setName)) revert MetaVesTController_SetDoesNotExist();
         bytes32 nameHash = keccak256(bytes(_setName));
-        if (!setMajorityVoteActive[nameHash] || block.timestamp < functionToSetMajorityProposal[_msgSig][nameHash].time + AMENDMENT_TIME_LIMIT) revert MetaVesTController_AmendmentCannotBeCanceled();
-        setMajorityVoteActive[nameHash] = false;
+        if (!st.setMajorityVoteActive[nameHash] || block.timestamp < st.functionToSetMajorityProposal[_msgSig][nameHash].time + AMENDMENT_TIME_LIMIT) revert MetaVesTController_AmendmentCannotBeCanceled();
+        st.setMajorityVoteActive[nameHash] = false;
     }
 
     /// @notice for a grantees to vote upon a metavest update for which they share a common amount of 'tokenGoverningPower'
     /// @param _msgSig function signature of the function in this controller which (if successfully executed) will execute the metavest detail update
     /// @param _inFavor whether msg.sender is in favor of the applicable amendment
     function voteOnMetavestAmendment(address _grant, string memory _setName, bytes4 _msgSig, bool _inFavor) external {
-
+        MetaVesTControllerStorage.MetaVesTControllerData storage st = MetaVesTControllerStorage.getStorage();
         bytes32 nameHash = keccak256(bytes(_setName));
         if(BaseAllocation(_grant).grantee() != msg.sender) revert MetaVesTController_OnlyGranteeMayCall();
         if (!isMetavestInSet(_grant, _setName)) revert MetaVesTController_SetDoesNotExist();
-        if (!functionToSetMajorityProposal[_msgSig][nameHash].isPending) revert MetaVesTController_NoPendingAmendment(_msgSig, _grant);
+        if (!st.functionToSetMajorityProposal[_msgSig][nameHash].isPending) revert MetaVesTController_NoPendingAmendment(_msgSig, _grant);
         if (!_checkFunctionToTokenToAmendmentTime(_msgSig, _setName))
             revert MetaVesTController_ProposedAmendmentExpired();
 
       
 
-        metavestController.MajorityAmendmentProposal storage proposal = functionToSetMajorityProposal[_msgSig][nameHash];
+        MetaVesTControllerStorage.MajorityAmendmentProposal storage proposal = st.functionToSetMajorityProposal[_msgSig][nameHash];
         uint256 _callerPower = proposal.voterPower[_grant];
         
         //check if the grant has already voted.
@@ -747,57 +632,62 @@ contract metavestController is UUPSUpgradeable, SafeTransferLib {
 
     /// @notice resets applicable amendment variables because either the applicable amending function has been successfully called or a pending amendment is being overridden with a new one
     function _resetAmendmentParams(address _grant, bytes4 _msgSig) internal {
+        MetaVesTControllerStorage.MetaVesTControllerData storage st = MetaVesTControllerStorage.getStorage();
         if(isMetavestInSet(_grant))
         {
             bytes32 set = getSetOfMetavest(_grant);
-            MajorityAmendmentProposal storage proposal = functionToSetMajorityProposal[_msgSig][set];
+            MetaVesTControllerStorage.MajorityAmendmentProposal storage proposal = st.functionToSetMajorityProposal[_msgSig][set];
             proposal.appliedProposalCreatedAt[_grant] = proposal.time;
-            setMajorityVoteActive[set] = false;
+            st.setMajorityVoteActive[set] = false;
         }
-        delete functionToGranteeToAmendmentPending[_msgSig][_grant];
+        delete st.functionToGranteeToAmendmentPending[_msgSig][_grant];
     }
 
     /// @notice check whether the applicable proposed amendment has expired
     function _checkFunctionToTokenToAmendmentTime(bytes4 _msgSig, string memory _setName) internal view returns (bool) {
+        MetaVesTControllerStorage.MetaVesTControllerData storage st = MetaVesTControllerStorage.getStorage();
         //check the majority proposal time
         bytes32 nameHash = keccak256(bytes(_setName));
-        return (block.timestamp < functionToSetMajorityProposal[_msgSig][nameHash].time + AMENDMENT_TIME_LIMIT);
+        return (block.timestamp < st.functionToSetMajorityProposal[_msgSig][nameHash].time + AMENDMENT_TIME_LIMIT);
     }
 
     function createSet(string memory _name) external onlyAuthority {
+        MetaVesTControllerStorage.MetaVesTControllerData storage st = MetaVesTControllerStorage.getStorage();
         bytes32 nameHash = keccak256(bytes(_name));
         if(bytes(_name).length == 0) revert MetaVesTController_ZeroAddress();
-        if (setNames.contains(nameHash)) revert MetaVesTController_SetAlreadyExists();
+        if (st.setNames.contains(nameHash)) revert MetaVesTController_SetAlreadyExists();
         if (bytes(_name).length > 512) revert MetaVesTController_StringTooLong();
-        
-        setNames.add(nameHash);
+
+        st.setNames.add(nameHash);
         emit MetaVesTController_SetCreated(_name);
     }
 
     function removeSet(string memory _name) external onlyAuthority {
+        MetaVesTControllerStorage.MetaVesTControllerData storage st = MetaVesTControllerStorage.getStorage();
         bytes32 nameHash = keccak256(bytes(_name));
-        if (setMajorityVoteActive[nameHash]) revert MetaVesTController_AmendmentAlreadyPending();
-        if (!setNames.contains(nameHash)) revert MetaVesTController_SetDoesNotExist();
+        if (st.setMajorityVoteActive[nameHash]) revert MetaVesTController_AmendmentAlreadyPending();
+        if (!st.setNames.contains(nameHash)) revert MetaVesTController_SetDoesNotExist();
         
         // Remove all addresses from the set starting from the last element
-        for (uint256 i = sets[nameHash].length(); i > 0; i--) {
-            address _grant = sets[nameHash].at(i - 1);
-            sets[nameHash].remove(_grant);
+        for (uint256 i = st.sets[nameHash].length(); i > 0; i--) {
+            address _grant = st.sets[nameHash].at(i - 1);
+            st.sets[nameHash].remove(_grant);
         }
 
-        setNames.remove(nameHash);
+        st.setNames.remove(nameHash);
         emit MetaVesTController_SetRemoved(_name);
     }
 
     function doesSetExist(string memory _name) internal view returns (bool) {
-        return setNames.contains(keccak256(bytes(_name)));
+        return MetaVesTControllerStorage.getStorage().setNames.contains(keccak256(bytes(_name)));
     }
 
     function isMetavestInSet(address _metavest) internal view returns (bool) {
-        uint256 length = setNames.length();
+        MetaVesTControllerStorage.MetaVesTControllerData storage st = MetaVesTControllerStorage.getStorage();
+        uint256 length = st.setNames.length();
         for (uint256 i = 0; i < length; i++) {
-            bytes32 nameHash = setNames.at(i);
-            if (sets[nameHash].contains(_metavest)) {
+            bytes32 nameHash = st.setNames.at(i);
+            if (st.sets[nameHash].contains(_metavest)) {
                 return true;
             }
         }
@@ -806,14 +696,15 @@ contract metavestController is UUPSUpgradeable, SafeTransferLib {
 
     function isMetavestInSet(address _metavest, string memory _setName) internal view returns (bool) {
         bytes32 nameHash = keccak256(bytes(_setName));
-        return sets[nameHash].contains(_metavest);
+        return MetaVesTControllerStorage.getStorage().sets[nameHash].contains(_metavest);
     }
 
     function getSetOfMetavest(address _metavest) internal view returns (bytes32) {
-        uint256 length = setNames.length();
+        MetaVesTControllerStorage.MetaVesTControllerData storage st = MetaVesTControllerStorage.getStorage();
+        uint256 length = st.setNames.length();
         for (uint256 i = 0; i < length; i++) {
-            bytes32 nameHash = setNames.at(i);
-            if (sets[nameHash].contains(_metavest)) {
+            bytes32 nameHash = st.setNames.at(i);
+            if (st.sets[nameHash].contains(_metavest)) {
                 return nameHash;
             }
         }
@@ -821,37 +712,88 @@ contract metavestController is UUPSUpgradeable, SafeTransferLib {
     }
 
     function addMetaVestToSet(string memory _name, address _metaVest) external onlyAuthority {
+        MetaVesTControllerStorage.MetaVesTControllerData storage st = MetaVesTControllerStorage.getStorage();
         bytes32 nameHash = keccak256(bytes(_name));
-        if (!setNames.contains(nameHash)) revert MetaVesTController_SetDoesNotExist();
+        if (!st.setNames.contains(nameHash)) revert MetaVesTController_SetDoesNotExist();
         if (isMetavestInSet(_metaVest)) revert MetaVesTController_MetaVesTAlreadyExists();
-        if (setMajorityVoteActive[nameHash]) revert MetaVesTController_AmendmentAlreadyPending();
+        if (st.setMajorityVoteActive[nameHash]) revert MetaVesTController_AmendmentAlreadyPending();
         
-        sets[nameHash].add(_metaVest);
+        st.sets[nameHash].add(_metaVest);
         emit MetaVesTController_AddressAddedToSet(_name, _metaVest);
     }
 
     function removeMetaVestFromSet(string memory _name, address _metaVest) external onlyAuthority {
+        MetaVesTControllerStorage.MetaVesTControllerData storage st = MetaVesTControllerStorage.getStorage();
         bytes32 nameHash = keccak256(bytes(_name));
-        if (!setNames.contains(nameHash)) revert MetaVesTController_SetDoesNotExist();
-        if (setMajorityVoteActive[nameHash]) revert MetaVesTController_AmendmentAlreadyPending();
-        if (!sets[nameHash].contains(_metaVest)) revert MetaVestController_MetaVestNotInSet();
+        if (!st.setNames.contains(nameHash)) revert MetaVesTController_SetDoesNotExist();
+        if (st.setMajorityVoteActive[nameHash]) revert MetaVesTController_AmendmentAlreadyPending();
+        if (!st.sets[nameHash].contains(_metaVest)) revert MetaVestController_MetaVestNotInSet();
         
-        sets[nameHash].remove(_metaVest);
+        st.sets[nameHash].remove(_metaVest);
         emit MetaVesTController_AddressRemovedFromSet(_name, _metaVest);
     }
 
     function getDeal(bytes32 agreementId) public view returns (MetaVestDeal memory) {
-        return deals[agreementId];
+        return MetaVesTControllerStorage.getStorage().deals[agreementId];
     }
 
     // Simple indexer for UX
 
     function getNumberOfDeals() public view returns(uint256) {
-        return dealIds.length;
+        return MetaVesTControllerStorage.getStorage().dealIds.length;
     }
 
     function getDealId(uint256 index) public view returns(bytes32) {
-        return dealIds[index];
+        return MetaVesTControllerStorage.getStorage().dealIds[index];
+    }
+
+    function authority() external view returns (address) {
+        return MetaVesTControllerStorage.getStorage().authority;
+    }
+
+    function dao() external view returns (address) {
+        return MetaVesTControllerStorage.getStorage().dao;
+    }
+
+    function registry() external view returns (address) {
+        return MetaVesTControllerStorage.getStorage().registry;
+    }
+
+    function vestingFactory() external view returns (address) {
+        return MetaVesTControllerStorage.getStorage().vestingFactory;
+    }
+
+    function tokenOptionFactory() external view returns (address) {
+        return MetaVesTControllerStorage.getStorage().tokenOptionFactory;
+    }
+
+    function restrictedTokenFactory() external view returns (address) {
+        return MetaVesTControllerStorage.getStorage().restrictedTokenFactory;
+    }
+
+    function functionToConditions(bytes4 sig, uint256 idx) external view returns (address) {
+        return MetaVesTControllerStorage.getStorage().functionToConditions[sig][idx];
+    }
+
+    function functionToGranteeToAmendmentPending(bytes4 sig, address grant) external view returns (MetaVesTControllerStorage.AmendmentProposal memory) {
+        return MetaVesTControllerStorage.getStorage().functionToGranteeToAmendmentPending[sig][grant];
+    }
+
+    function functionToSetMajorityProposal(bytes4 sig, bytes32 set) external view returns (
+        uint256 totalVotingPower,
+        uint256 currentVotingPower,
+        uint256 time,
+        bool isPending,
+        bytes32 dataHash
+    ) {
+        MetaVesTControllerStorage.MajorityAmendmentProposal storage proposal = MetaVesTControllerStorage.getStorage().functionToSetMajorityProposal[sig][set];
+        return (
+            proposal.totalVotingPower,
+            proposal.currentVotingPower,
+            proposal.time,
+            proposal.isPending,
+            proposal.dataHash
+        );
     }
 
     function _authorizeUpgrade(

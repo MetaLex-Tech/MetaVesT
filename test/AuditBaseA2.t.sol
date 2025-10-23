@@ -144,9 +144,9 @@ contract Audit is MetaVestControllerTest {
         controller.consentToMetavestAmendment(vestingAllocation, controller.removeMetavestMilestone.selector, false);
         // emit MetaVesTController_AmendmentConsentUpdated(msgSig: 0x75b89e4f00000000000000000000000000000000000000000000000000000000, grantee: ECAdd: [0x0000000000000000000000000000000000000006], inFavor: false)
         console.log("expected inFavor: false");
-        (,,bool inFavor) = controller.functionToGranteeToAmendmentPending(selector, vestingAllocation);
-        console.log("output: ", inFavor);
-        assertEq(inFavor, false);
+        MetaVesTControllerStorage.AmendmentProposal memory proposal = controller.functionToGranteeToAmendmentPending(selector, vestingAllocation);
+        console.log("output: ", proposal.inFavor);
+        assertEq(proposal.inFavor, false);
 
     }
 

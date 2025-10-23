@@ -75,11 +75,11 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
         vm.prank(authority);
         controller.proposeMetavestAmendment(address(vestingAllocation), msgSig, callData);
 
-        (bool isPending, bytes32 dataHash, bool inFavor) = controller.functionToGranteeToAmendmentPending(msgSig, address(vestingAllocation));
+        MetaVesTControllerStorage.AmendmentProposal memory proposal = controller.functionToGranteeToAmendmentPending(msgSig, address(vestingAllocation));
 
-        assertTrue(isPending);
-        assertEq(dataHash, keccak256(callData));
-        assertFalse(inFavor);
+        assertTrue(proposal.isPending);
+        assertEq(proposal.dataHash, keccak256(callData));
+        assertFalse(proposal.inFavor);
     }
 
      function test_RevertIf_ProposeMajorityMetavestAmendment() public {
