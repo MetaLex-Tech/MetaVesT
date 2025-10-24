@@ -248,7 +248,7 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
 
         vm.prank(authority);
         controller.updateMetavestTransferability(mockAllocation2, true);*/
-        vm.expectRevert(abi.encodeWithSelector(metavestController.MetaVesTController_AmendmentAlreadyPending.selector));
+        vm.expectRevert(abi.encodeWithSelector(MetaVesTControllerStorage.MetaVesTController_AmendmentAlreadyPending.selector));
         vm.prank(authority);
         controller.proposeMajorityMetavestAmendment("testSet", msgSig, callData);
     }
@@ -277,7 +277,7 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
         address mockAllocation2 = createDummyVestingAllocation();
         vm.startPrank(authority);
       //  controller.createSet("testSet");
-        vm.expectRevert(abi.encodeWithSelector(metavestController.MetaVestController_MetaVestNotInSet.selector));
+        vm.expectRevert(abi.encodeWithSelector(MetaVesTControllerStorage.MetaVestController_MetaVestNotInSet.selector));
         controller.removeMetaVestFromSet("testSet", mockAllocation2);
     }
 
@@ -394,7 +394,7 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
         vm.prank(authority);
         controller.terminateMetavestVesting(vestingAllocation);
 
-        vm.expectRevert(abi.encodeWithSelector(metavestController.MetaVesTController_EmergencyUnlockNotSatisfied.selector));
+        vm.expectRevert(abi.encodeWithSelector(MetaVesTControllerStorage.MetaVesTController_EmergencyUnlockNotSatisfied.selector));
         vm.prank(authority);
         controller.emergencyUpdateMetavestUnlockRate(vestingAllocation, 1e20);
         BaseAllocation.Allocation memory updatedAllocation = BaseAllocation(vestingAllocation).getMetavestDetails();
@@ -419,7 +419,7 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
         BaseAllocation.Allocation memory updatedAllocation = BaseAllocation(vestingAllocation).getMetavestDetails();
         assertEq(updatedAllocation.unlockRate, 0);
 
-        vm.expectRevert(abi.encodeWithSelector(metavestController.MetaVesTController_EmergencyUnlockNotSatisfied.selector));
+        vm.expectRevert(abi.encodeWithSelector(MetaVesTControllerStorage.MetaVesTController_EmergencyUnlockNotSatisfied.selector));
         vm.prank(authority);
         controller.emergencyUpdateMetavestUnlockRate(vestingAllocation, 1e20);
         updatedAllocation = BaseAllocation(vestingAllocation).getMetavestDetails();
@@ -889,7 +889,7 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
             alice, // recipient
             alicePrivateKey,
             "Alice",
-            abi.encodeWithSelector(metavestController.MetaVesTController_ZeroAddress.selector)
+            abi.encodeWithSelector(MetaVesTControllerStorage.MetaVesTController_ZeroAddress.selector)
         );
     }
 
@@ -1291,7 +1291,7 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
 
     function test_RevertIf_InitiateAuthorityUpdateNonAuthority() public {
         vm.prank(address(0x1234));
-        vm.expectRevert(abi.encodeWithSelector(metavestController.MetaVesTController_OnlyAuthority.selector));
+        vm.expectRevert(abi.encodeWithSelector(MetaVesTControllerStorage.MetaVesTController_OnlyAuthority.selector));
         controller.initiateAuthorityUpdate(address(0x5678));
     }
 
@@ -1300,13 +1300,13 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
         controller.initiateAuthorityUpdate(address(0x5678));
 
         vm.prank(address(0x1234));
-        vm.expectRevert(abi.encodeWithSelector(metavestController.MetaVesTController_OnlyPendingAuthority.selector));
+        vm.expectRevert(abi.encodeWithSelector(MetaVesTControllerStorage.MetaVesTController_OnlyPendingAuthority.selector));
         controller.acceptAuthorityRole();
     }
 
     function test_RevertIf_InitiateDaoUpdateNonDao() public {
         vm.prank(address(0x1234));
-        vm.expectRevert(abi.encodeWithSelector(metavestController.MetaVesTController_OnlyDAO.selector));
+        vm.expectRevert(abi.encodeWithSelector(MetaVesTControllerStorage.MetaVesTController_OnlyDAO.selector));
         controller.initiateDaoUpdate(address(0x5678));
     }
 
@@ -1315,7 +1315,7 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
         controller.initiateDaoUpdate(address(0x5678));
 
         vm.prank(address(0x1234));
-        vm.expectRevert(abi.encodeWithSelector(metavestController.MetaVesTController_OnlyPendingDao.selector));
+        vm.expectRevert(abi.encodeWithSelector(MetaVesTControllerStorage.MetaVesTController_OnlyPendingDao.selector));
         controller.acceptDaoRole();
     }
 
@@ -1340,7 +1340,7 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
     function test_RevertIf_UpdateFunctionConditionNonDao() public {
         bytes4 functionSig = bytes4(keccak256("updateMetavestStopTimes(address,uint48)"));
         address condition = address(0x1234);
-        vm.expectRevert(abi.encodeWithSelector(metavestController.MetaVesTController_OnlyDAO.selector));
+        vm.expectRevert(abi.encodeWithSelector(MetaVesTControllerStorage.MetaVesTController_OnlyDAO.selector));
         controller.updateFunctionCondition(condition, functionSig);
     }
 
@@ -1381,7 +1381,7 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
         assert(controller.functionToConditions(functionSig, 0) == address(condition));
         // create a dummy metavest
         createDummyVestingAllocation(
-            abi.encodeWithSelector(metavestController.MetaVesTController_ConditionNotSatisfied.selector, condition) // Expected revert
+            abi.encodeWithSelector(MetaVesTControllerStorage.MetaVesTController_ConditionNotSatisfied.selector, condition) // Expected revert
         );
     }
 
@@ -1401,7 +1401,7 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
         controller.updateFunctionCondition(address(condition), functionSig);
         assert(controller.functionToConditions(functionSig, 0) == address(condition));
         vm.prank(dao);
-        vm.expectRevert(abi.encodeWithSelector(metavestController.MetaVestController_DuplicateCondition.selector));
+        vm.expectRevert(abi.encodeWithSelector(MetaVesTControllerStorage.MetaVestController_DuplicateCondition.selector));
         controller.updateFunctionCondition(address(condition), functionSig);
     }
 
@@ -1565,7 +1565,7 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
 //
 //    function test_RevertIf_PauseMintingNonAuthority() public {
 //        // Non-authority should not be able to pause minting through controller
-//        vm.expectRevert(abi.encodeWithSelector(metavestController.MetaVesTController_OnlyAuthority.selector));
+//        vm.expectRevert(abi.encodeWithSelector(MetaVesTControllerStorage.MetaVesTController_OnlyAuthority.selector));
 //        controller.pauseZkCappedMinter();
 //    }
 //
@@ -1591,7 +1591,7 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
 //
 //    function test_RevertIf_CloseMintingNonAuthority() public {
 //        // Non-authority should not be able to close minting through controller
-//        vm.expectRevert(abi.encodeWithSelector(metavestController.MetaVesTController_OnlyAuthority.selector));
+//        vm.expectRevert(abi.encodeWithSelector(MetaVesTControllerStorage.MetaVesTController_OnlyAuthority.selector));
 //        controller.closeZkCappedMinter();
 //    }
 
@@ -1599,7 +1599,7 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
 //    function test_RevertIf_MintUnauthorized() public {
 //        // Should not be able to mint arbitrarily
 //        vm.prank(alice);
-//        vm.expectRevert(abi.encodeWithSelector(metavestController.MetaVesTController_UnauthorizedToMint.selector));
+//        vm.expectRevert(abi.encodeWithSelector(MetaVesTControllerStorage.MetaVesTController_UnauthorizedToMint.selector));
 //        controller.mint(alice, 1 ether);
 //    }
 
@@ -1610,7 +1610,7 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
         // Upgrade to new implementation without initialization data
 
         // Non-owner should not be able to upgrade it
-        vm.expectRevert(abi.encodeWithSelector(metavestController.MetaVesTController_OnlyAuthority.selector));
+        vm.expectRevert(abi.encodeWithSelector(MetaVesTControllerStorage.MetaVesTController_OnlyAuthority.selector));
         controller.upgradeToAndCall(newImplementation, "");
 
         // Owner should be able to upgrade it

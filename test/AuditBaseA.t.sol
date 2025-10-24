@@ -30,7 +30,7 @@ contract Audit is MetaVestControllerTest {
         address evil_grant = address(new EvilGrant());
 
         vm.prank(attacker);
-        vm.expectRevert(abi.encodeWithSelector(metavestController.MetaVesTController_SetDoesNotExist.selector));
+        vm.expectRevert(abi.encodeWithSelector(MetaVesTControllerStorage.MetaVesTController_SetDoesNotExist.selector));
         controller.voteOnMetavestAmendment(address(evil_grant), "testSet", msgSig, true);
 
         (uint256 totalVotingPower, uint256 currentVotingPower, , ,  ) = controller.functionToSetMajorityProposal(msgSig, "testSet");
@@ -51,7 +51,7 @@ contract Audit is MetaVestControllerTest {
 
         vm.prank(grantee);
         controller.consentToMetavestAmendment(vestingAllocation, controller.removeMetavestMilestone.selector, true);
-        vm.expectRevert(abi.encodeWithSelector(metavestController.MetaVesTController_MilestoneIndexCompletedOrDoesNotExist.selector));
+        vm.expectRevert(abi.encodeWithSelector(MetaVesTControllerStorage.MetaVesTController_MilestoneIndexCompletedOrDoesNotExist.selector));
         vm.prank(authority);
         controller.removeMetavestMilestone(vestingAllocation, 0);
     }

@@ -105,7 +105,7 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
         controller.voteOnMetavestAmendment(mockAllocation2, "testSet", msgSig, true);
 
         vm.prank(authority);
-         vm.expectRevert(abi.encodeWithSelector(metavestController.MetaVesTController_AmendmentNeitherMutualNorMajorityConsented.selector));
+         vm.expectRevert(abi.encodeWithSelector(MetaVesTControllerStorage.MetaVesTController_AmendmentNeitherMutualNorMajorityConsented.selector));
         controller.updateMetavestTransferability(mockAllocation2, true);
     }
 
@@ -277,11 +277,11 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
         controller.proposeMajorityMetavestAmendment("testSet", msgSig, callData);
 
         vm.prank(authority);
-        vm.expectRevert(abi.encodeWithSelector(metavestController.MetaVesTController_AmendmentNeitherMutualNorMajorityConsented.selector));
+        vm.expectRevert(abi.encodeWithSelector(MetaVesTControllerStorage.MetaVesTController_AmendmentNeitherMutualNorMajorityConsented.selector));
         controller.updateMetavestTransferability(mockAllocation2, true);
 
         vm.prank(authority);
-        vm.expectRevert(abi.encodeWithSelector(metavestController.MetaVesTController_AmendmentNeitherMutualNorMajorityConsented.selector));
+        vm.expectRevert(abi.encodeWithSelector(MetaVesTControllerStorage.MetaVesTController_AmendmentNeitherMutualNorMajorityConsented.selector));
         controller.updateMetavestTransferability(mockAllocation3, true);
     }
 
@@ -314,7 +314,7 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
 
         vm.startPrank(grantee);
         controller.voteOnMetavestAmendment(address(vestingAllocation), "testSet", msgSig, true);
-        vm.expectRevert(abi.encodeWithSelector(metavestController.MetaVesTController_AlreadyVoted.selector));
+        vm.expectRevert(abi.encodeWithSelector(MetaVesTControllerStorage.MetaVesTController_AlreadyVoted.selector));
         controller.voteOnMetavestAmendment(address(vestingAllocation), "testSet", msgSig, true);
         vm.stopPrank();
     }
@@ -343,14 +343,14 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
     function test_RevertIf_CreateDuplicateSet() public {
         vm.startPrank(authority);
         controller.createSet("duplicateSet");
-        vm.expectRevert(abi.encodeWithSelector(metavestController.MetaVesTController_SetAlreadyExists.selector));
+        vm.expectRevert(abi.encodeWithSelector(MetaVesTControllerStorage.MetaVesTController_SetAlreadyExists.selector));
         controller.createSet("duplicateSet");
         vm.stopPrank();
     }
 
     function test_RevertIf_NonAuthorityCreateSet() public {
         vm.prank(grantee);
-        vm.expectRevert(abi.encodeWithSelector(metavestController.MetaVesTController_OnlyAuthority.selector));
+        vm.expectRevert(abi.encodeWithSelector(MetaVesTControllerStorage.MetaVesTController_OnlyAuthority.selector));
         controller.createSet("unauthorizedSet");
     }
 
@@ -494,11 +494,11 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
         controller.proposeMetavestAmendment(allocation, msgSig, callData);
 
         vm.prank(grantee);
-        vm.expectRevert(abi.encodeWithSelector(metavestController.MetaVesTController_SetDoesNotExist.selector));
+        vm.expectRevert(abi.encodeWithSelector(MetaVesTControllerStorage.MetaVesTController_SetDoesNotExist.selector));
         controller.voteOnMetavestAmendment(allocation, "testSet", msgSig, false);
 
         vm.prank(authority);
-        vm.expectRevert(abi.encodeWithSelector(metavestController.MetaVesTController_AmendmentNeitherMutualNorMajorityConsented.selector));
+        vm.expectRevert(abi.encodeWithSelector(MetaVesTControllerStorage.MetaVesTController_AmendmentNeitherMutualNorMajorityConsented.selector));
         controller.updateMetavestTransferability(allocation, true);
     }
 
@@ -507,7 +507,7 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
         bytes4 msgSig = bytes4(keccak256("updateMetavestTransferability(address,bool)"));
 
         vm.prank(grantee);
-        vm.expectRevert(abi.encodeWithSelector(metavestController.MetaVesTController_SetDoesNotExist.selector));
+        vm.expectRevert(abi.encodeWithSelector(MetaVesTControllerStorage.MetaVesTController_SetDoesNotExist.selector));
         controller.voteOnMetavestAmendment(allocation, "testSet", msgSig, true);
     }
 
@@ -520,7 +520,7 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
         controller.proposeMetavestAmendment(allocation, msgSig, callData);
 
         vm.prank(authority);
-        vm.expectRevert(abi.encodeWithSelector(metavestController.MetaVesTController_AmendmentNeitherMutualNorMajorityConsented.selector));
+        vm.expectRevert(abi.encodeWithSelector(MetaVesTControllerStorage.MetaVesTController_AmendmentNeitherMutualNorMajorityConsented.selector));
         controller.updateMetavestTransferability(allocation, true);
     }
 
@@ -533,7 +533,7 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
         controller.proposeMetavestAmendment(allocation, msgSig, callData);
 
         vm.prank(grantee);
-        vm.expectRevert(abi.encodeWithSelector(metavestController.MetaVesTController_SetDoesNotExist.selector));
+        vm.expectRevert(abi.encodeWithSelector(MetaVesTControllerStorage.MetaVesTController_SetDoesNotExist.selector));
         controller.voteOnMetavestAmendment(allocation, "testSet", msgSig, true);
     }
 
@@ -546,7 +546,7 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
         controller.proposeMetavestAmendment(allocation, msgSig, callData);
 
         vm.prank(grantee);
-        vm.expectRevert(abi.encodeWithSelector(metavestController.MetaVesTController_SetDoesNotExist.selector));
+        vm.expectRevert(abi.encodeWithSelector(MetaVesTControllerStorage.MetaVesTController_SetDoesNotExist.selector));
         controller.voteOnMetavestAmendment(allocation, "testSet", msgSig, true);
     }
 
@@ -648,7 +648,7 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
         bytes memory callData = abi.encodeWithSelector(msgSig, allocation, true);
 
         vm.prank(grantee);
-        vm.expectRevert(abi.encodeWithSelector(metavestController.MetaVesTController_NoPendingAmendment.selector, msgSig, allocation));
+        vm.expectRevert(abi.encodeWithSelector(MetaVesTControllerStorage.MetaVesTController_NoPendingAmendment.selector, msgSig, allocation));
         controller.consentToMetavestAmendment(allocation, msgSig, true);
     }
 
@@ -922,7 +922,7 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
         controller.proposeMetavestAmendment(allocation, msgSig, callData);
 
         vm.prank(authority);
-        vm.expectRevert(abi.encodeWithSelector(metavestController.MetaVesTController_AmendmentNeitherMutualNorMajorityConsented.selector));
+        vm.expectRevert(abi.encodeWithSelector(MetaVesTControllerStorage.MetaVesTController_AmendmentNeitherMutualNorMajorityConsented.selector));
         controller.setMetaVestGovVariables(allocation, BaseAllocation.GovType.vested);
     }
 }
