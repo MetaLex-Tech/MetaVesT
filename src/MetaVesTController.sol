@@ -79,11 +79,8 @@ contract metavestController is UUPSUpgradeable, SafeTransferLib {
 
     modifier consentCheck(address _grant, bytes calldata _data) {
         bytes4 error = MetaVesTControllerStorage.consentCheck(_grant, _data);
-        if (error == MetaVesTControllerStorage.MetaVesTController_AmendmentCanOnlyBeAppliedOnce.selector) {
-            revert MetaVesTControllerStorage.MetaVesTController_AmendmentCanOnlyBeAppliedOnce();
-        } else if (error == MetaVesTControllerStorage.MetaVesTController_AmendmentNeitherMutualNorMajorityConsented.selector) {
-            revert MetaVesTControllerStorage.MetaVesTController_AmendmentNeitherMutualNorMajorityConsented();
-        }
+        // This is a hack because libraries cannot emit events nor errors
+        _checkError(error);
         _;
     }
 
@@ -213,15 +210,6 @@ contract metavestController is UUPSUpgradeable, SafeTransferLib {
         string memory secret
     ) external conditionCheck() returns (address) {
         MetaVesTControllerStorage.MetaVesTControllerData storage st = MetaVesTControllerStorage.getStorage();
-
-        // Check: verify inputs
-
-        if(ICyberAgreementRegistry(st.registry).isVoided(agreementId)) revert MetaVesTControllerStorage.MetaVesTController_DealVoided();
-        if(ICyberAgreementRegistry(st.registry).isFinalized(agreementId)) revert MetaVesTControllerStorage.MetaVesTController_DealAlreadyFinalized();
-
-        string[] storage counterPartyCheck = st.counterPartyValues[agreementId];
-        if (keccak256(abi.encode(counterPartyCheck)) != keccak256(abi.encode(partyValues))) revert MetaVesTControllerStorage.MetaVesTController_CounterPartyValueMismatch();
-
         MetaVestDeal storage deal = MetaVesTControllerStorage.getStorage().deals[agreementId];
 
         // Interaction: finalize the deal and create metavest contract
@@ -234,19 +222,7 @@ contract metavestController is UUPSUpgradeable, SafeTransferLib {
             secret
         );
 
-        if (error == MetaVesTControllerStorage.MetaVesTController_ZeroAddress.selector) {
-            revert MetaVesTControllerStorage.MetaVesTController_ZeroAddress();
-        } else if (error == MetaVesTControllerStorage.MetaVesTController_CliffGreaterThanTotal.selector) {
-            revert MetaVesTControllerStorage.MetaVesTController_CliffGreaterThanTotal();
-        } else if (error == MetaVesTControllerStorage.MetaVesTController_LengthMismatch.selector) {
-            revert MetaVesTControllerStorage.MetaVesTController_LengthMismatch();
-        } else if (error == MetaVesTControllerStorage.MetaVesTController_ZeroAmount.selector) {
-            revert MetaVesTControllerStorage.MetaVesTController_ZeroAmount();
-        } else if (error == MetaVesTControllerStorage.MetaVesTController_AmountNotApprovedForTransferFrom.selector) {
-            revert MetaVesTControllerStorage.MetaVesTController_AmountNotApprovedForTransferFrom();
-        } else if (error == MetaVesTControllerStorage.MetaVesTController_IncorrectMetaVesTType.selector) {
-            revert MetaVesTControllerStorage.MetaVesTController_IncorrectMetaVesTType();
-        }
+        _checkError(error);
 
         // Interaction: transfer tokens to escrow
         safeTransferFrom(deal.allocation.tokenContract, st.authority, newMetavest, total);
@@ -673,6 +649,52 @@ contract metavestController is UUPSUpgradeable, SafeTransferLib {
             proposal.isPending,
             proposal.dataHash
         );
+    }
+
+    /// @notice This is a hack because libraries cannot throw errors, so it returns error codes for the core contract
+    /// to throw accordingly
+    /// @dev As inefficient as it looks, it actually saves 3000+ bytes because otherwise logic that throws errors
+    /// would not be able to move to external libraries
+    function _checkError(bytes4 error) internal {
+        if (error == 0) {
+            return;
+
+        } else if (error == MetaVesTControllerStorage.MetaVesTController_ZeroAddress.selector) {
+            revert MetaVesTControllerStorage.MetaVesTController_ZeroAddress();
+
+        } else if (error == MetaVesTControllerStorage.MetaVesTController_CliffGreaterThanTotal.selector) {
+            revert MetaVesTControllerStorage.MetaVesTController_CliffGreaterThanTotal();
+
+        } else if (error == MetaVesTControllerStorage.MetaVesTController_LengthMismatch.selector) {
+            revert MetaVesTControllerStorage.MetaVesTController_LengthMismatch();
+
+        } else if (error == MetaVesTControllerStorage.MetaVesTController_ZeroAmount.selector) {
+            revert MetaVesTControllerStorage.MetaVesTController_ZeroAmount();
+
+        } else if (error == MetaVesTControllerStorage.MetaVesTController_AmountNotApprovedForTransferFrom.selector) {
+            revert MetaVesTControllerStorage.MetaVesTController_AmountNotApprovedForTransferFrom();
+
+        } else if (error == MetaVesTControllerStorage.MetaVesTController_IncorrectMetaVesTType.selector) {
+            revert MetaVesTControllerStorage.MetaVesTController_IncorrectMetaVesTType();
+
+        } else if (error == MetaVesTControllerStorage.MetaVesTController_AmendmentCanOnlyBeAppliedOnce.selector) {
+            revert MetaVesTControllerStorage.MetaVesTController_AmendmentCanOnlyBeAppliedOnce();
+            
+        } else if (error == MetaVesTControllerStorage.MetaVesTController_AmendmentNeitherMutualNorMajorityConsented.selector) {
+            revert MetaVesTControllerStorage.MetaVesTController_AmendmentNeitherMutualNorMajorityConsented();
+
+        } else if (error == MetaVesTControllerStorage.MetaVesTController_DealVoided.selector) {
+            revert MetaVesTControllerStorage.MetaVesTController_DealVoided();
+
+        } else if (error == MetaVesTControllerStorage.MetaVesTController_DealAlreadyFinalized.selector) {
+            revert MetaVesTControllerStorage.MetaVesTController_DealAlreadyFinalized();
+
+        } else if (error == MetaVesTControllerStorage.MetaVesTController_CounterPartyValueMismatch.selector) {
+            revert MetaVesTControllerStorage.MetaVesTController_CounterPartyValueMismatch();
+
+        } else {
+            revert MetaVesTControllerStorage.MetaVesTController_UnknownError(error, "");
+        }
     }
 
     function _authorizeUpgrade(

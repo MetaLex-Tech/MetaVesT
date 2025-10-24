@@ -155,6 +155,7 @@ library MetaVesTControllerStorage {
     error MetaVesTController_PartyValuesLengthMismatch();
     error MetaVesTController_CounterPartyValueMismatch();
     error MetaVesTController_UnauthorizedToMint();
+    error MetaVesTController_UnknownError(bytes4 error, bytes data);
 
     function getStorage() internal pure returns (MetaVesTControllerData storage st) {
         bytes32 position = STORAGE_POSITION;
@@ -270,9 +271,20 @@ library MetaVesTControllerStorage {
         MetaVesTControllerStorage.MetaVesTControllerData storage st = MetaVesTControllerStorage.getStorage();
 
         // Check: verify inputs
+
+        if(ICyberAgreementRegistry(st.registry).isVoided(agreementId)) return (address(0), 0, MetaVesTControllerStorage.MetaVesTController_DealVoided.selector);
+        if(ICyberAgreementRegistry(st.registry).isFinalized(agreementId)) return (address(0), 0, MetaVesTControllerStorage.MetaVesTController_DealAlreadyFinalized.selector);
+
+        string[] storage counterPartyCheck = st.counterPartyValues[agreementId];
+        if (keccak256(abi.encode(counterPartyCheck)) != keccak256(abi.encode(partyValues))) return (address(0), 0, MetaVesTControllerStorage.MetaVesTController_CounterPartyValueMismatch.selector);
         
         MetaVestDeal storage deal = MetaVesTControllerStorage.getStorage().deals[agreementId];
-        if (deal.grantee == address(0) || recipient == address(0) || deal.allocation.tokenContract == address(0) || deal.paymentToken == address(0) || deal.exercisePrice == 0) {
+
+        if (
+            deal.grantee == address(0) || recipient == address(0) || deal.allocation.tokenContract == address(0)
+            || (deal.metavestType == MetaVestType.TokenOption && deal.paymentToken == address(0) && deal.exercisePrice == 0)
+            || (deal.metavestType == MetaVestType.RestrictedTokenAward && deal.paymentToken == address(0) && deal.exercisePrice == 0)
+        ) {
             return (address(0), 0, MetaVesTController_ZeroAddress.selector);
         }
         if (
