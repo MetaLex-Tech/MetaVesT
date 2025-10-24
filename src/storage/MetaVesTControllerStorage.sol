@@ -42,6 +42,7 @@
  
 pragma solidity 0.8.28;
 
+import {ICyberAgreementRegistry} from "cybercorps-contracts/src/interfaces/ICyberAgreementRegistry.sol";
 import {EnumerableSet} from "../lib/EnumberableSet.sol";
 import {MetaVestDealLib, MetaVestDeal, MetaVestType} from "../lib/MetaVestDealLib.sol";
 import {IAllocationFactory} from "../interfaces/IAllocationFactory.sol";
@@ -118,7 +119,7 @@ library MetaVesTControllerStorage {
         }
     }
 
-    function createMetavest(bytes32 agreementId, address recipient) external returns (address) {
+    function createMetavest(bytes32 agreementId, address recipient) internal returns (address) {
         MetaVesTControllerStorage.MetaVesTControllerData storage st = MetaVesTControllerStorage.getStorage();
 
         MetaVestDeal storage deal = st.deals[agreementId];
@@ -189,5 +190,77 @@ library MetaVesTControllerStorage {
         );
 
         return restrictedTokenAward;
+    }
+
+    function proposeAndSignDeal(
+        bytes32 templateId,
+        uint256 salt,
+        MetaVestDeal memory dealDraft,
+        string[] memory globalValues,
+        address[] memory parties,
+        string[][] memory partyValues,
+        bytes calldata signature,
+        bytes32 secretHash,
+        uint256 expiry
+    ) external returns (MetaVestDeal memory) {
+        MetaVesTControllerStorage.MetaVesTControllerData storage st = MetaVesTControllerStorage.getStorage();
+
+        // Call internal function to avoid stack-too-deep errors
+        dealDraft.agreementId = ICyberAgreementRegistry(st.registry).createContract(
+            templateId,
+            salt,
+            globalValues,
+            parties,
+            partyValues,
+            secretHash,
+            address(this),
+            expiry
+        );
+
+        st.counterPartyValues[dealDraft.agreementId] = partyValues[1];
+
+        ICyberAgreementRegistry(st.registry).signContractFor(
+            st.authority, // First party (grantor) should always be the authority
+            dealDraft.agreementId,
+            partyValues[0],
+            signature,
+            false, // Not meant for anyone else other than the signer
+            "" // Signer == proposer, no secret needed
+        );
+
+        st.deals[dealDraft.agreementId] = dealDraft;
+        st.dealIds.push(dealDraft.agreementId);
+
+        return dealDraft;
+    }
+
+    function signDealAndCreateMetavest(
+        address grantee,
+        address recipient,
+        bytes32 agreementId,
+        string[] memory partyValues,
+        bytes memory signature,
+        string memory secret
+    ) external returns (address) {
+        MetaVesTControllerStorage.MetaVesTControllerData storage st = MetaVesTControllerStorage.getStorage();
+
+        // Finalize agreement
+        ICyberAgreementRegistry(st.registry).signContractFor(grantee, agreementId, partyValues, signature, false, secret);
+        ICyberAgreementRegistry(st.registry).finalizeContract(agreementId);
+
+        // Create and provision MetaVesT
+        return createMetavest(agreementId, recipient);
+    }
+
+    function removeFunctionCondition(address _condition, bytes4 _functionSig) external {
+        MetaVesTControllerStorage.MetaVesTControllerData storage st = MetaVesTControllerStorage.getStorage();
+        address[] storage conditions = st.functionToConditions[_functionSig];
+        for (uint256 i; i < conditions.length; ++i) {
+            if (conditions[i] == _condition) {
+                conditions[i] = conditions[conditions.length - 1];
+                conditions.pop();
+                break;
+            }
+        }
     }
 }

@@ -209,15 +209,7 @@ contract metavestController is UUPSUpgradeable, SafeTransferLib {
     }
 
     function removeFunctionCondition(address _condition, bytes4 _functionSig) external onlyDao {
-        MetaVesTControllerStorage.MetaVesTControllerData storage st = MetaVesTControllerStorage.getStorage();
-        address[] storage conditions = st.functionToConditions[_functionSig];
-        for (uint256 i; i < conditions.length; ++i) {
-            if (conditions[i] == _condition) {
-                conditions[i] = conditions[conditions.length - 1];
-                conditions.pop();
-                break;
-            }
-        }
+        MetaVesTControllerStorage.removeFunctionCondition(_condition, _functionSig);
         emit MetaVesTController_ConditionUpdated(_condition, _functionSig);
     }
 
@@ -236,41 +228,28 @@ contract metavestController is UUPSUpgradeable, SafeTransferLib {
         MetaVesTControllerStorage.MetaVesTControllerData storage st = MetaVesTControllerStorage.getStorage();
 
         // TODO validate parties against deal
+        // Check: verify inputs
+        if (partyValues.length < 2) revert MetaVesTController_CounterPartyNotFound();
+        if (partyValues[1].length != partyValues[0].length) revert MetaVesTController_PartyValuesLengthMismatch();
 
-        // Call internal function to avoid stack-too-deep errors
-        dealDraft.agreementId = ICyberAgreementRegistry(st.registry).createContract(
+        MetaVestDeal memory dealProposed = MetaVesTControllerStorage.proposeAndSignDeal(
             templateId,
             salt,
+            dealDraft,
             globalValues,
             parties,
             partyValues,
+            signature,
             secretHash,
-            address(this),
             expiry
         );
 
-        if (partyValues.length < 2) revert MetaVesTController_CounterPartyNotFound();
-        if (partyValues[1].length != partyValues[0].length) revert MetaVesTController_PartyValuesLengthMismatch();
-        st.counterPartyValues[dealDraft.agreementId] = partyValues[1];
-
-        ICyberAgreementRegistry(st.registry).signContractFor(
-            st.authority, // First party (grantor) should always be the authority
-            dealDraft.agreementId,
-            partyValues[0],
-            signature,
-            false, // Not meant for anyone else other than the signer
-            "" // Signer == proposer, no secret needed
-        );
-
-        st.deals[dealDraft.agreementId] = dealDraft;
-        st.dealIds.push(dealDraft.agreementId);
-
         emit MetaVesTController_DealProposed(
-            dealDraft.agreementId, dealDraft.grantee, dealDraft.metavestType, dealDraft.allocation, dealDraft.milestones,
+            dealProposed.agreementId, dealProposed.grantee, dealProposed.metavestType, dealProposed.allocation, dealProposed.milestones,
             secretHash > 0,
             st.registry
         );
-        return dealDraft.agreementId;
+        return dealProposed.agreementId;
     }
 
     // TODO handle cases when agreement is signed externally
@@ -284,7 +263,7 @@ contract metavestController is UUPSUpgradeable, SafeTransferLib {
     ) external conditionCheck returns (address) {
         MetaVesTControllerStorage.MetaVesTControllerData storage st = MetaVesTControllerStorage.getStorage();
 
-        // Finalize agreement
+        // Check: verify inputs
 
         if(ICyberAgreementRegistry(st.registry).isVoided(agreementId)) revert MetaVesTController_DealVoided();
         if(ICyberAgreementRegistry(st.registry).isFinalized(agreementId)) revert MetaVesTController_DealAlreadyFinalized();
@@ -292,14 +271,18 @@ contract metavestController is UUPSUpgradeable, SafeTransferLib {
         string[] storage counterPartyCheck = st.counterPartyValues[agreementId];
         if (keccak256(abi.encode(counterPartyCheck)) != keccak256(abi.encode(partyValues))) revert MetaVesTController_CounterPartyValueMismatch();
 
-        ICyberAgreementRegistry(st.registry).signContractFor(grantee, agreementId, partyValues, signature, false, secret);
-
-        ICyberAgreementRegistry(st.registry).finalizeContract(agreementId);
-
-        // Create and provision MetaVesT
         MetaVestDeal storage deal = MetaVesTControllerStorage.getStorage().deals[agreementId];
         uint256 total = validate(deal, recipient);
-        address newMetavest = MetaVesTControllerStorage.createMetavest(agreementId, recipient);
+
+        // Interaction: finalize the deal and create metavest contract
+        address newMetavest = MetaVesTControllerStorage.signDealAndCreateMetavest(
+            grantee,
+            recipient,
+            agreementId,
+            partyValues,
+            signature,
+            secret
+        );
 
         if (newMetavest == address(0)) {
             revert MetaVesTController_IncorrectMetaVesTType();
