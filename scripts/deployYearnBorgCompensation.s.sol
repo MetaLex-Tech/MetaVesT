@@ -63,7 +63,9 @@ contract DeployYearnBorgCompensationScript is SafeTxHelper, Script {
                 address(config.borgSafe),
                 address(config.borgSafe),
                 address(config.registry),
-                address(config.vestingAllocationFactory)
+                address(config.vestingAllocationFactory),
+                address(config.tokenOptionFactory),
+                address(config.restrictedTokenFactory)
             )
         )));
 

@@ -7,6 +7,8 @@ import {CyberAgreementRegistry} from "cybercorps-contracts/src/CyberAgreementReg
 import {IGnosisSafe} from "../../test/lib/safe.sol";
 import {BaseAllocation} from "../../src/BaseAllocation.sol";
 import {VestingAllocationFactory} from "../../src/VestingAllocationFactory.sol";
+import {TokenOptionFactory} from "../../src/TokenOptionFactory.sol";
+import {RestrictedTokenFactory} from "../../src/RestrictedTokenFactory.sol";
 import {metavestController} from "../../src/MetaVesTController.sol";
 
 library YearnBorgCompensation2025_2026 {
@@ -28,6 +30,8 @@ library YearnBorgCompensation2025_2026 {
         IGnosisSafe metalexSafe;
         CyberAgreementRegistry registry;
         VestingAllocationFactory vestingAllocationFactory;
+        TokenOptionFactory tokenOptionFactory;
+        RestrictedTokenFactory restrictedTokenFactory;
         metavestController controller;
 
         // Yearn BORG Director Compensation Agreement (one template per director for now)
@@ -82,6 +86,8 @@ library YearnBorgCompensation2025_2026 {
             metalexSafe: metalexSafe,
             registry: CyberAgreementRegistry(0xa9E808B8eCBB60Bb19abF026B5b863215BC4c134),
             vestingAllocationFactory: VestingAllocationFactory(0xDeaDbeefdEAdbeefdEadbEEFdeadbeEFdEaDbeeF), // TODO TBD
+            tokenOptionFactory: TokenOptionFactory(0xDeaDbeefdEAdbeefdEadbEEFdeadbeEFdEaDbeeF), // TODO TBD
+            restrictedTokenFactory: RestrictedTokenFactory(0xDeaDbeefdEAdbeefdEadbEEFdeadbeEFdEaDbeeF), // TODO TBD
             controller: metavestController(0xDeaDbeefdEAdbeefdEadbEEFdeadbeEFdEaDbeeF), // TODO TBD
 
             // Yearn BORG Compensation Agreement

@@ -101,9 +101,9 @@ contract metavestController is UUPSUpgradeable, SafeTransferLib {
         address _authority,
         address _dao,
         address _registry,
-        address _vestingFactory
-//        address _tokenOptionFactory,
-//        address _restrictedTokenFactory
+        address _vestingFactory,
+        address _tokenOptionFactory,
+        address _restrictedTokenFactory
     ) public initializer {
         __UUPSUpgradeable_init();
 
@@ -113,8 +113,8 @@ contract metavestController is UUPSUpgradeable, SafeTransferLib {
         st.authority = _authority;
         st.registry = _registry;
         st.vestingFactory = _vestingFactory;
-//        tokenOptionFactory = _tokenOptionFactory;
-//        restrictedTokenFactory = _restrictedTokenFactory;
+        st.tokenOptionFactory = _tokenOptionFactory;
+        st.restrictedTokenFactory = _restrictedTokenFactory;
         st.dao = _dao;
     }
 

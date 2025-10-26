@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity ^0.8.20;
 
-//import "../src/RestrictedTokenAllocation.sol";
-//import "../src/RestrictedTokenFactory.sol";
-//import "../src/TokenOptionAllocation.sol";
-//import "../src/TokenOptionFactory.sol";
+import "../src/RestrictedTokenAllocation.sol";
+import "../src/RestrictedTokenFactory.sol";
+import "../src/TokenOptionAllocation.sol";
+import "../src/TokenOptionFactory.sol";
 import "../src/VestingAllocation.sol";
 import "../src/VestingAllocationFactory.sol";
 import "../src/interfaces/IAllocationFactory.sol";
@@ -33,6 +33,8 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
         // Deploy MetaVesT controller
 
         vestingAllocationFactory = new VestingAllocationFactory();
+        tokenOptionFactory = new TokenOptionFactory();
+        restrictedTokenFactory = new RestrictedTokenFactory();
 
         controller = metavestController(address(new ERC1967Proxy{salt: salt}(
             address(new metavestController{salt: salt}()),
@@ -41,7 +43,9 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
                 guardianSafe,
                 guardianSafe,
                 address(registry),
-                address(vestingAllocationFactory)
+                address(vestingAllocationFactory),
+                address(tokenOptionFactory),
+                address(restrictedTokenFactory)
             )
         )));
 

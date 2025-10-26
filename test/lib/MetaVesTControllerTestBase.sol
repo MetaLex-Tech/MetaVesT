@@ -3,12 +3,14 @@ pragma solidity ^0.8.24;
 
 import "forge-std/Test.sol";
 import "../../src/MetaVesTController.sol";
-import "../../src/VestingAllocationFactory.sol";
 import {ERC1967Proxy} from "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {BorgAuth} from "cybercorps-contracts/src/libs/auth.sol";
 import {CyberAgreementRegistry} from "cybercorps-contracts/src/CyberAgreementRegistry.sol";
 import {CyberAgreementUtils} from "cybercorps-contracts/test/libs/CyberAgreementUtils.sol";
 import {MockERC20} from "../mocks/MockERC20.sol";
+import {VestingAllocationFactory} from "../../src/VestingAllocationFactory.sol";
+import {TokenOptionFactory} from "../../src/TokenOptionFactory.sol";
+import {RestrictedTokenFactory} from "../../src/RestrictedTokenFactory.sol";
 import {MetaVestDealLib, MetaVestDeal} from "../../src/lib/MetaVestDealLib.sol";
 
 contract MetaVesTControllerTestBase is Test {
@@ -39,6 +41,8 @@ contract MetaVesTControllerTestBase is Test {
     CyberAgreementRegistry registry;
 
     VestingAllocationFactory vestingAllocationFactory;
+    TokenOptionFactory tokenOptionFactory;
+    RestrictedTokenFactory restrictedTokenFactory;
 
     metavestController controller;
 

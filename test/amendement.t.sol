@@ -40,7 +40,9 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
                 guardianSafe,
                 guardianSafe,
                 address(registry),
-                address(vestingAllocationFactory)
+                address(vestingAllocationFactory),
+                address(tokenOptionFactory),
+                address(restrictedTokenFactory)
             )
         )));
 
