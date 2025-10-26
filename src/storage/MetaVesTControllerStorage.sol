@@ -365,22 +365,22 @@ library MetaVesTControllerStorage {
         return totalVotingPower;
     }
 
-    function conditionCheck() external returns (address) {
+    function conditionCheck(bytes4 msgSig) external returns (address) {
         MetaVesTControllerStorage.MetaVesTControllerData storage st = MetaVesTControllerStorage.getStorage();
-        address[] memory conditions = st.functionToConditions[msg.sig];
+        address[] memory conditions = st.functionToConditions[msgSig];
         for (uint256 i; i < conditions.length; ++i) {
-            if (!IConditionM(conditions[i]).checkCondition(address(this), msg.sig, "")) {
+            if (!IConditionM(conditions[i]).checkCondition(address(this), msgSig, "")) {
                 return conditions[i];
             }
         }
         return address(0);
     }
 
-    function consentCheck(address _grant, bytes calldata _data) external returns (bytes4) {
+    function consentCheck(bytes4 msgSig, address _grant, bytes calldata _data) external returns (bytes4) {
         MetaVesTControllerStorage.MetaVesTControllerData storage st = MetaVesTControllerStorage.getStorage();
         if (isMetavestInSet(_grant)) {
             bytes32 set = getSetOfMetavest(_grant);
-            MetaVesTControllerStorage.MajorityAmendmentProposal storage proposal = st.functionToSetMajorityProposal[msg.sig][set];
+            MetaVesTControllerStorage.MajorityAmendmentProposal storage proposal = st.functionToSetMajorityProposal[msgSig][set];
             if(proposal.appliedProposalCreatedAt[_grant] == proposal.time) return MetaVesTControllerStorage.MetaVesTController_AmendmentCanOnlyBeAppliedOnce.selector;
             if (_data.length>32 && _data.length<69)
             {
@@ -390,7 +390,7 @@ library MetaVesTControllerStorage {
             }
             else return MetaVesTControllerStorage.MetaVesTController_AmendmentNeitherMutualNorMajorityConsented.selector;
         } else {
-            MetaVesTControllerStorage.AmendmentProposal storage proposal = st.functionToGranteeToAmendmentPending[msg.sig][_grant];
+            MetaVesTControllerStorage.AmendmentProposal storage proposal = st.functionToGranteeToAmendmentPending[msgSig][_grant];
             if (!proposal.inFavor || proposal.dataHash != keccak256(_data)) {
                 return MetaVesTControllerStorage.MetaVesTController_AmendmentNeitherMutualNorMajorityConsented.selector;
             }

@@ -70,7 +70,7 @@ contract metavestController is UUPSUpgradeable, SafeTransferLib {
     ///
 
     modifier conditionCheck() {
-        address failedCondition = MetaVesTControllerStorage.conditionCheck();
+        address failedCondition = MetaVesTControllerStorage.conditionCheck(msg.sig);
         if (failedCondition != address(0)) {
             revert MetaVesTControllerStorage.MetaVesTController_ConditionNotSatisfied(failedCondition);
         }
@@ -78,7 +78,7 @@ contract metavestController is UUPSUpgradeable, SafeTransferLib {
     }
 
     modifier consentCheck(address _grant, bytes calldata _data) {
-        bytes4 error = MetaVesTControllerStorage.consentCheck(_grant, _data);
+        bytes4 error = MetaVesTControllerStorage.consentCheck(msg.sig, _grant, _data);
         // This is a hack because libraries cannot emit events nor errors
         _checkError(error);
         _;
