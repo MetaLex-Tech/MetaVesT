@@ -52,7 +52,15 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
 
         vm.stopPrank();
 
-        // Prepare funds
+        // Prepare funds (vesting token)
+        vestingToken.mint(
+            address(guardianSafe),
+            9999 ether
+        );
+        vm.prank(address(guardianSafe));
+        vestingToken.approve(address(controller), 9999 ether);
+
+        // Prepare funds (payment token)
         paymentToken.mint(
             address(guardianSafe),
             9999 ether
@@ -77,7 +85,7 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
             delegatePrivateKey,
             alice,
             BaseAllocation.Allocation({
-                tokenContract: address(paymentToken),
+                tokenContract: address(vestingToken),
                 tokenStreamTotal: 60 ether,
                 vestingCliffCredit: 30 ether,
                 unlockingCliffCredit: 30 ether,
@@ -121,11 +129,11 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
             delegatePrivateKey,
             MetaVestDealLib.draft().setTokenOption(
                 alice,
-                address(paymentToken), // TODO try a different token
+                address(paymentToken),
                 1e18, // exercisePrice
                 365 days, // shortStopDuration
                 BaseAllocation.Allocation({
-                    tokenContract: address(paymentToken),
+                    tokenContract: address(vestingToken),
                     tokenStreamTotal: 1000e18,
                     vestingCliffCredit: 100e18,
                     unlockingCliffCredit: 100e18,
@@ -149,7 +157,7 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
             "Alice"
         ));
 
-        assertEq(paymentToken.balanceOf(address(metavestAlice)), 1100e18, "Vesting contract should have token in escrow");
+        assertEq(vestingToken.balanceOf(address(metavestAlice)), 1100e18, "Vesting contract should have token in escrow");
     }
 
     function testCreateRestrictedTokenAward() public {
@@ -167,11 +175,11 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
             delegatePrivateKey,
             MetaVestDealLib.draft().setTokenOption(
                 alice,
-                address(paymentToken), // TODO try a different token
+                address(paymentToken),
                 1e18, // exercisePrice
                 365 days, // shortStopDuration
                 BaseAllocation.Allocation({
-                    tokenContract: address(paymentToken),
+                    tokenContract: address(vestingToken),
                     tokenStreamTotal: 1000e18,
                     vestingCliffCredit: 100e18,
                     unlockingCliffCredit: 100e18,
@@ -195,7 +203,7 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
             "Alice"
         ));
 
-        assertEq(paymentToken.balanceOf(address(metavestAlice)), 1100e18);
+        assertEq(vestingToken.balanceOf(address(metavestAlice)), 1100e18);
     }
 
     function testUpdateTransferability() public {
@@ -354,11 +362,11 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
             conditionContracts: new address[](0)
         });
 
-        uint256 balanceBefore = paymentToken.balanceOf(address(vestingAllocation));
+        uint256 balanceBefore = vestingToken.balanceOf(address(vestingAllocation));
         vm.prank(authority);
         controller.addMetavestMilestone(vestingAllocation, newMilestone);
         assertEq(
-            paymentToken.balanceOf(address(vestingAllocation)) - balanceBefore,
+            vestingToken.balanceOf(address(vestingAllocation)) - balanceBefore,
             50 ether,
             "vesting contract should receive token amount add by the milestone"
         );
@@ -589,7 +597,7 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
             delegatePrivateKey,
             alice, // = grantee
             BaseAllocation.Allocation({
-                tokenContract: address(paymentToken),
+                tokenContract: address(vestingToken),
                 tokenStreamTotal: 1000 ether,
                 vestingCliffCredit: 100 ether,
                 unlockingCliffCredit: 100 ether,
@@ -630,7 +638,7 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
             delegatePrivateKey,
             alice, // = grantee
             BaseAllocation.Allocation({
-                tokenContract: address(paymentToken),
+                tokenContract: address(vestingToken),
                 tokenStreamTotal: 1000 ether,
                 vestingCliffCredit: 100 ether,
                 unlockingCliffCredit: 100 ether,
@@ -670,7 +678,7 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
             delegatePrivateKey,
             alice, // = grantee
             BaseAllocation.Allocation({
-                tokenContract: address(paymentToken),
+                tokenContract: address(vestingToken),
                 tokenStreamTotal: 1000 ether,
                 vestingCliffCredit: 100 ether,
                 unlockingCliffCredit: 100 ether,
@@ -704,7 +712,7 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
             delegatePrivateKey,
             alice, // = grantee
             BaseAllocation.Allocation({
-                tokenContract: address(paymentToken),
+                tokenContract: address(vestingToken),
                 tokenStreamTotal: 1000 ether,
                 vestingCliffCredit: 0 ether,
                 unlockingCliffCredit: 0 ether,
@@ -738,7 +746,7 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
             delegatePrivateKey,
             alice, // = grantee
             BaseAllocation.Allocation({
-                tokenContract: address(paymentToken),
+                tokenContract: address(vestingToken),
                 tokenStreamTotal: 1000 ether,
                 vestingCliffCredit: 0 ether,
                 unlockingCliffCredit: 0 ether,
@@ -780,11 +788,11 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
             delegatePrivateKey,
             MetaVestDealLib.draft().setTokenOption(
                 alice,
-                address(paymentToken), // TODO try a different token
+                address(paymentToken),
                 5e17, // exercisePrice
                 1 days, // shortStopDuration
                 BaseAllocation.Allocation({
-                    tokenContract: address(paymentToken),
+                    tokenContract: address(vestingToken),
                     tokenStreamTotal: 1000e18,
                     vestingCliffCredit: 100e18,
                     unlockingCliffCredit: 100e18,
@@ -828,11 +836,11 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
             delegatePrivateKey,
             MetaVestDealLib.draft().setTokenOption(
                 alice,
-                address(paymentToken), // TODO try a different token
+                address(paymentToken),
                 1e18, // exercisePrice
                 1 days, // shortStopDuration
                 BaseAllocation.Allocation({
-                    tokenContract: address(paymentToken),
+                    tokenContract: address(vestingToken),
                     tokenStreamTotal: 1000e18,
                     vestingCliffCredit: 100e18,
                     unlockingCliffCredit: 100e18,
@@ -951,14 +959,14 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
 
     function testTerminateVestAndRecovers() public {
         address vestingAllocation = createDummyVestingAllocation();
-        uint256 snapshot = paymentToken.balanceOf(authority);
+        uint256 snapshot = vestingToken.balanceOf(authority);
         VestingAllocation(vestingAllocation).confirmMilestone(0);
         vm.warp(block.timestamp + 50 seconds);
 
-        uint256 authorityBalanceBefore = paymentToken.balanceOf(address(authority));
+        uint256 authorityBalanceBefore = vestingToken.balanceOf(address(authority));
         vm.prank(authority);
         controller.terminateMetavestVesting(vestingAllocation);
-        assertEq(paymentToken.balanceOf(
+        assertEq(vestingToken.balanceOf(
             address(authority)) - authorityBalanceBefore,
             400 ether, // 1000 + 1000 - 1000 - 100 - 10 * 50
             "authority should receive unvested funds"
@@ -967,12 +975,12 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
         vm.startPrank(grantee);
         VestingAllocation(vestingAllocation).withdraw(VestingAllocation(vestingAllocation).getAmountWithdrawable());
         vm.stopPrank();
-        assertEq(paymentToken.balanceOf(vestingAllocation), 0);
+        assertEq(vestingToken.balanceOf(vestingAllocation), 0);
     }
 
     function testTerminateVestAndRecoverSlowUnlock() public {
         address vestingAllocation = createDummyVestingAllocationSlowUnlock();
-        uint256 snapshot = paymentToken.balanceOf(authority);
+        uint256 snapshot = vestingToken.balanceOf(authority);
         VestingAllocation(vestingAllocation).confirmMilestone(0);
         vm.warp(block.timestamp + 25 seconds);
         vm.prank(authority);
@@ -982,18 +990,18 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
         vm.warp(block.timestamp + 25 seconds);
         VestingAllocation(vestingAllocation).withdraw(VestingAllocation(vestingAllocation).getAmountWithdrawable());
         vm.stopPrank();
-        assertEq(paymentToken.balanceOf(vestingAllocation), 0);
+        assertEq(vestingToken.balanceOf(vestingAllocation), 0);
     }
 
     function testTerminateRecoverAll() public {
         address vestingAllocation = createDummyVestingAllocationLarge();
-        uint256 snapshot = paymentToken.balanceOf(authority);
+        uint256 snapshot = vestingToken.balanceOf(authority);
         vm.warp(block.timestamp + 25 seconds);
 
-        uint256 authorityBalanceBefore = paymentToken.balanceOf(address(authority));
+        uint256 authorityBalanceBefore = vestingToken.balanceOf(address(authority));
         vm.prank(authority);
         controller.terminateMetavestVesting(vestingAllocation);
-        assertEq(paymentToken.balanceOf(
+        assertEq(vestingToken.balanceOf(
             address(authority)) - authorityBalanceBefore,
             750 ether, // 1000 - 10 * 25
             "authority should receive unvested funds"
@@ -1002,22 +1010,22 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
         vm.startPrank(grantee);
         VestingAllocation(vestingAllocation).withdraw(VestingAllocation(vestingAllocation).getAmountWithdrawable());
         vm.stopPrank();
-        assertEq(paymentToken.balanceOf(vestingAllocation), 0);
+        assertEq(vestingToken.balanceOf(vestingAllocation), 0);
     }
 
     function testTerminateRecoverChunksBefore() public {
         address vestingAllocation = createDummyVestingAllocationLarge();
-        uint256 snapshot = paymentToken.balanceOf(authority);
+        uint256 snapshot = vestingToken.balanceOf(authority);
         vm.warp(block.timestamp + 25 seconds);
         vm.startPrank(grantee);
         VestingAllocation(vestingAllocation).withdraw(VestingAllocation(vestingAllocation).getAmountWithdrawable());
         vm.stopPrank();
         vm.warp(block.timestamp + 25 seconds);
 
-        uint256 authorityBalanceBefore = paymentToken.balanceOf(address(authority));
+        uint256 authorityBalanceBefore = vestingToken.balanceOf(address(authority));
         vm.prank(authority);
         controller.terminateMetavestVesting(vestingAllocation);
-        assertEq(paymentToken.balanceOf(
+        assertEq(vestingToken.balanceOf(
             address(authority)) - authorityBalanceBefore,
             500 ether, // 1000 - 10 * 50
             "authority should receive unvested funds"
@@ -1026,7 +1034,7 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
         vm.startPrank(grantee);
         VestingAllocation(vestingAllocation).withdraw(VestingAllocation(vestingAllocation).getAmountWithdrawable());
         vm.stopPrank();
-        assertEq(paymentToken.balanceOf(vestingAllocation), 0);
+        assertEq(vestingToken.balanceOf(vestingAllocation), 0);
     }
 
 //    function testConfirmingMilestoneRestrictedTokenAllocation() public {
@@ -1054,7 +1062,7 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
 
     function testUnlockMilestoneNotUnlocked() public {
         address vestingAllocation = createDummyVestingAllocationNoUnlock();
-        uint256 snapshot = paymentToken.balanceOf(authority);
+        uint256 snapshot = vestingToken.balanceOf(authority);
         VestingAllocation(vestingAllocation).confirmMilestone(0);
         vm.warp(block.timestamp + 50 seconds);
         vm.startPrank(grantee);
@@ -1504,7 +1512,7 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
             alicePrivateKey, // Should fail because Alice is not delegated by the grantor
             alice, // grantee
             BaseAllocation.Allocation({
-                tokenContract: address(paymentToken),
+                tokenContract: address(vestingToken),
                 tokenStreamTotal: 100 ether,
                 vestingCliffCredit: 10 ether,
                 unlockingCliffCredit: 10 ether,
@@ -1527,7 +1535,7 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
             delegatePrivateKey,
             alice,
             BaseAllocation.Allocation({
-                tokenContract: address(paymentToken),
+                tokenContract: address(vestingToken),
                 tokenStreamTotal: 100 ether,
                 vestingCliffCredit: 10 ether,
                 unlockingCliffCredit: 10 ether,
@@ -1565,7 +1573,7 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
             delegatePrivateKey,
             alice,
             BaseAllocation.Allocation({
-                tokenContract: address(paymentToken),
+                tokenContract: address(vestingToken),
                 tokenStreamTotal: 100 ether,
                 vestingCliffCredit: 10 ether,
                 unlockingCliffCredit: 10 ether,
@@ -1682,7 +1690,7 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
             delegatePrivateKey,
             alice,
             BaseAllocation.Allocation({
-                tokenContract: address(paymentToken),
+                tokenContract: address(vestingToken),
                 // 100k ZK total, the first half unlocks with a cliff and the second half unlocks over an year
                 tokenStreamTotal: 60 ether,
                 vestingCliffCredit: 30 ether,

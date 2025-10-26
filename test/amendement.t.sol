@@ -49,12 +49,12 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
         vm.stopPrank();
 
         // Prepare funds
-        paymentToken.mint(
+        vestingToken.mint(
             address(guardianSafe),
             9999 ether
         );
         vm.prank(address(guardianSafe));
-        paymentToken.approve(address(controller), 9999 ether);
+        vestingToken.approve(address(controller), 9999 ether);
 
         vm.startPrank(guardianSafe);
 
@@ -378,7 +378,7 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
             delegatePrivateKey,
             alice, // = grantee
             BaseAllocation.Allocation({
-                tokenContract: address(paymentToken),
+                tokenContract: address(vestingToken),
                 tokenStreamTotal: 1000 ether,
                 vestingCliffCredit: 100 ether,
                 unlockingCliffCredit: 100 ether,

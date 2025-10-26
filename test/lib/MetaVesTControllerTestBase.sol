@@ -16,6 +16,7 @@ import {MetaVestDealLib, MetaVestDeal} from "../../src/lib/MetaVestDealLib.sol";
 contract MetaVesTControllerTestBase is Test {
     using MetaVestDealLib for MetaVestDeal;
 
+    MockERC20 vestingToken = new MockERC20("Vesting Token", "VEST", 18);
     MockERC20 paymentToken = new MockERC20("Payment Token", "PAY", 18);
 
     address deployer = address(0x2);
@@ -93,13 +94,13 @@ contract MetaVesTControllerTestBase is Test {
 
     function _granteeWithdrawAndAsserts(VestingAllocation vestingAllocation, uint256 amount, string memory assertName) internal {
         address grantee = vestingAllocation.grantee();
-        uint256 balanceBefore = paymentToken.balanceOf(grantee);
+        uint256 balanceBefore = vestingToken.balanceOf(grantee);
 
         vm.prank(grantee);
         vestingAllocation.withdraw(amount);
 
-        assertEq(paymentToken.balanceOf(grantee), balanceBefore + amount, string(abi.encodePacked(assertName, ": unexpected received amount")));
-        assertEq(paymentToken.balanceOf(address(vestingAllocation)), 0, string(abi.encodePacked(assertName, ": vesting contract should not have any token (it mints on-demand)")));
+        assertEq(vestingToken.balanceOf(grantee), balanceBefore + amount, string(abi.encodePacked(assertName, ": unexpected received amount")));
+        assertEq(vestingToken.balanceOf(address(vestingAllocation)), 0, string(abi.encodePacked(assertName, ": vesting contract should not have any token (it mints on-demand)")));
     }
 
     function _proposeAndSignDeal(

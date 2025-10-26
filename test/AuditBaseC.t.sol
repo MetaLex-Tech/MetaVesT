@@ -10,7 +10,7 @@ contract Audit is MetaVestControllerTest {
     function test_RevertIf_AuditTerminateFailAfterWithdraw() public {
         // template from testTerminateVestAndRecoverSlowUnlock
         address vestingAllocation = createDummyVestingAllocationSlowUnlock();
-        uint256 snapshot = paymentToken.balanceOf(authority);
+        uint256 snapshot = vestingToken.balanceOf(authority);
         VestingAllocation(vestingAllocation).confirmMilestone(0);
         vm.warp(block.timestamp + 25 seconds);
         vm.startPrank(grantee);
