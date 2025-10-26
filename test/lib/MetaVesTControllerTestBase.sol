@@ -118,6 +118,7 @@ contract MetaVesTControllerTestBase is Test {
         );
     }
 
+    // TODO WIP: temporarily for backwards compatibility
     function _proposeAndSignDeal(
         bytes32 templateId,
         uint256 agreementSalt,
@@ -129,18 +130,42 @@ contract MetaVesTControllerTestBase is Test {
         uint256 expiry,
         bytes memory expectRevertData
     ) internal returns(bytes32) {
+        return _proposeAndSignDeal(
+            templateId,
+            agreementSalt,
+            grantorOrDelegatePrivateKey,
+            MetaVestDealLib.draft().setVesting(
+                grantee,
+                allocation,
+                milestones
+            ),
+            partyName,
+            expiry,
+            expectRevertData
+        );
+    }
+
+    function _proposeAndSignDeal(
+        bytes32 templateId,
+        uint256 agreementSalt,
+        uint256 grantorOrDelegatePrivateKey,
+        MetaVestDeal memory dealDraft,
+        string memory partyName,
+        uint256 expiry,
+        bytes memory expectRevertData
+    ) internal returns(bytes32) {
         string[] memory globalValues = new string[](11);
         globalValues[0] = "0"; // metavestType: Vesting
         globalValues[1] = vm.toString(address(guardianSafe)); // grantor
-        globalValues[2] = vm.toString(grantee); // grantee
-        globalValues[3] = vm.toString(allocation.tokenContract); // tokenContract
-        globalValues[4] = vm.toString(allocation.tokenStreamTotal / 1 ether); //tokenStreamTotal (human-readable)
-        globalValues[5] = vm.toString(allocation.vestingCliffCredit / 1 ether); // vestingCliffCredit (human-readable)
-        globalValues[6] = vm.toString(allocation.unlockingCliffCredit / 1 ether); // unlockingCliffCredit (human-readable)
-        globalValues[7] = vm.toString(allocation.vestingRate * 365 days / 1 ether); // vestingRate (annually) (human-readable)
-        globalValues[8] = vm.toString(allocation.vestingStartTime); // vestingStartTime
-        globalValues[9] = vm.toString(allocation.unlockRate * 365 days / 1 ether); // unlockRate (annually) (human-readable)
-        globalValues[10] = vm.toString(allocation.unlockStartTime); // unlockStartTime
+        globalValues[2] = vm.toString(dealDraft.grantee); // grantee
+        globalValues[3] = vm.toString(dealDraft.allocation.tokenContract); // tokenContract
+        globalValues[4] = vm.toString(dealDraft.allocation.tokenStreamTotal / 1 ether); //tokenStreamTotal (human-readable)
+        globalValues[5] = vm.toString(dealDraft.allocation.vestingCliffCredit / 1 ether); // vestingCliffCredit (human-readable)
+        globalValues[6] = vm.toString(dealDraft.allocation.unlockingCliffCredit / 1 ether); // unlockingCliffCredit (human-readable)
+        globalValues[7] = vm.toString(dealDraft.allocation.vestingRate * 365 days / 1 ether); // vestingRate (annually) (human-readable)
+        globalValues[8] = vm.toString(dealDraft.allocation.vestingStartTime); // vestingStartTime
+        globalValues[9] = vm.toString(dealDraft.allocation.unlockRate * 365 days / 1 ether); // unlockRate (annually) (human-readable)
+        globalValues[10] = vm.toString(dealDraft.allocation.unlockStartTime); // unlockStartTime
 
         // TODO what to do with milestones, which could be of dynamic lengths
 
@@ -152,13 +177,13 @@ contract MetaVesTControllerTestBase is Test {
         partyValues[0][3] = "Foundation";
         partyValues[1] = new string[](4);
         partyValues[1][0] = partyName;
-        partyValues[1][1] = vm.toString(grantee); // evmAddress
+        partyValues[1][1] = vm.toString(dealDraft.grantee); // evmAddress
         partyValues[1][2] = "email@company.com";
         partyValues[1][3] = "individual";
 
         address[] memory parties = new address[](2);
         parties[0] = address(guardianSafe);
-        parties[1] = grantee;
+        parties[1] = dealDraft.grantee;
         bytes32 expectedContractId = keccak256(
             abi.encode(
                 templateId,
@@ -187,11 +212,7 @@ contract MetaVesTControllerTestBase is Test {
         bytes32 contractId = controller.proposeAndSignDeal(
             templateId,
             agreementSalt,
-            MetaVestDealLib.draft().setVesting(
-                grantee,
-                allocation,
-                milestones
-            ),
+            dealDraft,
             globalValues,
             parties,
             partyValues,

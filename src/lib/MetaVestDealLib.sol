@@ -52,7 +52,6 @@ struct MetaVestDeal {
     address paymentToken;
     uint256 exercisePrice;
     uint256 shortStopDuration;
-    uint256 longStopDate;
     BaseAllocation.Allocation allocation;
     BaseAllocation.Milestone[] milestones;
     address metavest;
@@ -74,6 +73,48 @@ library MetaVestDealLib {
     ) internal pure returns (MetaVestDeal memory) {
         deal.metavestType = MetaVestType.Vesting;
         deal.grantee = grantee;
+        deal.allocation = allocation;
+        deal.milestones = milestones;
+        return deal;
+    }
+
+    /// @notice Partially fill the given deal struct
+    /// @dev Beware of which fields are not filled and using default values
+    function setTokenOption(
+        MetaVestDeal memory deal,
+        address grantee,
+        address paymentToken,
+        uint256 exercisePrice,
+        uint256 shortStopDuration,
+        BaseAllocation.Allocation memory allocation,
+        BaseAllocation.Milestone[] memory milestones
+    ) internal pure returns (MetaVestDeal memory) {
+        deal.metavestType = MetaVestType.TokenOption;
+        deal.grantee = grantee;
+        deal.paymentToken = paymentToken;
+        deal.exercisePrice = exercisePrice;
+        deal.shortStopDuration = shortStopDuration;
+        deal.allocation = allocation;
+        deal.milestones = milestones;
+        return deal;
+    }
+
+    /// @notice Partially fill the given deal struct
+    /// @dev Beware of which fields are not filled and using default values
+    function setRestrictedToken(
+        MetaVestDeal memory deal,
+        address grantee,
+        address paymentToken,
+        uint256 exercisePrice,
+        uint256 shortStopDuration,
+        BaseAllocation.Allocation memory allocation,
+        BaseAllocation.Milestone[] memory milestones
+    ) internal pure returns (MetaVestDeal memory) {
+        deal.metavestType = MetaVestType.TokenOption;
+        deal.grantee = grantee;
+        deal.paymentToken = paymentToken;
+        deal.exercisePrice = exercisePrice;
+        deal.shortStopDuration = shortStopDuration;
         deal.allocation = allocation;
         deal.milestones = milestones;
         return deal;

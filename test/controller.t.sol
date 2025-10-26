@@ -14,6 +14,7 @@ import {ERC1967ProxyLib} from "./lib/ERC1967ProxyLib.sol";
 
 contract MetaVestControllerTest is MetaVesTControllerTestBase {
     using ERC1967ProxyLib for address;
+    using MetaVestDealLib for MetaVestDeal;
 
     address authority = guardianSafe;
     address dao = guardianSafe;
@@ -105,78 +106,97 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
         _granteeWithdrawAndAsserts(vestingAllocationAlice, 60 ether, "Alice full");
     }
 
-//    function testCreateTokenOptionAllocation() public {
-//        BaseAllocation.Allocation memory allocation = BaseAllocation.Allocation({
-//            tokenContract: address(paymentToken),
-//            tokenStreamTotal: 1000e18,
-//            vestingCliffCredit: 100e18,
-//            unlockingCliffCredit: 100e18,
-//            vestingRate: 10e18,
-//            vestingStartTime: uint48(block.timestamp),
-//            unlockRate: 10e18,
-//            unlockStartTime: uint48(block.timestamp)
-//        });
-//
-//        BaseAllocation.Milestone[] memory milestones = new BaseAllocation.Milestone[](1);
-//        milestones[0] = BaseAllocation.Milestone({
-//            milestoneAward: 100e18,
-//            unlockOnCompletion: true,
-//            complete: false,
-//            conditionContracts: new address[](0)
-//        });
-//
-//        address tokenOptionAllocation = controller.createMetavest(
-//            MetaVestType.TokenOption,
-//            grantee,
-//            allocation,
-//            milestones,
-//            1e18,
-//            address(paymentToken),
-//            365 days,
-//            0
-//        );
-//
-//        assertEq(paymentToken.balanceOf(address(tokenOptionAllocation)), 0, "Vesting contract should not have any token (it mints on-demand)");
-//        //assertEq(controller.tokenOptionAllocations(grantee, 0), tokenOptionAllocation);
-//    }
+    function testCreateTokenOptionAllocation() public {
+        BaseAllocation.Milestone[] memory milestones = new BaseAllocation.Milestone[](1);
+        milestones[0] = BaseAllocation.Milestone({
+            milestoneAward: 100e18,
+            unlockOnCompletion: true,
+            complete: false,
+            conditionContracts: new address[](0)
+        });
 
-//    function testCreateRestrictedTokenAward() public {
-//        BaseAllocation.Allocation memory allocation = BaseAllocation.Allocation({
-//            tokenContract: address(token),
-//            tokenStreamTotal: 1000e18,
-//            vestingCliffCredit: 100e18,
-//            unlockingCliffCredit: 100e18,
-//            vestingRate: 10e18,
-//            vestingStartTime: uint48(block.timestamp),
-//            unlockRate: 10e18,
-//            unlockStartTime: uint48(block.timestamp)
-//        });
-//
-//        BaseAllocation.Milestone[] memory milestones = new BaseAllocation.Milestone[](1);
-//        milestones[0] = BaseAllocation.Milestone({
-//            milestoneAward: 100e18,
-//            unlockOnCompletion: true,
-//            complete: false,
-//            conditionContracts: new address[](0)
-//        });
-//
-//        token.approve(address(controller), 1100e18);
-//
-//        address restrictedTokenAward = controller.createMetavest(
-//            MetaVestType.RestrictedTokenAward,
-//            grantee,
-//            allocation,
-//            milestones,
-//            1e18,
-//            address(paymentToken),
-//            365 days,
-//            0
-//
-//        );
-//
-//        assertEq(token.balanceOf(restrictedTokenAward), 1100e18);
-//        //assertEq(controller.restrictedTokenAllocations(grantee, 0), restrictedTokenAward);
-//    }
+        bytes32 contractIdAlice = _proposeAndSignDeal(
+            templateId,
+            block.timestamp, // salt
+            delegatePrivateKey,
+            MetaVestDealLib.draft().setTokenOption(
+                alice,
+                address(paymentToken), // TODO try a different token
+                1e18, // exercisePrice
+                365 days, // shortStopDuration
+                BaseAllocation.Allocation({
+                    tokenContract: address(paymentToken),
+                    tokenStreamTotal: 1000e18,
+                    vestingCliffCredit: 100e18,
+                    unlockingCliffCredit: 100e18,
+                    vestingRate: 10e18,
+                    vestingStartTime: uint48(block.timestamp),
+                    unlockRate: 10e18,
+                    unlockStartTime: uint48(block.timestamp)
+                }),
+                milestones
+            ),
+            "Alice",
+            cappedMinterExpirationTime, // Same expiry as the minter so grantee can defer vesting contract creation as much as possible
+            ""
+        );
+
+        TokenOptionAllocation metavestAlice = TokenOptionAllocation(_granteeSignDeal(
+            contractIdAlice,
+            alice, // grantee
+            alice, // recipient
+            alicePrivateKey,
+            "Alice"
+        ));
+
+        assertEq(paymentToken.balanceOf(address(metavestAlice)), 1100e18, "Vesting contract should have token in escrow");
+    }
+
+    function testCreateRestrictedTokenAward() public {
+        BaseAllocation.Milestone[] memory milestones = new BaseAllocation.Milestone[](1);
+        milestones[0] = BaseAllocation.Milestone({
+            milestoneAward: 100e18,
+            unlockOnCompletion: true,
+            complete: false,
+            conditionContracts: new address[](0)
+        });
+
+        bytes32 contractIdAlice = _proposeAndSignDeal(
+            templateId,
+            block.timestamp, // salt
+            delegatePrivateKey,
+            MetaVestDealLib.draft().setTokenOption(
+                alice,
+                address(paymentToken), // TODO try a different token
+                1e18, // exercisePrice
+                365 days, // shortStopDuration
+                BaseAllocation.Allocation({
+                    tokenContract: address(paymentToken),
+                    tokenStreamTotal: 1000e18,
+                    vestingCliffCredit: 100e18,
+                    unlockingCliffCredit: 100e18,
+                    vestingRate: 10e18,
+                    vestingStartTime: uint48(block.timestamp),
+                    unlockRate: 10e18,
+                    unlockStartTime: uint48(block.timestamp)
+                }),
+                milestones
+            ),
+            "Alice",
+            cappedMinterExpirationTime, // Same expiry as the minter so grantee can defer vesting contract creation as much as possible
+            ""
+        );
+
+        RestrictedTokenAward metavestAlice = RestrictedTokenAward(_granteeSignDeal(
+            contractIdAlice,
+            alice, // grantee
+            alice, // recipient
+            alicePrivateKey,
+            "Alice"
+        ));
+
+        assertEq(paymentToken.balanceOf(address(metavestAlice)), 1100e18);
+    }
 
     function testUpdateTransferability() public {
         uint256 startTimestamp = block.timestamp;
@@ -286,22 +306,24 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
     }
 
 
-//    function testUpdateExercisePrice() public {
-//        address tokenOptionAllocation = createDummyTokenOptionAllocation();
-//
-//        //compute msg.data for updateExerciseOrRepurchasePrice(tokenOptionAllocation, 2e18)
-//        bytes4 selector = controller.updateExerciseOrRepurchasePrice.selector;
-//        bytes memory msgData = abi.encodeWithSelector(selector, tokenOptionAllocation, 2e18);
-//
-//        controller.proposeMetavestAmendment(tokenOptionAllocation, controller.updateExerciseOrRepurchasePrice.selector, msgData);
-//
-//        vm.prank(grantee);
-//        controller.consentToMetavestAmendment(tokenOptionAllocation, controller.updateExerciseOrRepurchasePrice.selector, true);
-//
-//        controller.updateExerciseOrRepurchasePrice(tokenOptionAllocation, 2e18);
-//
-//        assertEq(TokenOptionAllocation(tokenOptionAllocation).exercisePrice(), 2e18);
-//    }
+    function testUpdateExercisePrice() public {
+        address tokenOptionAllocation = createDummyTokenOptionAllocation();
+
+        //compute msg.data for updateExerciseOrRepurchasePrice(tokenOptionAllocation, 2e18)
+        bytes4 selector = controller.updateExerciseOrRepurchasePrice.selector;
+        bytes memory msgData = abi.encodeWithSelector(selector, tokenOptionAllocation, 2e18);
+
+        vm.prank(authority);
+        controller.proposeMetavestAmendment(tokenOptionAllocation, controller.updateExerciseOrRepurchasePrice.selector, msgData);
+
+        vm.prank(grantee);
+        controller.consentToMetavestAmendment(tokenOptionAllocation, controller.updateExerciseOrRepurchasePrice.selector, true);
+
+        vm.prank(authority);
+        controller.updateExerciseOrRepurchasePrice(tokenOptionAllocation, 2e18);
+
+        assertEq(TokenOptionAllocation(tokenOptionAllocation).exercisePrice(), 2e18);
+    }
 
     function testRemoveMilestone() public {
         address vestingAllocation = createDummyVestingAllocation();
@@ -447,20 +469,24 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
         assertEq(updatedAllocation.vestingRate, 20e18);
     }
 
-//    function testUpdateStopTimes() public {
-//
-//        address vestingAllocation = createDummyRestrictedTokenAward();
-//         address[] memory addresses = new address[](1);
-//        addresses[0] = vestingAllocation;
-//        bytes4 selector = bytes4(keccak256("updateMetavestStopTimes(address,uint48)"));
-//        bytes memory msgData = abi.encodeWithSelector(selector, vestingAllocation, uint48(block.timestamp + 500 days));
-//        controller.proposeMetavestAmendment(vestingAllocation, controller.updateMetavestStopTimes.selector, msgData);
-//        vm.prank(grantee);
-//        controller.consentToMetavestAmendment(vestingAllocation, controller.updateMetavestStopTimes.selector, true);
-//        uint48 newShortStopTime = uint48(block.timestamp + 500 days);
-//
-//        controller.updateMetavestStopTimes(vestingAllocation, newShortStopTime);
-//    }
+    function testUpdateStopTimes() public {
+
+        address metavest = createDummyRestrictedTokenAward();
+         address[] memory addresses = new address[](1);
+        addresses[0] = metavest;
+        bytes4 selector = bytes4(keccak256("updateMetavestStopTimes(address,uint48)"));
+        bytes memory msgData = abi.encodeWithSelector(selector, metavest, uint48(block.timestamp + 500 days));
+
+        vm.prank(authority);
+        controller.proposeMetavestAmendment(metavest, controller.updateMetavestStopTimes.selector, msgData);
+
+        vm.prank(grantee);
+        controller.consentToMetavestAmendment(metavest, controller.updateMetavestStopTimes.selector, true);
+        uint48 newShortStopTime = uint48(block.timestamp + 500 days);
+
+        vm.prank(authority);
+        controller.updateMetavestStopTimes(metavest, newShortStopTime);
+    }
 
     function testTerminateVesting() public {
         address vestingAllocation = createDummyVestingAllocation();
@@ -735,76 +761,102 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
         );
     }
 
-//    function createDummyTokenOptionAllocation() internal returns (address) {
-//        BaseAllocation.Allocation memory allocation = BaseAllocation.Allocation({
-//            tokenContract: address(token),
-//            tokenStreamTotal: 1000e18,
-//            vestingCliffCredit: 100e18,
-//            unlockingCliffCredit: 100e18,
-//            vestingRate: 10e18,
-//            vestingStartTime: uint48(block.timestamp),
-//            unlockRate: 10e18,
-//            unlockStartTime: uint48(block.timestamp)
-//        });
-//
-//        BaseAllocation.Milestone[] memory milestones = new BaseAllocation.Milestone[](1);
-//        milestones[0] = BaseAllocation.Milestone({
-//            milestoneAward: 1000e18,
-//            unlockOnCompletion: true,
-//            complete: false,
-//            conditionContracts: new address[](0)
-//        });
-//
-//        token.approve(address(controller), 2000e18);
-//
-//        return controller.createMetavest(
-//            MetaVestType.TokenOption,
-//            grantee,
-//            allocation,
-//            milestones,
-//            5e17,
-//            address(paymentToken),
-//            1 days,
-//            0
-//        );
-//    }
+    function createDummyTokenOptionAllocation() internal returns (address) {
+        return createDummyTokenOptionAllocation(""); // Expect no reverts
+    }
 
+    function createDummyTokenOptionAllocation(bytes memory expectRevertData) internal returns (address) {
+        BaseAllocation.Milestone[] memory milestones = new BaseAllocation.Milestone[](1);
+        milestones[0] = BaseAllocation.Milestone({
+            milestoneAward: 1000e18,
+            unlockOnCompletion: true,
+            complete: false,
+            conditionContracts: new address[](0)
+        });
 
-//   function createDummyRestrictedTokenAward() internal returns (address) {
-//        BaseAllocation.Allocation memory allocation = BaseAllocation.Allocation({
-//            tokenContract: address(token),
-//            tokenStreamTotal: 1000e18,
-//            vestingCliffCredit: 100e18,
-//            unlockingCliffCredit: 100e18,
-//            vestingRate: 10e18,
-//            vestingStartTime: uint48(block.timestamp),
-//            unlockRate: 10e18,
-//            unlockStartTime: uint48(block.timestamp)
-//        });
-//
-//        BaseAllocation.Milestone[] memory milestones = new BaseAllocation.Milestone[](1);
-//        milestones[0] = BaseAllocation.Milestone({
-//            milestoneAward: 1000e18,
-//            unlockOnCompletion: true,
-//            complete: false,
-//            conditionContracts: new address[](0)
-//        });
-//
-//        token.approve(address(controller), 2100e18);
-//
-//        return controller.createMetavest(
-//            MetaVestType.RestrictedTokenAward,
-//            grantee,
-//            allocation,
-//            milestones,
-//            1e18,
-//            address(paymentToken),
-//            1 days,
-//            0
-//
-//        );
-//    }
-//
+        bytes32 contractIdAlice = _proposeAndSignDeal(
+            templateId,
+            block.timestamp, // salt
+            delegatePrivateKey,
+            MetaVestDealLib.draft().setTokenOption(
+                alice,
+                address(paymentToken), // TODO try a different token
+                5e17, // exercisePrice
+                1 days, // shortStopDuration
+                BaseAllocation.Allocation({
+                    tokenContract: address(paymentToken),
+                    tokenStreamTotal: 1000e18,
+                    vestingCliffCredit: 100e18,
+                    unlockingCliffCredit: 100e18,
+                    vestingRate: 10e18,
+                    vestingStartTime: uint48(block.timestamp),
+                    unlockRate: 10e18,
+                    unlockStartTime: uint48(block.timestamp)
+                }),
+                milestones
+            ),
+            "Alice",
+            cappedMinterExpirationTime, // Same expiry as the minter so grantee can defer vesting contract creation as much as possible
+            ""
+        );
+
+        return _granteeSignDeal(
+            contractIdAlice,
+            alice, // grantee
+            alice, // recipient
+            alicePrivateKey,
+            "Alice"
+        );
+    }
+
+   function createDummyRestrictedTokenAward() internal returns (address) {
+       return createDummyRestrictedTokenAward("");
+   }
+
+    function createDummyRestrictedTokenAward(bytes memory expectRevertData) internal returns (address) {
+        BaseAllocation.Milestone[] memory milestones = new BaseAllocation.Milestone[](1);
+        milestones[0] = BaseAllocation.Milestone({
+            milestoneAward: 1000e18,
+            unlockOnCompletion: true,
+            complete: false,
+            conditionContracts: new address[](0)
+        });
+
+        bytes32 contractIdAlice = _proposeAndSignDeal(
+            templateId,
+            block.timestamp, // salt
+            delegatePrivateKey,
+            MetaVestDealLib.draft().setTokenOption(
+                alice,
+                address(paymentToken), // TODO try a different token
+                1e18, // exercisePrice
+                1 days, // shortStopDuration
+                BaseAllocation.Allocation({
+                    tokenContract: address(paymentToken),
+                    tokenStreamTotal: 1000e18,
+                    vestingCliffCredit: 100e18,
+                    unlockingCliffCredit: 100e18,
+                    vestingRate: 10e18,
+                    vestingStartTime: uint48(block.timestamp),
+                    unlockRate: 10e18,
+                    unlockStartTime: uint48(block.timestamp)
+                }),
+                milestones
+            ),
+            "Alice",
+            cappedMinterExpirationTime, // Same expiry as the minter so grantee can defer vesting contract creation as much as possible
+            ""
+        );
+
+        return _granteeSignDeal(
+            contractIdAlice,
+            alice, // grantee
+            alice, // recipient
+            alicePrivateKey,
+            "Alice"
+        );
+    }
+
 //    function createDummyRestrictedTokenAwardFuture() internal returns (address) {
 //        BaseAllocation.Allocation memory allocation = BaseAllocation.Allocation({
 //            tokenContract: address(token),

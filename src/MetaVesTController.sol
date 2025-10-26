@@ -266,7 +266,8 @@ contract metavestController is UUPSUpgradeable, SafeTransferLib {
     ) external onlyAuthority conditionCheck consentCheck(_grant, msg.data) {
         if (_newPrice == 0) revert MetaVesTControllerStorage.MetaVesTController_ZeroPrice();
         IPriceAllocation grant = IPriceAllocation(_grant);
-        if(grant.getVestingType()!=2 && grant.getVestingType()!=3) revert MetaVesTControllerStorage.MetaVesTController_IncorrectMetaVesTType();
+        // TODO review needed: it is supposed to be TokenOption, RestrictedTokenAward right?
+        if (grant.getVestingType() != uint256(MetaVestType.TokenOption) && grant.getVestingType() != uint256(MetaVestType.RestrictedTokenAward)) revert MetaVesTControllerStorage.MetaVesTController_IncorrectMetaVesTType();
         _resetAmendmentParams(_grant, msg.sig);
         grant.updatePrice(_newPrice);
     }
