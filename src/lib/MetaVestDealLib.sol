@@ -110,7 +110,7 @@ library MetaVestDealLib {
         BaseAllocation.Allocation memory allocation,
         BaseAllocation.Milestone[] memory milestones
     ) internal pure returns (MetaVestDeal memory) {
-        deal.metavestType = MetaVestType.TokenOption;
+        deal.metavestType = MetaVestType.RestrictedTokenAward;
         deal.grantee = grantee;
         deal.paymentToken = paymentToken;
         deal.exercisePrice = exercisePrice;
