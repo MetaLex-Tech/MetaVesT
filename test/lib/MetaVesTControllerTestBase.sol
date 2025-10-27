@@ -183,7 +183,7 @@ contract MetaVesTControllerTestBase is Test {
         bytes memory expectRevertData
     ) internal returns(bytes32) {
         string[] memory globalValues = new string[](11);
-        globalValues[0] = "0"; // metavestType: Vesting
+        globalValues[0] = vm.toString(uint256(dealDraft.metavestType)); // metavestType
         globalValues[1] = vm.toString(address(guardianSafe)); // grantor
         globalValues[2] = vm.toString(dealDraft.grantee); // grantee
         globalValues[3] = vm.toString(dealDraft.allocation.tokenContract); // tokenContract
@@ -278,7 +278,7 @@ contract MetaVesTControllerTestBase is Test {
         MetaVestDeal memory deal = controller.getDeal(contractId);
 
         string[] memory globalValues = new string[](11);
-        globalValues[0] = "0"; // metavestType: Vesting
+        globalValues[0] = vm.toString(uint256(deal.metavestType)); // metavestType
         globalValues[1] = vm.toString(address(guardianSafe)); // grantor
         globalValues[2] = vm.toString(grantee); // grantee
         globalValues[3] = vm.toString(deal.allocation.tokenContract); // tokenContract

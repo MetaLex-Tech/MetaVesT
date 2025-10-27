@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import "./BaseAllocation.sol";
+import {MetaVestType} from "./lib/MetaVestDealLib.sol";
 
 pragma solidity ^0.8.24;
 
@@ -63,10 +64,10 @@ contract TokenOptionAllocation is BaseAllocation {
         }
     }
 
-    /// @notice returns the contract vesting type 2 for TokenOptionAllocation
-    /// @return 2
-    function getVestingType() external pure override returns (uint256) {
-        return 2;
+    /// @notice returns the vesting type
+    /// @return MetaVestType
+    function getVestingType() external pure override returns (MetaVestType) {
+        return MetaVestType.TokenOption;
     }
 
     /// @notice returns the governing power of the TokenOptionAllocation

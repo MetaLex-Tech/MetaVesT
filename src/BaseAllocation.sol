@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity 0.8.28;
 
+import {MetaVestType} from "./lib/MetaVestDealLib.sol";
+
 /// @notice interface to a MetaLeX condition contract
 /// @dev see https://github.com/MetaLex-Tech/BORG-CORE/tree/main/src/libs/conditions
 interface IConditionM {
@@ -190,7 +192,7 @@ abstract contract BaseAllocation is ReentrancyGuard, SafeTransferLib{
             govType = GovType.vested;
         }
 
-        function getVestingType() external view virtual returns (uint256);
+        function getVestingType() external view virtual returns (MetaVestType);
         function getGoverningPower() external virtual returns (uint256);  
         function updateStopTimes(uint48 _shortStopTime) external virtual;// onlyController;
         function terminate() external virtual;// onlyController;

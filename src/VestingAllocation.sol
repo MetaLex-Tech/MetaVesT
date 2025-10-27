@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import "./BaseAllocation.sol";
+import {MetaVestType} from "./lib/MetaVestDealLib.sol";
 
 pragma solidity ^0.8.24;
 
@@ -45,10 +46,10 @@ contract VestingAllocation is BaseAllocation {
         }
     }
 
-    /// @notice returns the contract vesting type 1 for VestingAllocation
-    /// @return 1 for VestingAllocation
-    function getVestingType() external pure override returns (uint256) {
-        return 1;
+    /// @notice returns the vesting type
+    /// @return MetaVestType
+    function getVestingType() external pure override returns (MetaVestType) {
+        return MetaVestType.Vesting;
     }
 
     /// @notice returns the governing power of the VestingAllocation

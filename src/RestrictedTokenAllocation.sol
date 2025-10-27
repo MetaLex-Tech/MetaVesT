@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import "./BaseAllocation.sol";
+import {MetaVestType} from "./lib/MetaVestDealLib.sol";
 
 pragma solidity ^0.8.24;
 
@@ -62,10 +63,10 @@ contract RestrictedTokenAward is BaseAllocation {
         }
     }
 
-    /// @notice returns the vesting type for RestrictedTokenAward
-    /// @return uint256 type 3
-    function getVestingType() external pure override returns (uint256) {
-        return 3;
+    /// @notice returns the vesting type
+    /// @return MetaVestType
+    function getVestingType() external pure override returns (MetaVestType) {
+        return MetaVestType.RestrictedTokenAward;
     }
 
     /// @notice returns the governing power for RestrictedTokenAward based on the govType

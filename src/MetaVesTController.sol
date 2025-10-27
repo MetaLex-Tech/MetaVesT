@@ -176,7 +176,6 @@ contract metavestController is UUPSUpgradeable, SafeTransferLib {
         MetaVesTControllerStorage.MetaVesTControllerData storage st = MetaVesTControllerStorage.getStorage();
 
         // Check: verify inputs
-        // TODO check metavest type (and other party values)
         if (parties[1] != dealDraft.grantee) revert MetaVesTControllerStorage.MetaVesTController_GranteeNotDirectParty();
         if (partyValues.length < 2) revert MetaVesTControllerStorage.MetaVesTController_CounterPartyNotFound();
         if (partyValues[1].length != partyValues[0].length) revert MetaVesTControllerStorage.MetaVesTController_PartyValuesLengthMismatch();
@@ -231,7 +230,7 @@ contract metavestController is UUPSUpgradeable, SafeTransferLib {
         return newMetavest;
     }
 
-    function getMetaVestType(address _grant) public view returns (uint256) {
+    function getMetaVestType(address _grant) public view returns (MetaVestType) {
         return BaseAllocation(_grant).getVestingType();
     }
 
@@ -256,7 +255,6 @@ contract metavestController is UUPSUpgradeable, SafeTransferLib {
         BaseAllocation(_grant).updateTransferability(_isTransferable);
     }
 
-    // TODO review needed
     /// @notice for the controller to update either exercisePrice or repurchasePrice for a '_grantee' and their transferees, as applicable depending on the '_grantee''s MetaVesTType
     /// @param _grant address of grantee whose applicable price is being updated
     /// @param _newPrice new exercisePrice (if token option) or (repurchase price if restricted token award) as 'paymentToken' per 1 metavested token in vesting token decimals but only up to payment decimal precision
@@ -266,7 +264,7 @@ contract metavestController is UUPSUpgradeable, SafeTransferLib {
     ) external onlyAuthority conditionCheck consentCheck(_grant, msg.data) {
         if (_newPrice == 0) revert MetaVesTControllerStorage.MetaVesTController_ZeroPrice();
         IPriceAllocation grant = IPriceAllocation(_grant);
-        // TODO review needed: it is supposed to be TokenOption, RestrictedTokenAward right?
+        // The price is only meaningful for TokenOption and RestrictedTokenAward types
         if (grant.getVestingType() != uint256(MetaVestType.TokenOption) && grant.getVestingType() != uint256(MetaVestType.RestrictedTokenAward)) revert MetaVesTControllerStorage.MetaVesTController_IncorrectMetaVesTType();
         _resetAmendmentParams(_grant, msg.sig);
         grant.updatePrice(_newPrice);
