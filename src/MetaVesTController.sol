@@ -175,8 +175,9 @@ contract metavestController is UUPSUpgradeable, SafeTransferLib {
     ) external returns (bytes32) {
         MetaVesTControllerStorage.MetaVesTControllerData storage st = MetaVesTControllerStorage.getStorage();
 
-        // TODO validate parties against deal
         // Check: verify inputs
+        // TODO check metavest type (and other party values)
+        if (parties[1] != dealDraft.grantee) revert MetaVesTControllerStorage.MetaVesTController_GranteeNotDirectParty();
         if (partyValues.length < 2) revert MetaVesTControllerStorage.MetaVesTController_CounterPartyNotFound();
         if (partyValues[1].length != partyValues[0].length) revert MetaVesTControllerStorage.MetaVesTController_PartyValuesLengthMismatch();
 
@@ -200,7 +201,6 @@ contract metavestController is UUPSUpgradeable, SafeTransferLib {
         return dealProposed.agreementId;
     }
 
-    // TODO handle cases when agreement is signed externally
     function signDealAndCreateMetavest(
         address grantee,
         address recipient,

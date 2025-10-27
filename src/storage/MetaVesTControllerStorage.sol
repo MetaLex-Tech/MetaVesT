@@ -143,7 +143,7 @@ library MetaVesTControllerStorage {
     error MetaVesTController_ZeroAddress();
     error MetaVesTController_ZeroAmount();
     error MetaVesTController_ZeroPrice();
-    error MetaVesT_AmountNotApprovedForTransferFrom();
+    error MetaVesT_AmountNotApprovedForTransferFrom(); // TODO review needed: should we move it elsewhere?
     error MetaVesTController_SetDoesNotExist();
     error MetaVestController_MetaVestNotInSet();
     error MetaVesTController_SetAlreadyExists();
@@ -152,9 +152,9 @@ library MetaVesTControllerStorage {
     error MetaVesTController_DealAlreadyFinalized();
     error MetaVesTController_DealVoided();
     error MetaVesTController_CounterPartyNotFound();
+    error MetaVesTController_GranteeNotDirectParty();
     error MetaVesTController_PartyValuesLengthMismatch();
     error MetaVesTController_CounterPartyValueMismatch();
-    error MetaVesTController_UnauthorizedToMint();
     error MetaVesTController_UnknownError(bytes4 error, bytes data);
 
     function getStorage() internal pure returns (MetaVesTControllerData storage st) {
@@ -164,7 +164,6 @@ library MetaVesTControllerStorage {
         }
     }
 
-    // TODO why doesn't it need conditionCheck?
     function createVestingAllocation(MetaVestDeal storage deal, address recipient) internal returns (address){
         MetaVesTControllerStorage.MetaVesTControllerData storage st = MetaVesTControllerStorage.getStorage();
         address vestingAllocation = IAllocationFactory(st.vestingFactory).createAllocation(
@@ -182,7 +181,6 @@ library MetaVesTControllerStorage {
         return vestingAllocation;
     }
 
-    // TODO where should we put conditionCheck instead since it will emit events?
     function createTokenOptionAllocation(MetaVestDeal storage deal, address recipient) internal returns (address) {
         MetaVesTControllerStorage.MetaVesTControllerData storage st = MetaVesTControllerStorage.getStorage();
         address tokenOptionAllocation = IAllocationFactory(st.tokenOptionFactory).createAllocation(
@@ -200,7 +198,6 @@ library MetaVesTControllerStorage {
         return tokenOptionAllocation;
     }
 
-    // TODO where should we put conditionCheck instead since it will emit events?
     function createRestrictedTokenAward(MetaVestDeal storage deal, address recipient) internal returns (address){
         MetaVesTControllerStorage.MetaVesTControllerData storage st = MetaVesTControllerStorage.getStorage();
         address restrictedTokenAward = IAllocationFactory(st.restrictedTokenFactory).createAllocation(
@@ -320,7 +317,19 @@ library MetaVesTControllerStorage {
         }
 
         // Interaction: Finalize agreement
-        ICyberAgreementRegistry(st.registry).signContractFor(grantee, agreementId, partyValues, signature, false, secret);
+
+        // If the grantee signed the agreement externally (ex. by directly interacting with CyberAgreementRegistry),
+        // we will skip the signing step.
+        if (!ICyberAgreementRegistry(st.registry).hasSigned(agreementId, grantee)) {
+            ICyberAgreementRegistry(st.registry).signContractFor(grantee, agreementId, partyValues, signature, false, secret);
+        } else {
+            // Already signed in registry; fetch values recorded in the registry and ensure consistency.
+            // Theoretically, since the agreement is always close-ended, we could've safely assumed
+            // the counterparty values stored in CyberAgreementRegistry vs here are always consistent,
+            // but we check it anyways just in case
+            string[] memory registryValues = ICyberAgreementRegistry(st.registry).getSignerValues(agreementId, grantee);
+            if (keccak256(abi.encode(registryValues)) != keccak256(abi.encode(partyValues))) return (address(0), 0, MetaVesTControllerStorage.MetaVesTController_CounterPartyValueMismatch.selector);
+        }
         ICyberAgreementRegistry(st.registry).finalizeContract(agreementId);
 
         // Interaction: Create and provision MetaVesT

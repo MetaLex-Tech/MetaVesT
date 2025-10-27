@@ -146,10 +146,37 @@ contract MetaVesTControllerTestBase is Test {
         );
     }
 
+    /// @notice Shortcut for automatically generate the correct parties
     function _proposeAndSignDeal(
         bytes32 templateId,
         uint256 agreementSalt,
         uint256 grantorOrDelegatePrivateKey,
+        MetaVestDeal memory dealDraft,
+        string memory partyName,
+        uint256 expiry,
+        bytes memory expectRevertData
+    ) internal returns(bytes32) {
+        address[] memory parties = new address[](2);
+        parties[0] = address(guardianSafe);
+        parties[1] = dealDraft.grantee;
+
+        return _proposeAndSignDeal(
+            templateId,
+            agreementSalt,
+            grantorOrDelegatePrivateKey,
+            parties,
+            dealDraft,
+            partyName,
+            expiry,
+            expectRevertData
+        );
+    }
+
+    function _proposeAndSignDeal(
+        bytes32 templateId,
+        uint256 agreementSalt,
+        uint256 grantorOrDelegatePrivateKey,
+        address[] memory parties,
         MetaVestDeal memory dealDraft,
         string memory partyName,
         uint256 expiry,
@@ -182,9 +209,6 @@ contract MetaVesTControllerTestBase is Test {
         partyValues[1][2] = "email@company.com";
         partyValues[1][3] = "individual";
 
-        address[] memory parties = new address[](2);
-        parties[0] = address(guardianSafe);
-        parties[1] = dealDraft.grantee;
         bytes32 expectedContractId = keccak256(
             abi.encode(
                 templateId,
