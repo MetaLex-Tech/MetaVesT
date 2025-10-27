@@ -17,6 +17,7 @@ contract TokenOptionAllocation is BaseAllocation {
 
     /// @notice Constructor to create a TokenOptionAllocation
     /// @param _grantee - address of the grantee
+    /// @param _recipient address of the fund recipient
     /// @param _controller - address of the controller
     /// @param _paymentToken - address of the payment token
     /// @param _exercisePrice - price of the token option exercise in vesting token decimals but only up to payment decimal precision
@@ -25,7 +26,7 @@ contract TokenOptionAllocation is BaseAllocation {
     /// @param _milestones - milestones with conditions and awards
     constructor (
         address _grantee,
-        address _recipient, // TODO review needed
+        address _recipient,
         address _controller,
         address _paymentToken,
         uint256 _exercisePrice,
@@ -41,16 +42,10 @@ contract TokenOptionAllocation is BaseAllocation {
         if (_allocation.tokenContract == address(0)) revert MetaVesT_ZeroAddress();
         if (_allocation.tokenStreamTotal == 0) revert MetaVesT_ZeroAmount();
         if (_allocation.vestingRate >  1000*1e18 || _allocation.unlockRate > 1000*1e18) revert MetaVesT_RateTooHigh();
+        if (_allocation.vestingRate <  100 || _allocation.unlockRate < 100) revert MetaVesT_RateTooLow();
 
-        //set vesting allocation variables
-        allocation.tokenContract = _allocation.tokenContract;
-        allocation.tokenStreamTotal = _allocation.tokenStreamTotal;
-        allocation.vestingCliffCredit = _allocation.vestingCliffCredit;
-        allocation.unlockingCliffCredit = _allocation.unlockingCliffCredit;
-        allocation.vestingRate = _allocation.vestingRate;
-        allocation.vestingStartTime = _allocation.vestingStartTime;
-        allocation.unlockRate = _allocation.unlockRate;
-        allocation.unlockStartTime = _allocation.unlockStartTime;
+        // set vesting allocation variables
+        allocation = _allocation;
 
         // set token option variables
         exercisePrice = _exercisePrice;
@@ -143,9 +138,9 @@ contract TokenOptionAllocation is BaseAllocation {
         uint256 paymentAmount = getPaymentAmount(_tokensToExercise);
         if(paymentAmount == 0) revert MetaVesT_TooSmallAmount();
         
-        safeTransferFrom(paymentToken, msg.sender, getAuthority(), paymentAmount);
+        safeTransferFrom(paymentToken, grantee, getAuthority(), paymentAmount);
         tokensExercised += _tokensToExercise;
-        emit MetaVesT_TokenOptionExercised(msg.sender, _tokensToExercise, paymentAmount);
+        emit MetaVesT_TokenOptionExercised(grantee, _tokensToExercise, paymentAmount);
     }
 
     /// @notice Allows the controller to terminate the TokenOptionAllocation

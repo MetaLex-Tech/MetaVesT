@@ -16,6 +16,7 @@ contract RestrictedTokenAward is BaseAllocation {
 
     /// @notice Constructor to deploy a new RestrictedTokenAward
     /// @param _grantee - address of the grantee
+    /// @param _recipient address of the fund recipient
     /// @param _controller - address of the controller
     /// @param _paymentToken - address of the payment token
     /// @param _repurchasePrice - price at which the restricted tokens can be repurchased in vesting token decimals but only up to payment decimal precision
@@ -24,7 +25,7 @@ contract RestrictedTokenAward is BaseAllocation {
     /// @param _milestones - milestones with their conditions and awards
     constructor (
         address _grantee,
-        address _recipient, // TODO review needed
+        address _recipient,
         address _controller,
         address _paymentToken,
         uint256 _repurchasePrice,
@@ -40,16 +41,10 @@ contract RestrictedTokenAward is BaseAllocation {
         if (_allocation.tokenContract == address(0)) revert MetaVesT_ZeroAddress();
         if (_allocation.tokenStreamTotal == 0) revert MetaVesT_ZeroAmount();
         if (_allocation.vestingRate >  1000*1e18 || _allocation.unlockRate > 1000*1e18) revert MetaVesT_RateTooHigh();
+        if (_allocation.vestingRate <  100 || _allocation.unlockRate < 100) revert MetaVesT_RateTooLow();
 
-        //set vesting allocation variables
-        allocation.tokenContract = _allocation.tokenContract;
-        allocation.tokenStreamTotal = _allocation.tokenStreamTotal;
-        allocation.vestingCliffCredit = _allocation.vestingCliffCredit;
-        allocation.unlockingCliffCredit = _allocation.unlockingCliffCredit;
-        allocation.vestingRate = _allocation.vestingRate;
-        allocation.vestingStartTime = _allocation.vestingStartTime;
-        allocation.unlockRate = _allocation.unlockRate;
-        allocation.unlockStartTime = _allocation.unlockStartTime;
+        // set vesting allocation variables
+        allocation = _allocation;
 
         // set token option variables
         repurchasePrice = _repurchasePrice;
@@ -155,9 +150,9 @@ contract RestrictedTokenAward is BaseAllocation {
     function claimRepurchasedTokens() external onlyGrantee nonReentrant {
         if(IERC20M(paymentToken).balanceOf(address(this)) == 0) revert MetaVesT_MoreThanAvailable();
         uint256 _amount = IERC20M(paymentToken).balanceOf(address(this));
-        safeTransfer(paymentToken, msg.sender, _amount);
+        safeTransfer(paymentToken, recipient, _amount);
         tokensRepurchasedWithdrawn += _amount;
-        emit MetaVesT_Withdrawn(msg.sender, recipient, paymentToken, _amount); // TODO review needed
+        emit MetaVesT_Withdrawn(grantee, recipient, paymentToken, _amount);
     }
 
     /// @notice Allows the controller to terminate the RestrictedTokenAward

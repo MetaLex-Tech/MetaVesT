@@ -23,23 +23,15 @@ contract VestingAllocation is BaseAllocation {
         _recipient,
         _controller
     ) {
-        //perform input validation
+        // perform input validation
         if (_allocation.tokenContract == address(0)) revert MetaVesT_ZeroAddress();
         if (_allocation.tokenStreamTotal == 0) revert MetaVesT_ZeroAmount();
-        if (_grantee == address(0)) revert MetaVesT_ZeroAddress();
-        if (_recipient == address(0)) revert MetaVesT_ZeroAddress();
         if (_allocation.vestingRate >  1000*1e18 || _allocation.unlockRate > 1000*1e18) revert MetaVesT_RateTooHigh();
         if (_allocation.vestingRate <  100 || _allocation.unlockRate < 100) revert MetaVesT_RateTooLow();
 
-        //set vesting allocation variables
-        allocation.tokenContract = _allocation.tokenContract;
-        allocation.tokenStreamTotal = _allocation.tokenStreamTotal;
-        allocation.vestingCliffCredit = _allocation.vestingCliffCredit;
-        allocation.unlockingCliffCredit = _allocation.unlockingCliffCredit;
-        allocation.vestingRate = _allocation.vestingRate;
-        allocation.vestingStartTime = _allocation.vestingStartTime;
-        allocation.unlockRate = _allocation.unlockRate;
-        allocation.unlockStartTime = _allocation.unlockStartTime;
+        // set vesting allocation variables
+        allocation = _allocation;
+
         // manually copy milestones
         for (uint256 i; i < _milestones.length; ++i) {
             milestones.push(_milestones[i]);

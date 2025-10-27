@@ -9,7 +9,7 @@ contract RestrictedTokenFactory is IAllocationFactory {
     function createAllocation(
         AllocationType _allocationType,
         address _grantee,
-        address _recipient, // TODO review needed
+        address _recipient,
         address _controller,
         RestrictedTokenAward.Allocation memory _allocation,
         RestrictedTokenAward.Milestone[] memory _milestones,

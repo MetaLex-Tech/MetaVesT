@@ -9,7 +9,7 @@ contract TokenOptionFactory is IAllocationFactory {
     function createAllocation(
         AllocationType _allocationType,
         address _grantee,
-        address _recipient, // TODO review needed
+        address _recipient,
         address _controller,
         TokenOptionAllocation.Allocation memory _allocation,
         TokenOptionAllocation.Milestone[] memory _milestones,

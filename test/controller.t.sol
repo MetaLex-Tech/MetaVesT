@@ -527,6 +527,33 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
         assertEq(paymentToken.balanceOf(grantee), startingPaymentTokenBalance + payment);
     }
 
+    function testRepurchaseTokensSpecifiedRecipient() public {
+        uint256 startingPaymentTokenBalance = paymentToken.balanceOf(grantee);
+        address restrictedTokenAward = createDummyRestrictedTokenAward(bob); // set bob as the recipient
+        uint256 repurchaseAmount = 5e18;
+        uint256 startingVestingTokenBalance = vestingToken.balanceOf(authority);
+        uint256 payment = RestrictedTokenAward(restrictedTokenAward).getPaymentAmount(repurchaseAmount);
+
+        vm.startPrank(authority);
+
+        controller.terminateMetavestVesting(restrictedTokenAward);
+        paymentToken.approve(address(restrictedTokenAward), payment);
+
+        vm.warp(block.timestamp + 20 days);
+
+        RestrictedTokenAward(restrictedTokenAward).repurchaseTokens(repurchaseAmount);
+
+        vm.stopPrank();
+
+        assertEq(vestingToken.balanceOf(authority), startingVestingTokenBalance + repurchaseAmount);
+
+        vm.prank(grantee);
+        vm.expectEmit(true, true, true, true);
+        emit BaseAllocation.MetaVesT_Withdrawn(grantee, bob, address(paymentToken), payment);
+        RestrictedTokenAward(restrictedTokenAward).claimRepurchasedTokens();
+        assertEq(paymentToken.balanceOf(bob) - startingPaymentTokenBalance, payment, "Bob should receive the payment as the specified recipient");
+    }
+
     function testRepurchaseTokensFuture() public {
         uint256 startingPaymentTokenBalance = paymentToken.balanceOf(grantee);
         address restrictedTokenAward = createDummyRestrictedTokenAwardFuture();
@@ -825,11 +852,15 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
         );
     }
 
-   function createDummyRestrictedTokenAward() internal returns (address) {
-       return createDummyRestrictedTokenAward("");
-   }
+    function createDummyRestrictedTokenAward() internal returns (address) {
+        return createDummyRestrictedTokenAward(alice, "");
+    }
 
-    function createDummyRestrictedTokenAward(bytes memory expectRevertData) internal returns (address) {
+    function createDummyRestrictedTokenAward(address recipient) internal returns (address) {
+        return createDummyRestrictedTokenAward(recipient, "");
+    }
+
+    function createDummyRestrictedTokenAward(address recipient, bytes memory expectRevertData) internal returns (address) {
         BaseAllocation.Milestone[] memory milestones = new BaseAllocation.Milestone[](1);
         milestones[0] = BaseAllocation.Milestone({
             milestoneAward: 1000e18,
@@ -867,7 +898,7 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
         return _granteeSignDeal(
             contractIdAlice,
             alice, // grantee
-            alice, // recipient
+            recipient,
             alicePrivateKey,
             "Alice"
         );
