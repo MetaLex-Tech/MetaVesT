@@ -81,18 +81,20 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
             templateId,
             block.timestamp, // salt
             delegatePrivateKey,
-            alice,
-            BaseAllocation.Allocation({
-                tokenContract: address(vestingToken),
-                tokenStreamTotal: 60 ether,
-                vestingCliffCredit: 30 ether,
-                unlockingCliffCredit: 30 ether,
-                vestingRate: 1 ether,
-                vestingStartTime: uint48(block.timestamp),
-                unlockRate: 1 ether,
-                unlockStartTime: uint48(block.timestamp)
-            }),
-            new BaseAllocation.Milestone[](0),
+            MetaVestDealLib.draft().setVesting(
+                alice,
+                BaseAllocation.Allocation({
+                    tokenContract: address(vestingToken),
+                    tokenStreamTotal: 60 ether,
+                    vestingCliffCredit: 30 ether,
+                    unlockingCliffCredit: 30 ether,
+                    vestingRate: 1 ether,
+                    vestingStartTime: uint48(block.timestamp),
+                    unlockRate: 1 ether,
+                    unlockStartTime: uint48(block.timestamp)
+                }),
+                new BaseAllocation.Milestone[](0)
+            ),
             "Alice",
             metavestExpiry
         );
@@ -630,18 +632,20 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
             templateId,
             block.timestamp, // salt
             delegatePrivateKey,
-            alice, // = grantee
-            BaseAllocation.Allocation({
-                tokenContract: address(vestingToken),
-                tokenStreamTotal: 1000 ether,
-                vestingCliffCredit: 100 ether,
-                unlockingCliffCredit: 100 ether,
-                vestingRate: 10 ether,
-                vestingStartTime: uint48(block.timestamp),
-                unlockRate: 10 ether,
-                unlockStartTime: uint48(block.timestamp)
-            }),
-            milestones,
+            MetaVestDealLib.draft().setVesting(
+                alice, // = grantee
+                BaseAllocation.Allocation({
+                    tokenContract: address(vestingToken),
+                    tokenStreamTotal: 1000 ether,
+                    vestingCliffCredit: 100 ether,
+                    unlockingCliffCredit: 100 ether,
+                    vestingRate: 10 ether,
+                    vestingStartTime: uint48(block.timestamp),
+                    unlockRate: 10 ether,
+                    unlockStartTime: uint48(block.timestamp)
+                }),
+                milestones
+            ),
             "Alice",
             metavestExpiry
         );
@@ -671,18 +675,20 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
             templateId,
             block.timestamp, // salt
             delegatePrivateKey,
-            alice, // = grantee
-            BaseAllocation.Allocation({
-                tokenContract: address(vestingToken),
-                tokenStreamTotal: 1000 ether,
-                vestingCliffCredit: 100 ether,
-                unlockingCliffCredit: 100 ether,
-                vestingRate: 10 ether,
-                vestingStartTime: uint48(block.timestamp),
-                unlockRate: 10 ether,
-                unlockStartTime: uint48(block.timestamp)
-            }),
-            milestones,
+            MetaVestDealLib.draft().setVesting(
+                alice, // = grantee
+                BaseAllocation.Allocation({
+                    tokenContract: address(vestingToken),
+                    tokenStreamTotal: 1000 ether,
+                    vestingCliffCredit: 100 ether,
+                    unlockingCliffCredit: 100 ether,
+                    vestingRate: 10 ether,
+                    vestingStartTime: uint48(block.timestamp),
+                    unlockRate: 10 ether,
+                    unlockStartTime: uint48(block.timestamp)
+                }),
+                milestones
+            ),
             "Alice",
             metavestExpiry
         );
@@ -711,18 +717,20 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
             templateId,
             block.timestamp, // salt
             delegatePrivateKey,
-            alice, // = grantee
-            BaseAllocation.Allocation({
-                tokenContract: address(vestingToken),
-                tokenStreamTotal: 1000 ether,
-                vestingCliffCredit: 100 ether,
-                unlockingCliffCredit: 100 ether,
-                vestingRate: 10 ether,
-                vestingStartTime: uint48(block.timestamp),
-                unlockRate: 5 ether,
-                unlockStartTime: uint48(block.timestamp)
-            }),
-            milestones,
+            MetaVestDealLib.draft().setVesting(
+                alice, // = grantee
+                BaseAllocation.Allocation({
+                    tokenContract: address(vestingToken),
+                    tokenStreamTotal: 1000 ether,
+                    vestingCliffCredit: 100 ether,
+                    unlockingCliffCredit: 100 ether,
+                    vestingRate: 10 ether,
+                    vestingStartTime: uint48(block.timestamp),
+                    unlockRate: 5 ether,
+                    unlockStartTime: uint48(block.timestamp)
+                }),
+                milestones
+            ),
             "Alice",
             metavestExpiry
         );
@@ -745,18 +753,20 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
             templateId,
             block.timestamp, // salt
             delegatePrivateKey,
-            alice, // = grantee
-            BaseAllocation.Allocation({
-                tokenContract: address(vestingToken),
-                tokenStreamTotal: 1000 ether,
-                vestingCliffCredit: 0 ether,
-                unlockingCliffCredit: 0 ether,
-                vestingRate: 10 ether,
-                vestingStartTime: uint48(block.timestamp),
-                unlockRate: 10 ether,
-                unlockStartTime: uint48(block.timestamp)
-            }),
-            milestones,
+            MetaVestDealLib.draft().setVesting(
+                alice, // = grantee
+                BaseAllocation.Allocation({
+                    tokenContract: address(vestingToken),
+                    tokenStreamTotal: 1000 ether,
+                    vestingCliffCredit: 0 ether,
+                    unlockingCliffCredit: 0 ether,
+                    vestingRate: 10 ether,
+                    vestingStartTime: uint48(block.timestamp),
+                    unlockRate: 10 ether,
+                    unlockStartTime: uint48(block.timestamp)
+                }),
+                milestones
+            ),
             "Alice",
             metavestExpiry
         );
@@ -779,18 +789,20 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
             templateId,
             block.timestamp, // salt
             delegatePrivateKey,
-            alice, // = grantee
-            BaseAllocation.Allocation({
-                tokenContract: address(vestingToken),
-                tokenStreamTotal: 1000 ether,
-                vestingCliffCredit: 0 ether,
-                unlockingCliffCredit: 0 ether,
-                vestingRate: 10 ether,
-                vestingStartTime: uint48(block.timestamp + 2000),
-                unlockRate: 10 ether,
-                unlockStartTime: uint48(block.timestamp + 2000)
-            }),
-            milestones,
+            MetaVestDealLib.draft().setVesting(
+                alice, // = grantee
+                BaseAllocation.Allocation({
+                    tokenContract: address(vestingToken),
+                    tokenStreamTotal: 1000 ether,
+                    vestingCliffCredit: 0 ether,
+                    unlockingCliffCredit: 0 ether,
+                    vestingRate: 10 ether,
+                    vestingStartTime: uint48(block.timestamp + 2000),
+                    unlockRate: 10 ether,
+                    unlockStartTime: uint48(block.timestamp + 2000)
+                }),
+                milestones
+            ),
             "Alice",
             metavestExpiry
         );
@@ -972,18 +984,20 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
             templateId,
             block.timestamp, // salt
             delegatePrivateKey,
-            alice, // = grantee
-            BaseAllocation.Allocation({
-                tokenContract: address(0), // zero address
-                tokenStreamTotal: 1000 ether,
-                vestingCliffCredit: 100 ether,
-                unlockingCliffCredit: 100 ether,
-                vestingRate: 10 ether,
-                vestingStartTime: uint48(block.timestamp),
-                unlockRate: 10 ether,
-                unlockStartTime: uint48(block.timestamp)
-            }),
-            milestones,
+            MetaVestDealLib.draft().setVesting(
+                alice, // = grantee
+                BaseAllocation.Allocation({
+                    tokenContract: address(0), // zero address
+                    tokenStreamTotal: 1000 ether,
+                    vestingCliffCredit: 100 ether,
+                    unlockingCliffCredit: 100 ether,
+                    vestingRate: 10 ether,
+                    vestingStartTime: uint48(block.timestamp),
+                    unlockRate: 10 ether,
+                    unlockStartTime: uint48(block.timestamp)
+                }),
+                milestones
+            ),
             "Alice",
             metavestExpiry
         );
@@ -1606,18 +1620,20 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
             templateId,
             block.timestamp, // salt
             alicePrivateKey, // Should fail because Alice is not delegated by the grantor
-            alice, // grantee
-            BaseAllocation.Allocation({
-                tokenContract: address(vestingToken),
-                tokenStreamTotal: 100 ether,
-                vestingCliffCredit: 10 ether,
-                unlockingCliffCredit: 10 ether,
-                vestingRate: 1 ether,
-                vestingStartTime: uint48(block.timestamp),
-                unlockRate: 1 ether,
-                unlockStartTime: uint48(block.timestamp)
-            }),
-            new BaseAllocation.Milestone[](0),
+            MetaVestDealLib.draft().setVesting(
+                alice, // grantee
+                BaseAllocation.Allocation({
+                    tokenContract: address(vestingToken),
+                    tokenStreamTotal: 100 ether,
+                    vestingCliffCredit: 10 ether,
+                    unlockingCliffCredit: 10 ether,
+                    vestingRate: 1 ether,
+                    vestingStartTime: uint48(block.timestamp),
+                    unlockRate: 1 ether,
+                    unlockStartTime: uint48(block.timestamp)
+                }),
+                new BaseAllocation.Milestone[](0)
+            ),
             "Alice",
             block.timestamp + 7 days,
             abi.encodeWithSelector(CyberAgreementRegistry.SignatureVerificationFailed.selector) // Expected revert
@@ -1629,18 +1645,20 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
             templateId,
             block.timestamp, // salt
             delegatePrivateKey,
-            alice,
-            BaseAllocation.Allocation({
-                tokenContract: address(vestingToken),
-                tokenStreamTotal: 100 ether,
-                vestingCliffCredit: 10 ether,
-                unlockingCliffCredit: 10 ether,
-                vestingRate: 1 ether,
-                vestingStartTime: uint48(block.timestamp),
-                unlockRate: 1 ether,
-                unlockStartTime: uint48(block.timestamp)
-            }),
-            new BaseAllocation.Milestone[](0),
+            MetaVestDealLib.draft().setVesting(
+                alice,
+                BaseAllocation.Allocation({
+                    tokenContract: address(vestingToken),
+                    tokenStreamTotal: 100 ether,
+                    vestingCliffCredit: 10 ether,
+                    unlockingCliffCredit: 10 ether,
+                    vestingRate: 1 ether,
+                    vestingStartTime: uint48(block.timestamp),
+                    unlockRate: 1 ether,
+                    unlockStartTime: uint48(block.timestamp)
+                }),
+                new BaseAllocation.Milestone[](0)
+            ),
             "Alice",
             block.timestamp + 7 days
         );
@@ -1667,18 +1685,20 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
             templateId,
             block.timestamp, // salt
             delegatePrivateKey,
-            alice,
-            BaseAllocation.Allocation({
-                tokenContract: address(vestingToken),
-                tokenStreamTotal: 100 ether,
-                vestingCliffCredit: 10 ether,
-                unlockingCliffCredit: 10 ether,
-                vestingRate: 1 ether,
-                vestingStartTime: uint48(block.timestamp),
-                unlockRate: 1 ether,
-                unlockStartTime: uint48(block.timestamp)
-            }),
-            new BaseAllocation.Milestone[](0),
+            MetaVestDealLib.draft().setVesting(
+                alice,
+                BaseAllocation.Allocation({
+                    tokenContract: address(vestingToken),
+                    tokenStreamTotal: 100 ether,
+                    vestingCliffCredit: 10 ether,
+                    unlockingCliffCredit: 10 ether,
+                    vestingRate: 1 ether,
+                    vestingStartTime: uint48(block.timestamp),
+                    unlockRate: 1 ether,
+                    unlockStartTime: uint48(block.timestamp)
+                }),
+                new BaseAllocation.Milestone[](0)
+            ),
             "Alice",
             metavestExpiry
         );
@@ -1706,18 +1726,20 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
             templateId,
             block.timestamp, // salt
             delegatePrivateKey,
-            alice,
-            BaseAllocation.Allocation({
-                tokenContract: address(vestingToken),
-                tokenStreamTotal: 100 ether,
-                vestingCliffCredit: 10 ether,
-                unlockingCliffCredit: 10 ether,
-                vestingRate: 1 ether,
-                vestingStartTime: uint48(block.timestamp),
-                unlockRate: 1 ether,
-                unlockStartTime: uint48(block.timestamp)
-            }),
-            new BaseAllocation.Milestone[](0),
+            MetaVestDealLib.draft().setVesting(
+                alice,
+                BaseAllocation.Allocation({
+                    tokenContract: address(vestingToken),
+                    tokenStreamTotal: 100 ether,
+                    vestingCliffCredit: 10 ether,
+                    unlockingCliffCredit: 10 ether,
+                    vestingRate: 1 ether,
+                    vestingStartTime: uint48(block.timestamp),
+                    unlockRate: 1 ether,
+                    unlockStartTime: uint48(block.timestamp)
+                }),
+                new BaseAllocation.Milestone[](0)
+            ),
             "Alice",
             metavestExpiry
         );
@@ -1800,19 +1822,21 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
             templateId,
             block.timestamp, // salt
             delegatePrivateKey,
-            alice,
-            BaseAllocation.Allocation({
-                tokenContract: address(vestingToken),
-                // 100k ZK total, the first half unlocks with a cliff and the second half unlocks over an year
-                tokenStreamTotal: 60 ether,
-                vestingCliffCredit: 30 ether,
-                unlockingCliffCredit: 30 ether,
-                vestingRate: 1 ether,
-                vestingStartTime: uint48(block.timestamp),
-                unlockRate: 1 ether,
-                unlockStartTime: uint48(block.timestamp)
-            }),
-            new BaseAllocation.Milestone[](0),
+            MetaVestDealLib.draft().setVesting(
+                alice,
+                BaseAllocation.Allocation({
+                    tokenContract: address(vestingToken),
+                    // 100k ZK total, the first half unlocks with a cliff and the second half unlocks over an year
+                    tokenStreamTotal: 60 ether,
+                    vestingCliffCredit: 30 ether,
+                    unlockingCliffCredit: 30 ether,
+                    vestingRate: 1 ether,
+                    vestingStartTime: uint48(block.timestamp),
+                    unlockRate: 1 ether,
+                    unlockStartTime: uint48(block.timestamp)
+                }),
+                new BaseAllocation.Milestone[](0)
+            ),
             "Alice",
             metavestExpiry
         );

@@ -12,6 +12,8 @@ import "./lib/MetaVesTControllerTestBase.sol";
 
 // TODO WIP: non-VestingAllocation tests are disabled until reviewed with new design with CyberAgreementRegistry
 contract MetaVestControllerTest is MetaVesTControllerTestBase {
+    using MetaVestDealLib for MetaVestDeal;
+
     address public authority = guardianSafe;
     address public dao = guardianSafe;
     address public grantee = alice;
@@ -376,18 +378,20 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
             templateId,
             agreementSaltCounter++,
             delegatePrivateKey,
-            alice, // = grantee
-            BaseAllocation.Allocation({
-                tokenContract: address(vestingToken),
-                tokenStreamTotal: 1000 ether,
-                vestingCliffCredit: 100 ether,
-                unlockingCliffCredit: 100 ether,
-                vestingRate: 10 ether,
-                vestingStartTime: uint48(block.timestamp),
-                unlockRate: 10 ether,
-                unlockStartTime: uint48(block.timestamp)
-            }),
-            milestones,
+            MetaVestDealLib.draft().setVesting(
+                alice, // = grantee
+                BaseAllocation.Allocation({
+                    tokenContract: address(vestingToken),
+                    tokenStreamTotal: 1000 ether,
+                    vestingCliffCredit: 100 ether,
+                    unlockingCliffCredit: 100 ether,
+                    vestingRate: 10 ether,
+                    vestingStartTime: uint48(block.timestamp),
+                    unlockRate: 10 ether,
+                    unlockStartTime: uint48(block.timestamp)
+                }),
+                milestones
+            ),
             "Alice",
             cappedMinterExpirationTime // Same expiry as the minter so grantee can defer vesting contract creation as much as possible
         );

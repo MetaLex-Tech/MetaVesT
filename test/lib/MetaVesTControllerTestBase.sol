@@ -103,50 +103,30 @@ contract MetaVesTControllerTestBase is Test {
         assertEq(vestingToken.balanceOf(address(vestingAllocation)), 0, string(abi.encodePacked(assertName, ": vesting contract should not have any token (it mints on-demand)")));
     }
 
+    /// @notice Shortcut for:
+    /// - no revert
+    /// - automatically generate the correct parties
     function _proposeAndSignDeal(
         bytes32 templateId,
         uint256 agreementSalt,
         uint256 grantorOrDelegatePrivateKey,
-        address grantee,
-        BaseAllocation.Allocation memory allocation,
-        BaseAllocation.Milestone[] memory milestones,
+        MetaVestDeal memory dealDraft,
         string memory partyName,
         uint256 expiry
-    ) internal returns(bytes32) {
-        return _proposeAndSignDeal(
-            templateId, agreementSalt, grantorOrDelegatePrivateKey, grantee, allocation, milestones, partyName, expiry,
-            "" // Not expecting revert
-        );
-    }
-
-    // TODO WIP: temporarily for backwards compatibility
-    function _proposeAndSignDeal(
-        bytes32 templateId,
-        uint256 agreementSalt,
-        uint256 grantorOrDelegatePrivateKey,
-        address grantee,
-        BaseAllocation.Allocation memory allocation,
-        BaseAllocation.Milestone[] memory milestones,
-        string memory partyName,
-        uint256 expiry,
-        bytes memory expectRevertData
     ) internal returns(bytes32) {
         return _proposeAndSignDeal(
             templateId,
             agreementSalt,
             grantorOrDelegatePrivateKey,
-            MetaVestDealLib.draft().setVesting(
-                grantee,
-                allocation,
-                milestones
-            ),
+            dealDraft,
             partyName,
             expiry,
-            expectRevertData
+            ""
         );
     }
 
-    /// @notice Shortcut for automatically generate the correct parties
+    /// @notice Shortcut for:
+    /// - automatically generate the correct parties
     function _proposeAndSignDeal(
         bytes32 templateId,
         uint256 agreementSalt,
