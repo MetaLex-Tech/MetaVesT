@@ -14,7 +14,6 @@ contract EvilGrant {
     }
 }
 
-// TODO WIP: non-VestingAllocation tests are disabled until reviewed with new design with CyberAgreementRegistry
 contract Audit is MetaVestControllerTest {
     function test_RevertIf_AuditArbitraryVote() public {
         // template from testVoteOnMetavestAmendment
@@ -82,51 +81,55 @@ contract Audit is MetaVestControllerTest {
         controller.proposeMajorityMetavestAmendment("testSet", msgSig, callData);
     }
 
-//    function testAuditModifiedCalldataProposal() public {
-//        // template from testCreateSetWithThreeTokenOptionsAndChangeExercisePrice
-//        address allocation1 = createDummyTokenOptionAllocation();
-//        address allocation2 = createDummyTokenOptionAllocation();
-//        address allocation3 = createDummyTokenOptionAllocation();
-//
-//        vm.prank(authority);
-//        controller.addMetaVestToSet("testSet", allocation1);
-//        controller.addMetaVestToSet("testSet", allocation2);
-//        controller.addMetaVestToSet("testSet", allocation3);
-//         assertTrue(TokenOptionAllocation(allocation1).exercisePrice() == 1e18);
-//         vm.warp(block.timestamp + 25 seconds);
-//
-//
-//        vm.startPrank(grantee);
-//        ERC20(paymentToken).approve(address(allocation1), 2000e18);
-//        ERC20(paymentToken).approve(address(allocation2), 2000e18);
-//
-//         TokenOptionAllocation(allocation1).exerciseTokenOption(TokenOptionAllocation(allocation1).getAmountExercisable());
-//
-//         TokenOptionAllocation(allocation2).exerciseTokenOption(TokenOptionAllocation(allocation2).getAmountExercisable());
-//         vm.stopPrank();
-//        bytes4 msgSig = bytes4(keccak256("updateExerciseOrRepurchasePrice(address,uint256)"));
-//        bytes memory callData = abi.encodeWithSelector(msgSig, allocation1, 2e18);
-//
-//        vm.prank(authority);
-//        controller.proposeMajorityMetavestAmendment("testSet", msgSig, callData);
-//
-//        vm.prank(grantee);
-//        controller.voteOnMetavestAmendment(allocation1, "testSet", msgSig, true);
-//
-//        vm.prank(grantee);
-//        controller.voteOnMetavestAmendment(allocation2, "testSet", msgSig, true);
-//
-//        vm.prank(authority);
-//        vm.expectRevert();
-//        controller.updateExerciseOrRepurchasePrice(allocation1, 999999999999999999999e18);
-//
-//        // Bypass MetaVesTController_AmendmentNeitherMutualNorMajorityConsented
-//        vm.prank(authority);
-//        bytes memory p = abi.encodeWithSelector(msgSig, allocation1, 999999999999999999999e18, 2e18);
-//        address(controller).call(p);
-//
-//        console.log('Modified excercise price: ', TokenOptionAllocation(allocation1).exercisePrice());
-//    }
+    function testAuditModifiedCalldataProposal() public {
+        // template from testCreateSetWithThreeTokenOptionsAndChangeExercisePrice
+        address allocation1 = createDummyTokenOptionAllocation();
+        address allocation2 = createDummyTokenOptionAllocation();
+        address allocation3 = createDummyTokenOptionAllocation();
+
+        vm.startPrank(authority);
+        controller.addMetaVestToSet("testSet", allocation1);
+        controller.addMetaVestToSet("testSet", allocation2);
+        controller.addMetaVestToSet("testSet", allocation3);
+        vm.stopPrank();
+        assertTrue(TokenOptionAllocation(allocation1).exercisePrice() == 1e18);
+
+        vm.warp(block.timestamp + 25 seconds);
+
+        paymentToken.mint(grantee, 4000e18);
+
+        vm.startPrank(grantee);
+        paymentToken.approve(address(allocation1), 2000e18);
+        paymentToken.approve(address(allocation2), 2000e18);
+        TokenOptionAllocation(allocation1).exerciseTokenOption(TokenOptionAllocation(allocation1).getAmountExercisable());
+        TokenOptionAllocation(allocation2).exerciseTokenOption(TokenOptionAllocation(allocation2).getAmountExercisable());
+        vm.stopPrank();
+
+        bytes4 msgSig = bytes4(keccak256("updateExerciseOrRepurchasePrice(address,uint256)"));
+        bytes memory callData = abi.encodeWithSelector(msgSig, allocation1, 2e18);
+
+        vm.prank(authority);
+        controller.proposeMajorityMetavestAmendment("testSet", msgSig, callData);
+
+        vm.prank(grantee);
+        controller.voteOnMetavestAmendment(allocation1, "testSet", msgSig, true);
+
+        vm.prank(grantee);
+        controller.voteOnMetavestAmendment(allocation2, "testSet", msgSig, true);
+
+        // Call function with a different value from the consent should fail
+        vm.prank(authority);
+        vm.expectRevert(MetaVesTControllerStorage.MetaVesTController_AmendmentNeitherMutualNorMajorityConsented.selector);
+        controller.updateExerciseOrRepurchasePrice(allocation1, 999999999999999999999e18);
+
+        // Using lower-level call would still fail internally
+        vm.prank(authority);
+        bytes memory p = abi.encodeWithSelector(msgSig, allocation1, 999999999999999999999e18);
+        address(controller).call(p);
+
+        // Verify exercise price is still not changed
+        assertEq(TokenOptionAllocation(allocation1).exercisePrice(), 1e18, "exercise price should not change");
+    }
 
     function testAuditConsentToMetavestAmendmentInFlavor() public {
         // template from testRemoveMilestone

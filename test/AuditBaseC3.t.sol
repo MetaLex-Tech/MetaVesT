@@ -4,7 +4,6 @@ import "forge-std/Test.sol";
 
 import "../test/controller.t.sol";
 
-// TODO WIP: non-VestingAllocation tests are disabled until reviewed with new design with CyberAgreementRegistry
 contract Audit is MetaVestControllerTest {
 
     function test_RevertIf_AuditTerminateFailAfterWithdraw() public {
@@ -51,55 +50,67 @@ contract Audit is MetaVestControllerTest {
         // assertEq(token.balanceOf(vestingAllocation), 0);
     }
 
-//    function test_RevertIf_AuditRounding() public {
-//        // template from testConfirmingMilestoneTokenOption
-//        address vestingAllocation = createDummyTokenOptionAllocation();
-//        uint256 snapshot = token.balanceOf(authority);
-//        TokenOptionAllocation(vestingAllocation).confirmMilestone(0);
-//        vm.warp(block.timestamp + 50 seconds);
-//        vm.startPrank(grantee);
-//        //exercise max available
-//        ERC20Stable(paymentToken).approve(vestingAllocation, TokenOptionAllocation(vestingAllocation).getPaymentAmount(TokenOptionAllocation(vestingAllocation).getAmountExercisable()));
-//
-//        console.log('before amount of payment token:', ERC20Stable(paymentToken).balanceOf(grantee));
-//        console.log('before tokensExercised: ', TokenOptionAllocation(vestingAllocation).tokensExercised());
-//        console.log('small amount payment: ', TokenOptionAllocation(vestingAllocation).getPaymentAmount(1e6));
-//        console.log('small amount payment: ', TokenOptionAllocation(vestingAllocation).getPaymentAmount(1e11));
-//        console.log('small amount payment: ', TokenOptionAllocation(vestingAllocation).getPaymentAmount(9.99e11));
-//        console.log('small amount payment: ', TokenOptionAllocation(vestingAllocation).getPaymentAmount(1e12));
-//        console.log('small amount payment: ', TokenOptionAllocation(vestingAllocation).getPaymentAmount(1.1e12));
-//        console.log('small amount payment: ', TokenOptionAllocation(vestingAllocation).getPaymentAmount(1e13));
-//        TokenOptionAllocation(vestingAllocation).exerciseTokenOption(1.1e12);
-//        TokenOptionAllocation(vestingAllocation).exerciseTokenOption(1e6);
-//        TokenOptionAllocation(vestingAllocation).exerciseTokenOption(1e6);
-//        TokenOptionAllocation(vestingAllocation).exerciseTokenOption(1e6);
-//        TokenOptionAllocation(vestingAllocation).exerciseTokenOption(1e6);
-//        TokenOptionAllocation(vestingAllocation).exerciseTokenOption(1e6);
-//
-//        console.log('after amount of payment token: ', ERC20Stable(paymentToken).balanceOf(grantee));
-//        console.log('after tokensExercised: ', TokenOptionAllocation(vestingAllocation).tokensExercised());
-//        // TokenOptionAllocation(vestingAllocation).withdraw(VestingAllocation(vestingAllocation).getAmountWithdrawable());
-//        vm.stopPrank();
-//    }
-//
-//    function testAuditExcercisePrice() public {
-//        // template from testConfirmingMilestoneTokenOption
-//        address vestingAllocation = createDummyTokenOptionAllocation();
-//        uint256 snapshot = token.balanceOf(authority);
-//        TokenOptionAllocation(vestingAllocation).confirmMilestone(0);
-//        vm.warp(block.timestamp + 50 seconds);
-//        vm.startPrank(grantee);
-//        //exercise max available
-//        ERC20Stable(paymentToken).approve(vestingAllocation, TokenOptionAllocation(vestingAllocation).getPaymentAmount(TokenOptionAllocation(vestingAllocation).getAmountExercisable()));
-//
-//        console.log('before amount of payment token:', ERC20Stable(paymentToken).balanceOf(grantee));
-//        console.log('before tokensExercised: ', TokenOptionAllocation(vestingAllocation).tokensExercised());
-//
-//        TokenOptionAllocation(vestingAllocation).exerciseTokenOption(1e18);
-//
-//        console.log('after amount of payment token: ', ERC20Stable(paymentToken).balanceOf(grantee));
-//        console.log('after tokensExercised: ', TokenOptionAllocation(vestingAllocation).tokensExercised());
-//        // TokenOptionAllocation(vestingAllocation).withdraw(VestingAllocation(vestingAllocation).getAmountWithdrawable());
-//        vm.stopPrank();
-//    }
+    function test_AuditRounding() public {
+        // template from testConfirmingMilestoneTokenOption
+        address metavest = createDummyTokenOptionAllocation();
+        TokenOptionAllocation(metavest).confirmMilestone(0);
+
+        vm.warp(block.timestamp + 50 seconds);
+
+        paymentToken.mint(grantee, 550_002_500_000);
+
+        vm.startPrank(grantee);
+        //exercise max available
+        paymentToken.approve(metavest, TokenOptionAllocation(metavest).getPaymentAmount(TokenOptionAllocation(metavest).getAmountExercisable()));
+
+        console2.log('before amount of payment token:', paymentToken.balanceOf(grantee));
+        assertEq(TokenOptionAllocation(metavest).tokensExercised(), 0, "no token exercised yet");
+        assertEq(TokenOptionAllocation(metavest).getPaymentAmount(1e6), 5e5);
+        assertEq(TokenOptionAllocation(metavest).getPaymentAmount(1e11), 5e10);
+        assertEq(TokenOptionAllocation(metavest).getPaymentAmount(9.99e11), 4.995e11);
+        assertEq(TokenOptionAllocation(metavest).getPaymentAmount(1e12), 5e11);
+        assertEq(TokenOptionAllocation(metavest).getPaymentAmount(1.1e12), 5.5e11);
+        assertEq(TokenOptionAllocation(metavest).getPaymentAmount(1e13), 5e12);
+        TokenOptionAllocation(metavest).exerciseTokenOption(1.1e12);
+        assertEq(TokenOptionAllocation(metavest).tokensExercised(), 1.1e12);
+        TokenOptionAllocation(metavest).exerciseTokenOption(1e6);
+        assertEq(TokenOptionAllocation(metavest).tokensExercised(), 1100001e6);
+        TokenOptionAllocation(metavest).exerciseTokenOption(1e6);
+        assertEq(TokenOptionAllocation(metavest).tokensExercised(), 1100002e6);
+        TokenOptionAllocation(metavest).exerciseTokenOption(1e6);
+        assertEq(TokenOptionAllocation(metavest).tokensExercised(), 1100003e6);
+        TokenOptionAllocation(metavest).exerciseTokenOption(1e6);
+        assertEq(TokenOptionAllocation(metavest).tokensExercised(), 1100004e6);
+        TokenOptionAllocation(metavest).exerciseTokenOption(1e6);
+        assertEq(TokenOptionAllocation(metavest).tokensExercised(), 1100005e6);
+
+        console2.log('after amount of payment token: ', paymentToken.balanceOf(grantee));
+        assertEq(TokenOptionAllocation(metavest).getAmountWithdrawable(), 1100005e6, "should be able to withdraw all exercised");
+        TokenOptionAllocation(metavest).withdraw(TokenOptionAllocation(metavest).getAmountWithdrawable());
+        vm.stopPrank();
+    }
+
+    function testAuditExercisePrice() public {
+        // template from testConfirmingMilestoneTokenOption
+        address metavest = createDummyTokenOptionAllocation();
+        TokenOptionAllocation(metavest).confirmMilestone(0);
+
+        vm.warp(block.timestamp + 50 seconds);
+
+        paymentToken.mint(grantee, 0.5e18);
+
+        vm.startPrank(grantee);
+        //exercise max available
+        paymentToken.approve(metavest, TokenOptionAllocation(metavest).getPaymentAmount(TokenOptionAllocation(metavest).getAmountExercisable()));
+
+        console2.log('before amount of payment token:', paymentToken.balanceOf(grantee));
+        assertEq(TokenOptionAllocation(metavest).tokensExercised(), 0, "no token exercised yet");
+
+        TokenOptionAllocation(metavest).exerciseTokenOption(1e18);
+
+        console2.log('after amount of payment token: ', paymentToken.balanceOf(grantee));
+        assertEq(TokenOptionAllocation(metavest).tokensExercised(), 1e18, "should have exercised");
+        TokenOptionAllocation(metavest).withdraw(TokenOptionAllocation(metavest).getAmountWithdrawable());
+        vm.stopPrank();
+    }
 }

@@ -52,7 +52,6 @@ contract MetaVesTControllerTestBase is Test {
 
         // Deploy CyberAgreementRegistry and prepare templates
 
-        // TODO who should be the owner of auth?
         auth = new BorgAuth{salt: salt}(deployer);
         registry = CyberAgreementRegistry(address(new ERC1967Proxy{salt: salt}(
             address(new CyberAgreementRegistry{salt: salt}()),
