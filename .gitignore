@@ -5,4 +5,3 @@ out/
 test-command.txt
 broadcast/
 .DS_Store
-foundry.toml

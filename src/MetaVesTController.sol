@@ -94,6 +94,11 @@ contract metavestController is UUPSUpgradeable, SafeTransferLib {
         _;
     }
 
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
+
     /// @param _authority address of the authority who can call the functions in this contract and update each MetaVesT in '_metavest', such as a BORG
     /// @param _dao DAO governance contract address which exercises control over ability of 'authority' to call certain functions via imposing
     /// conditions through 'updateFunctionCondition'.
@@ -700,6 +705,7 @@ contract metavestController is UUPSUpgradeable, SafeTransferLib {
         address newImplementation
     ) internal virtual override onlyAuthority {}
 
+    // TODO deprecated: do we still need this?
     // Avoid "Address: low-level delegate call failed" due to `UUPSUpgradeable.upgradeToAndCall()` runs with `forceCall=true`
     fallback() external {}
 }

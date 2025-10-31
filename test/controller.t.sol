@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity ^0.8.20;
 
+import {Initializable} from "openzeppelin-contracts-upgradeable/proxy/utils/Initializable.sol";
 import "../src/RestrictedTokenAllocation.sol";
 import "../src/RestrictedTokenFactory.sol";
 import "../src/TokenOptionAllocation.sol";
@@ -74,6 +75,19 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
         vm.prank(guardianSafe);
         registry.setDelegation(delegate, block.timestamp + 365 days * 3); // This is a hack. One should not delegate signing for this long
         assertTrue(registry.isValidDelegate(guardianSafe, delegate), "delegate should be Guardian SAFE's delegate");
+    }
+
+    function test_RevertIf_InitializeImplementation() public {
+        metavestController controllerImpl = new metavestController();
+        vm.expectRevert(Initializable.InvalidInitialization.selector);
+        controllerImpl.initialize(
+            address(123), // no-op
+            address(123), // no-op
+            address(123), // no-op
+            address(123), // no-op
+            address(123), // no-op
+            address(123) // no-op
+        );
     }
 
     function testCreateVestingAllocation() public {
