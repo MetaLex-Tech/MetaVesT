@@ -704,8 +704,4 @@ contract metavestController is UUPSUpgradeable, SafeTransferLib {
     function _authorizeUpgrade(
         address newImplementation
     ) internal virtual override onlyAuthority {}
-
-    // TODO deprecated: do we still need this?
-    // Avoid "Address: low-level delegate call failed" due to `UUPSUpgradeable.upgradeToAndCall()` runs with `forceCall=true`
-    fallback() external {}
 }
