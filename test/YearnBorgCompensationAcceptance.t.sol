@@ -5,7 +5,6 @@ import {console2} from "forge-std/console2.sol";
 import {CyberAgreementRegistry} from "cybercorps-contracts/src/CyberAgreementRegistry.sol";
 import {YearnBorgCompensationTest} from "./YearnBorgCompensation.t.sol";
 import {metavestController} from "../src/MetaVesTController.sol";
-import {VestingAllocationFactory} from "../src/VestingAllocationFactory.sol";
 import {MetaVesTControllerTestBase} from "./lib/MetaVesTControllerTestBase.sol";
 import {GnosisTransaction} from "./lib/safe.sol";
 import {CreateAllTemplatesScript} from "../scripts/createAllTemplates.s.sol";

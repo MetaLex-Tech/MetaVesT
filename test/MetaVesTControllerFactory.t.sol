@@ -9,6 +9,10 @@ contract MetaVesTControllerFactoryTest is Test {
     function test_RevertIf_InitializeImplementation() public {
         MetaVesTControllerFactory impl = new MetaVesTControllerFactory();
         vm.expectRevert(Initializable.InvalidInitialization.selector);
-        impl.initialize();
+        impl.initialize(
+            address(0), // no-op
+            address(0), // no-op
+            address(0) // no-op
+        );
     }
 }

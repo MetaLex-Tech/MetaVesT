@@ -12,6 +12,7 @@ import {ICyberAgreementRegistry} from "cybercorps-contracts/src/interfaces/ICybe
 import {UUPSUpgradeable} from "openzeppelin-contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import {MetaVestDealLib, MetaVestDeal, MetaVestType} from "./lib/MetaVestDealLib.sol";
 import {MetaVesTControllerStorage} from "./storage/MetaVesTControllerStorage.sol";
+import {IMetaVesTControllerFactory} from "./interfaces/IMetaVesTControllerFactory.sol";
 import "./BaseAllocation.sol";
 import "./interfaces/IAllocationFactory.sol";
 import "./interfaces/IPriceAllocation.sol";
@@ -27,6 +28,8 @@ import "./lib/EnumberableSet.sol";
  *             by an applicable affected grantee or a majority-in-governing power of similar token grantees
  **/
 contract metavestController is UUPSUpgradeable, SafeTransferLib {
+    string public constant DEPLOY_VERSION = "1"; // For version-tracking on all deployment and future upgrades
+
     using MetaVesTControllerStorage for MetaVesTControllerStorage.MetaVesTControllerData;
     using EnumerableSet for EnumerableSet.AddressSet;
     using EnumerableSet for EnumerableSet.Bytes32Set;
@@ -64,6 +67,8 @@ contract metavestController is UUPSUpgradeable, SafeTransferLib {
         address indexed recipient,
         address metavest
     );
+
+    error NotRefImplementation();
 
     ///
     /// FUNCTIONS
@@ -106,9 +111,7 @@ contract metavestController is UUPSUpgradeable, SafeTransferLib {
         address _authority,
         address _dao,
         address _registry,
-        address _vestingFactory,
-        address _tokenOptionFactory,
-        address _restrictedTokenFactory
+        address upgradeFactory
     ) public initializer {
         __UUPSUpgradeable_init();
 
@@ -117,10 +120,8 @@ contract metavestController is UUPSUpgradeable, SafeTransferLib {
         MetaVesTControllerStorage.MetaVesTControllerData storage st = MetaVesTControllerStorage.getStorage();
         st.authority = _authority;
         st.registry = _registry;
-        st.vestingFactory = _vestingFactory;
-        st.tokenOptionFactory = _tokenOptionFactory;
-        st.restrictedTokenFactory = _restrictedTokenFactory;
         st.dao = _dao;
+        st.upgradeFactory = upgradeFactory;
     }
 
     /// @notice for a grantee to consent to an update to one of their metavestDetails by 'authority' corresponding to the applicable function in this controller
@@ -618,16 +619,8 @@ contract metavestController is UUPSUpgradeable, SafeTransferLib {
         return MetaVesTControllerStorage.getStorage().registry;
     }
 
-    function vestingFactory() external view returns (address) {
-        return MetaVesTControllerStorage.getStorage().vestingFactory;
-    }
-
-    function tokenOptionFactory() external view returns (address) {
-        return MetaVesTControllerStorage.getStorage().tokenOptionFactory;
-    }
-
-    function restrictedTokenFactory() external view returns (address) {
-        return MetaVesTControllerStorage.getStorage().restrictedTokenFactory;
+    function upgradeFactory() external view returns (address) {
+        return MetaVesTControllerStorage.getStorage().upgradeFactory;
     }
 
     function functionToConditions(bytes4 sig, uint256 idx) external view returns (address) {
@@ -701,7 +694,18 @@ contract metavestController is UUPSUpgradeable, SafeTransferLib {
         }
     }
 
+    // ========================
+    // UUPSUpgradeable
+    // ========================
+
+    /// @notice UUPS upgrade authorization
+    /// @dev MetaLeX releases new versions through the factory's reference implementation,
+    /// and the MetaVesTController authority can decide if or when he wants to perform the upgrade
     function _authorizeUpgrade(
         address newImplementation
-    ) internal virtual override onlyAuthority {}
+    ) internal override onlyAuthority {
+        if (IMetaVesTControllerFactory(MetaVesTControllerStorage.getStorage().upgradeFactory).getRefImplementation() != newImplementation) {
+            revert NotRefImplementation();
+        }
+    }
 }

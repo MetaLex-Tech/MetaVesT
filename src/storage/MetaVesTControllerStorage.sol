@@ -29,31 +29,33 @@
               .o..P'                                                                     888           
               `Y8P'                                                                     o888o          
  _______________________________________________________________________________________________________
- 
+
  All software, documentation and other files and information in this repository (collectively, the "Software")
  are copyright MetaLeX Labs, Inc., a Delaware corporation.
- 
+
  All rights reserved.
- 
- The Software is proprietary and shall not, in part or in whole, be used, copied, modified, merged, published, 
+
+ The Software is proprietary and shall not, in part or in whole, be used, copied, modified, merged, published,
  distributed, transmitted, sublicensed, sold, or otherwise used in any form or by any means, electronic or
- mechanical, including photocopying, recording, or by any information storage and retrieval system, 
+ mechanical, including photocopying, recording, or by any information storage and retrieval system,
  except with the express prior written permission of the copyright holder.*/
- 
+
 pragma solidity 0.8.28;
 
-import {ICyberAgreementRegistry} from "cybercorps-contracts/src/interfaces/ICyberAgreementRegistry.sol";
-import {BaseAllocation, IERC20M, IConditionM} from "../BaseAllocation.sol";
+import {BaseAllocation, IConditionM, IERC20M} from "../BaseAllocation.sol";
+import {RestrictedTokenAward} from "../RestrictedTokenAllocation.sol";
+import {TokenOptionAllocation} from "../TokenOptionAllocation.sol";
+import {VestingAllocation} from "../VestingAllocation.sol";
 import {EnumerableSet} from "../lib/EnumberableSet.sol";
-import {MetaVestDealLib, MetaVestDeal, MetaVestType} from "../lib/MetaVestDealLib.sol";
-import {IAllocationFactory} from "../interfaces/IAllocationFactory.sol";
+import {MetaVestDeal, MetaVestDealLib, MetaVestType} from "../lib/MetaVestDealLib.sol";
+import {ICyberAgreementRegistry} from "cybercorps-contracts/src/interfaces/ICyberAgreementRegistry.sol";
 
 library MetaVesTControllerStorage {
     using EnumerableSet for EnumerableSet.AddressSet;
     using EnumerableSet for EnumerableSet.Bytes32Set;
 
     // Storage slot for our struct
-    bytes32 constant internal STORAGE_POSITION = keccak256("cybercorp.metavest.controller.storage.v1");
+    bytes32 internal constant STORAGE_POSITION = keccak256("cybercorp.metavest.controller.storage.v1");
 
     uint256 internal constant ARRAY_LENGTH_LIMIT = 20;
 
@@ -78,9 +80,7 @@ library MetaVesTControllerStorage {
         address authority;
         address dao;
         address registry;
-        address vestingFactory;
-        address tokenOptionFactory;
-        address restrictedTokenFactory;
+        address upgradeFactory;
         address _pendingAuthority;
         address _pendingDao;
 
@@ -164,55 +164,41 @@ library MetaVesTControllerStorage {
         }
     }
 
-    function createVestingAllocation(MetaVestDeal storage deal, address recipient) internal returns (address){
+    function createVestingAllocation(MetaVestDeal storage deal, address recipient) internal returns (address) {
         MetaVesTControllerStorage.MetaVesTControllerData storage st = MetaVesTControllerStorage.getStorage();
-        address vestingAllocation = IAllocationFactory(st.vestingFactory).createAllocation(
-            IAllocationFactory.AllocationType.Vesting,
-            deal.grantee,
-            recipient,
-            address(this),
-            deal.allocation,
-            deal.milestones,
-            address(0),
-            0,
-            0
-        );
-
-        return vestingAllocation;
+        return address(new VestingAllocation(deal.grantee, recipient, address(this), deal.allocation, deal.milestones));
     }
 
     function createTokenOptionAllocation(MetaVestDeal storage deal, address recipient) internal returns (address) {
         MetaVesTControllerStorage.MetaVesTControllerData storage st = MetaVesTControllerStorage.getStorage();
-        address tokenOptionAllocation = IAllocationFactory(st.tokenOptionFactory).createAllocation(
-            IAllocationFactory.AllocationType.TokenOption,
-            deal.grantee,
-            recipient,
-            address(this),
-            deal.allocation,
-            deal.milestones,
-            deal.paymentToken,
-            deal.exercisePrice,
-            deal.shortStopDuration
+        return address(
+            new TokenOptionAllocation(
+                deal.grantee,
+                recipient,
+                address(this),
+                deal.paymentToken,
+                deal.exercisePrice,
+                deal.shortStopDuration,
+                deal.allocation,
+                deal.milestones
+            )
         );
-
-        return tokenOptionAllocation;
     }
 
-    function createRestrictedTokenAward(MetaVestDeal storage deal, address recipient) internal returns (address){
+    function createRestrictedTokenAward(MetaVestDeal storage deal, address recipient) internal returns (address) {
         MetaVesTControllerStorage.MetaVesTControllerData storage st = MetaVesTControllerStorage.getStorage();
-        address restrictedTokenAward = IAllocationFactory(st.restrictedTokenFactory).createAllocation(
-            IAllocationFactory.AllocationType.RestrictedToken,
-            deal.grantee,
-            recipient,
-            address(this),
-            deal.allocation,
-            deal.milestones,
-            deal.paymentToken,
-            deal.exercisePrice,
-            deal.shortStopDuration
+        return address(
+            new RestrictedTokenAward(
+                deal.grantee,
+                recipient,
+                address(this),
+                deal.paymentToken,
+                deal.exercisePrice,
+                deal.shortStopDuration,
+                deal.allocation,
+                deal.milestones
+            )
         );
-
-        return restrictedTokenAward;
     }
 
     function proposeAndSignDeal(
@@ -229,27 +215,20 @@ library MetaVesTControllerStorage {
         MetaVesTControllerStorage.MetaVesTControllerData storage st = MetaVesTControllerStorage.getStorage();
 
         // Call internal function to avoid stack-too-deep errors
-        dealDraft.agreementId = ICyberAgreementRegistry(st.registry).createContract(
-            templateId,
-            salt,
-            globalValues,
-            parties,
-            partyValues,
-            secretHash,
-            address(this),
-            expiry
-        );
+        dealDraft.agreementId = ICyberAgreementRegistry(st.registry)
+            .createContract(templateId, salt, globalValues, parties, partyValues, secretHash, address(this), expiry);
 
         st.counterPartyValues[dealDraft.agreementId] = partyValues[1];
 
-        ICyberAgreementRegistry(st.registry).signContractFor(
-            st.authority, // First party (grantor) should always be the authority
-            dealDraft.agreementId,
-            partyValues[0],
-            signature,
-            false, // Not meant for anyone else other than the signer
-            "" // Signer == proposer, no secret needed
-        );
+        ICyberAgreementRegistry(st.registry)
+            .signContractFor(
+                st.authority, // First party (grantor) should always be the authority
+                dealDraft.agreementId,
+                partyValues[0],
+                signature,
+                false, // Not meant for anyone else other than the signer
+                "" // Signer == proposer, no secret needed
+            );
 
         st.deals[dealDraft.agreementId] = dealDraft;
         st.dealIds.push(dealDraft.agreementId);
@@ -269,24 +248,34 @@ library MetaVesTControllerStorage {
 
         // Check: verify inputs
 
-        if(ICyberAgreementRegistry(st.registry).isVoided(agreementId)) return (address(0), 0, MetaVesTControllerStorage.MetaVesTController_DealVoided.selector);
-        if(ICyberAgreementRegistry(st.registry).isFinalized(agreementId)) return (address(0), 0, MetaVesTControllerStorage.MetaVesTController_DealAlreadyFinalized.selector);
+        if (ICyberAgreementRegistry(st.registry).isVoided(agreementId)) {
+            return (address(0), 0, MetaVesTControllerStorage.MetaVesTController_DealVoided.selector);
+        }
+        if (ICyberAgreementRegistry(st.registry).isFinalized(agreementId)) {
+            return (address(0), 0, MetaVesTControllerStorage.MetaVesTController_DealAlreadyFinalized.selector);
+        }
 
         string[] storage counterPartyCheck = st.counterPartyValues[agreementId];
-        if (keccak256(abi.encode(counterPartyCheck)) != keccak256(abi.encode(partyValues))) return (address(0), 0, MetaVesTControllerStorage.MetaVesTController_CounterPartyValueMismatch.selector);
-        
+        if (keccak256(abi.encode(counterPartyCheck)) != keccak256(abi.encode(partyValues))) {
+            return (address(0), 0, MetaVesTControllerStorage.MetaVesTController_CounterPartyValueMismatch.selector);
+        }
+
         MetaVestDeal storage deal = MetaVesTControllerStorage.getStorage().deals[agreementId];
 
         if (
             deal.grantee == address(0) || recipient == address(0) || deal.allocation.tokenContract == address(0)
-            || (deal.metavestType == MetaVestType.TokenOption && deal.paymentToken == address(0) && deal.exercisePrice == 0)
-            || (deal.metavestType == MetaVestType.RestrictedTokenAward && deal.paymentToken == address(0) && deal.exercisePrice == 0)
+                || (deal.metavestType == MetaVestType.TokenOption
+                    && deal.paymentToken == address(0)
+                    && deal.exercisePrice == 0)
+                || (deal.metavestType == MetaVestType.RestrictedTokenAward
+                    && deal.paymentToken == address(0)
+                    && deal.exercisePrice == 0)
         ) {
             return (address(0), 0, MetaVesTController_ZeroAddress.selector);
         }
         if (
-            deal.allocation.vestingCliffCredit > deal.allocation.tokenStreamTotal ||
-            deal.allocation.unlockingCliffCredit > deal.allocation.tokenStreamTotal
+            deal.allocation.vestingCliffCredit > deal.allocation.tokenStreamTotal
+                || deal.allocation.unlockingCliffCredit > deal.allocation.tokenStreamTotal
         ) {
             return (address(0), 0, MetaVesTController_CliffGreaterThanTotal.selector);
         }
@@ -310,8 +299,8 @@ library MetaVesTControllerStorage {
             return (address(0), 0, MetaVesTController_ZeroAmount.selector);
         }
         if (
-            IERC20M(deal.allocation.tokenContract).allowance(st.authority, address(this)) < total ||
-            IERC20M(deal.allocation.tokenContract).balanceOf(st.authority) < total
+            IERC20M(deal.allocation.tokenContract).allowance(st.authority, address(this)) < total
+                || IERC20M(deal.allocation.tokenContract).balanceOf(st.authority) < total
         ) {
             return (address(0), 0, MetaVesTController_AmountNotApprovedForTransferFrom.selector);
         }
@@ -321,23 +310,26 @@ library MetaVesTControllerStorage {
         // If the grantee signed the agreement externally (ex. by directly interacting with CyberAgreementRegistry),
         // we will skip the signing step.
         if (!ICyberAgreementRegistry(st.registry).hasSigned(agreementId, grantee)) {
-            ICyberAgreementRegistry(st.registry).signContractFor(grantee, agreementId, partyValues, signature, false, secret);
+            ICyberAgreementRegistry(st.registry)
+                .signContractFor(grantee, agreementId, partyValues, signature, false, secret);
         } else {
             // Already signed in registry; fetch values recorded in the registry and ensure consistency.
             // Theoretically, since the agreement is always close-ended, we could've safely assumed
             // the counterparty values stored in CyberAgreementRegistry vs here are always consistent,
             // but we check it anyways just in case
             string[] memory registryValues = ICyberAgreementRegistry(st.registry).getSignerValues(agreementId, grantee);
-            if (keccak256(abi.encode(registryValues)) != keccak256(abi.encode(partyValues))) return (address(0), 0, MetaVesTControllerStorage.MetaVesTController_CounterPartyValueMismatch.selector);
+            if (keccak256(abi.encode(registryValues)) != keccak256(abi.encode(partyValues))) {
+                return (address(0), 0, MetaVesTControllerStorage.MetaVesTController_CounterPartyValueMismatch.selector);
+            }
         }
         ICyberAgreementRegistry(st.registry).finalizeContract(agreementId);
 
         // Interaction: Create and provision MetaVesT
-        if(deal.metavestType == MetaVestType.Vesting) {
+        if (deal.metavestType == MetaVestType.Vesting) {
             deal.metavest = createVestingAllocation(deal, recipient);
-        } else if(deal.metavestType == MetaVestType.TokenOption) {
+        } else if (deal.metavestType == MetaVestType.TokenOption) {
             deal.metavest = createTokenOptionAllocation(deal, recipient);
-        } else if(deal.metavestType == MetaVestType.RestrictedTokenAward) {
+        } else if (deal.metavestType == MetaVestType.RestrictedTokenAward) {
             deal.metavest = createRestrictedTokenAward(deal, recipient);
         } else {
             return (address(0), 0, MetaVesTController_IncorrectMetaVesTType.selector);
@@ -347,15 +339,15 @@ library MetaVesTControllerStorage {
         return (deal.metavest, total, 0);
     }
 
-    function proposeMajorityMetavestAmendment(
-        string memory setName,
-        bytes4 _msgSig,
-        bytes calldata _callData
-    ) external returns (uint256 totalVotingPower) {
+    function proposeMajorityMetavestAmendment(string memory setName, bytes4 _msgSig, bytes calldata _callData)
+        external
+        returns (uint256 totalVotingPower)
+    {
         MetaVesTControllerStorage.MetaVesTControllerData storage st = MetaVesTControllerStorage.getStorage();
 
         bytes32 nameHash = keccak256(bytes(setName));
-        MetaVesTControllerStorage.MajorityAmendmentProposal storage proposal = st.functionToSetMajorityProposal[_msgSig][nameHash];
+        MetaVesTControllerStorage.MajorityAmendmentProposal storage proposal =
+            st.functionToSetMajorityProposal[_msgSig][nameHash];
         proposal.isPending = true;
         proposal.dataHash = keccak256(_callData[_callData.length - 32:]);
         proposal.time = block.timestamp;
@@ -389,17 +381,25 @@ library MetaVesTControllerStorage {
         MetaVesTControllerStorage.MetaVesTControllerData storage st = MetaVesTControllerStorage.getStorage();
         if (isMetavestInSet(_grant)) {
             bytes32 set = getSetOfMetavest(_grant);
-            MetaVesTControllerStorage.MajorityAmendmentProposal storage proposal = st.functionToSetMajorityProposal[msgSig][set];
-            if(proposal.appliedProposalCreatedAt[_grant] == proposal.time) return MetaVesTControllerStorage.MetaVesTController_AmendmentCanOnlyBeAppliedOnce.selector;
-            if (_data.length>32 && _data.length<69)
-            {
-                if (!proposal.isPending || proposal.totalVotingPower>proposal.currentVotingPower*2 || keccak256(_data[_data.length - 32:]) != proposal.dataHash ) {
-                    return MetaVesTControllerStorage.MetaVesTController_AmendmentNeitherMutualNorMajorityConsented.selector;
-                }
+            MetaVesTControllerStorage.MajorityAmendmentProposal storage proposal =
+                st.functionToSetMajorityProposal[msgSig][set];
+            if (proposal.appliedProposalCreatedAt[_grant] == proposal.time) {
+                return MetaVesTControllerStorage.MetaVesTController_AmendmentCanOnlyBeAppliedOnce.selector;
             }
-            else return MetaVesTControllerStorage.MetaVesTController_AmendmentNeitherMutualNorMajorityConsented.selector;
+            if (_data.length > 32 && _data.length < 69) {
+                if (
+                    !proposal.isPending || proposal.totalVotingPower > proposal.currentVotingPower * 2
+                        || keccak256(_data[_data.length - 32:]) != proposal.dataHash
+                ) {
+                    return MetaVesTControllerStorage.MetaVesTController_AmendmentNeitherMutualNorMajorityConsented
+                        .selector;
+                }
+            } else {
+                return MetaVesTControllerStorage.MetaVesTController_AmendmentNeitherMutualNorMajorityConsented.selector;
+            }
         } else {
-            MetaVesTControllerStorage.AmendmentProposal storage proposal = st.functionToGranteeToAmendmentPending[msgSig][_grant];
+            MetaVesTControllerStorage.AmendmentProposal storage proposal =
+                st.functionToGranteeToAmendmentPending[msgSig][_grant];
             if (!proposal.inFavor || proposal.dataHash != keccak256(_data)) {
                 return MetaVesTControllerStorage.MetaVesTController_AmendmentNeitherMutualNorMajorityConsented.selector;
             }

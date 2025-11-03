@@ -6,9 +6,6 @@ import "../src/BaseAllocation.sol";
 import "../src/TokenOptionAllocation.sol";
 import "../src/RestrictedTokenAllocation.sol";
 import "../src/interfaces/IAllocationFactory.sol";
-import "../src/VestingAllocationFactory.sol";
-import "../src/TokenOptionFactory.sol";
-import "../src/RestrictedTokenFactory.sol";
 import "./lib/MetaVesTControllerTestBase.sol";
 
 contract MetaVestControllerTest is MetaVesTControllerTestBase {
@@ -32,10 +29,6 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
 
         // Deploy MetaVesT controller
 
-        vestingAllocationFactory = new VestingAllocationFactory();
-        tokenOptionFactory = new TokenOptionFactory();
-        restrictedTokenFactory = new RestrictedTokenFactory();
-
         controller = metavestController(address(new ERC1967Proxy{salt: salt}(
             address(new metavestController{salt: salt}()),
             abi.encodeWithSelector(
@@ -43,9 +36,7 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
                 guardianSafe,
                 guardianSafe,
                 address(registry),
-                address(vestingAllocationFactory),
-                address(tokenOptionFactory),
-                address(restrictedTokenFactory)
+                address(metavestControllerFactory)
             )
         )));
 

@@ -3,11 +3,8 @@ pragma solidity ^0.8.20;
 
 import {Initializable} from "openzeppelin-contracts-upgradeable/proxy/utils/Initializable.sol";
 import "../src/RestrictedTokenAllocation.sol";
-import "../src/RestrictedTokenFactory.sol";
 import "../src/TokenOptionAllocation.sol";
-import "../src/TokenOptionFactory.sol";
 import "../src/VestingAllocation.sol";
-import "../src/VestingAllocationFactory.sol";
 import "../src/interfaces/IAllocationFactory.sol";
 import "./lib/MetaVesTControllerTestBase.sol";
 import "./mocks/MockCondition.sol";
@@ -32,10 +29,6 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
 
         // Deploy MetaVesT controller
 
-        vestingAllocationFactory = new VestingAllocationFactory();
-        tokenOptionFactory = new TokenOptionFactory();
-        restrictedTokenFactory = new RestrictedTokenFactory();
-
         controller = metavestController(address(new ERC1967Proxy{salt: salt}(
             address(new metavestController{salt: salt}()),
             abi.encodeWithSelector(
@@ -43,9 +36,7 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
                 guardianSafe,
                 guardianSafe,
                 address(registry),
-                address(vestingAllocationFactory),
-                address(tokenOptionFactory),
-                address(restrictedTokenFactory)
+                address(metavestControllerFactory)
             )
         )));
 
@@ -81,8 +72,6 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
         metavestController controllerImpl = new metavestController();
         vm.expectRevert(Initializable.InvalidInitialization.selector);
         controllerImpl.initialize(
-            address(123), // no-op
-            address(123), // no-op
             address(123), // no-op
             address(123), // no-op
             address(123), // no-op
@@ -1816,8 +1805,11 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
     }
 
     function test_UpgradeMetaVesTController() public {
-        // Deploy new implementation
+        // MetaLeX to release new implementation
+        vm.startPrank(deployer);
         address newImplementation = address(new metavestController());
+        metavestControllerFactory.setRefImplementation(newImplementation);
+        vm.stopPrank();
 
         // Upgrade to new implementation without initialization data
 

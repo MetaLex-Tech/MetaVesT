@@ -8,9 +8,7 @@ import {BorgAuth} from "cybercorps-contracts/src/libs/auth.sol";
 import {CyberAgreementRegistry} from "cybercorps-contracts/src/CyberAgreementRegistry.sol";
 import {CyberAgreementUtils} from "cybercorps-contracts/test/libs/CyberAgreementUtils.sol";
 import {MockERC20} from "../mocks/MockERC20.sol";
-import {VestingAllocationFactory} from "../../src/VestingAllocationFactory.sol";
-import {TokenOptionFactory} from "../../src/TokenOptionFactory.sol";
-import {RestrictedTokenFactory} from "../../src/RestrictedTokenFactory.sol";
+import {MetaVesTControllerFactory} from "../../src/MetaVesTControllerFactory.sol";
 import {MetaVestDealLib, MetaVestDeal} from "../../src/lib/MetaVestDealLib.sol";
 
 contract MetaVesTControllerTestBase is Test {
@@ -41,9 +39,7 @@ contract MetaVesTControllerTestBase is Test {
     BorgAuth auth;
     CyberAgreementRegistry registry;
 
-    VestingAllocationFactory vestingAllocationFactory;
-    TokenOptionFactory tokenOptionFactory;
-    RestrictedTokenFactory restrictedTokenFactory;
+    MetaVesTControllerFactory metavestControllerFactory;
 
     metavestController controller;
 
@@ -87,6 +83,16 @@ contract MetaVesTControllerTestBase is Test {
             globalFields,
             partyFields
         );
+
+        metavestControllerFactory = MetaVesTControllerFactory(address(new ERC1967Proxy{salt: salt}(
+            address(new MetaVesTControllerFactory{salt: salt}()),
+            abi.encodeWithSelector(
+                MetaVesTControllerFactory.initialize.selector,
+                address(auth),
+                address(registry),
+                new metavestController()
+            )
+        )));
 
         vm.stopPrank();
     }

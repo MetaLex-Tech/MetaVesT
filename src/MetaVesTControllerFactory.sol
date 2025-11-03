@@ -9,7 +9,10 @@
 pragma solidity ^0.8.24;
 
 import {metavestController} from "./MetaVesTController.sol";
+import {MetaVesTControllerFactoryStorage} from "./storage/MetaVesTControllerFactoryStorage.sol";
+import {BorgAuthACL} from "cybercorps-contracts/src/libs/auth.sol";
 import {UUPSUpgradeable} from "openzeppelin-contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import {ERC1967Proxy} from "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.sol";
 
 /**
  * @title      MetaVesT Controller Factory
@@ -18,38 +21,88 @@ import {UUPSUpgradeable} from "openzeppelin-contracts-upgradeable/proxy/utils/UU
  *
  *
  */
-contract MetaVesTControllerFactory is UUPSUpgradeable {
-    event MetaVesT_Deployment(
-        address newMetaVesT,
-        address authority,
+contract MetaVesTControllerFactory is BorgAuthACL, UUPSUpgradeable {
+    event RegistrySet(address registry);
+    event RefImplementationSet(address refImplementation, string version);
+    event MetaVesTControllerDeployed(
         address controller,
-        address dao,
-        address vestingAllocationFactory,
-        address tokenOptionFactory,
-        address restrictedTokenFactory
+        address authority,
+        address dao
     );
-
-    error ZeroAddress();
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
         _disableInitializers();
     }
 
-    function initialize() public initializer {}
+    function initialize(address auth, address registry, address refImplementation) public initializer {
+        // Initialize BorgAuthACL
+        __BorgAuthACL_init(auth);
 
-    /// @notice constructs a MetaVesT framework specifying authority address, DAO staking/voting contract address
-    /// each individual grantee's MetaVesT will be initiated in the newly deployed MetaVesT contract, and deployed MetaVesTs are amendable by 'authority' via the controller contract
-    /// @dev conditionals are contained in the deployed MetaVesT, which is deployed in the MetaVesTController's constructor(); the MetaVesT within the MetaVesTController is immutable, but the 'authority' which has access control within the controller may replace itself
-    // TODO WIP
-    //    function deployMetavestAndController(address _authority, address _dao, address _vestingAllocationFactory, address _tokenOptionFactory, address _restrictedTokenFactory ) external returns(address) {
-    //        if(_vestingAllocationFactory == address(0) || _tokenOptionFactory == address(0) || _restrictedTokenFactory == address(0))
-    //           revert MetaVesTFactory_ZeroAddress();
-    //        metavestController _controller = new metavestController(_authority, _dao, _vestingAllocationFactory, _tokenOptionFactory, _restrictedTokenFactory);
-    //        emit MetaVesT_Deployment(address(0), _authority, address(_controller), _dao, _vestingAllocationFactory, _tokenOptionFactory, _restrictedTokenFactory);
-    //        return address(_controller);
-    //    }
+        MetaVesTControllerFactoryStorage.StorageData storage s = MetaVesTControllerFactoryStorage.getStorageData();
+        s.registry = registry;
+        s.refImplementation = refImplementation;
+    }
 
-    // TODO WIP: use BorgAuth
-    function _authorizeUpgrade(address newImplementation) internal virtual override {}
+    /// @notice Deploy a MetaVesTController specifying authority address, DAO staking/voting contract address
+    /// each individual grantee's will have his own MetaVesT contract, and deployed MetaVesTs are amendable by 'authority' via the controller contract
+    /// @dev Each deployed MetaVesTController has its own set of conditions for admin operations such as MetaVesT creation/termination and parameters, etc.
+    /// the MetaVesT created by the MetaVesTController is immutable, but the 'authority' which has access control within the controller may replace itself
+    function deployMetavestController(bytes32 salt, address authority, address dao) external returns (address) {
+        MetaVesTControllerFactoryStorage.StorageData storage s = MetaVesTControllerFactoryStorage.getStorageData();
+        metavestController controller = metavestController(address(new ERC1967Proxy{salt: salt}(
+            MetaVesTControllerFactoryStorage.getStorageData().refImplementation,
+            abi.encodeWithSelector(
+                metavestController.initialize.selector,
+                authority,
+                dao,
+                s.registry,
+                address(this)
+            )
+        )));
+        emit MetaVesTControllerDeployed(
+            address(controller),
+            authority,
+            dao
+        );
+        return address(controller);
+    }
+
+    // ========================
+    // Getter / Setter
+    // ========================
+
+    /// @notice Get the CyberAgreementRegistry used for MetaVesT deals
+    /// @return CyberAgreementRegistry contract address
+    function getRegistry() public view returns (address) {
+        return MetaVesTControllerFactoryStorage.getStorageData().registry;
+    }
+
+    /// @notice Set the CyberAgreementRegistry used for MetaVesT deals
+    /// @dev Only callable by addresses with the owner role
+    /// @param registry Address of the new implementation
+    function setRegistry(address registry) public onlyOwner {
+        MetaVesTControllerFactoryStorage.getStorageData().registry = registry;
+        emit RegistrySet(registry);
+    }
+
+    /// @notice Get the reference implementation contract for the next deployments
+    /// @return Current reference implementation contract address
+    function getRefImplementation() public view returns (address) {
+        return MetaVesTControllerFactoryStorage.getStorageData().refImplementation;
+    }
+
+    /// @notice Set the reference implementation contract for the next deployments
+    /// @dev Only callable by addresses with the admin role
+    /// @param newImplementation Address of the new implementation
+    function setRefImplementation(address newImplementation) public onlyOwner {
+        MetaVesTControllerFactoryStorage.getStorageData().refImplementation = newImplementation;
+        emit RefImplementationSet(newImplementation, metavestController(newImplementation).DEPLOY_VERSION());
+    }
+
+    // ========================
+    // UUPSUpgradeable
+    // ========================
+
+    function _authorizeUpgrade(address newImplementation) internal virtual override onlyOwner {}
 }
