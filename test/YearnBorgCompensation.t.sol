@@ -14,7 +14,7 @@ import {ProposeAllGuardiansMetaVestDealScript} from "../scripts/proposeAllGuardi
 import {SignDealAndCreateMetavestScript} from "../scripts/signDealAndCreateMetavest.s.sol";
 import {YearnBorgCompensation2025_2026} from "../scripts/lib/YearnBorgCompensation2025_2026.sol";
 import {GnosisTransaction} from "./lib/safe.sol";
-import {MetaVesTControllerFactory} from "../../src/MetaVesTControllerFactory.sol";
+import {MetaVesTControllerFactory} from "../src/MetaVesTControllerFactory.sol";
 
 // Test with fresh deployment (except third-party dependencies)
 // - Use third-party dependencies on Ethereum mainnet

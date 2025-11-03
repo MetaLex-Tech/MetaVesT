@@ -43,11 +43,11 @@
 pragma solidity 0.8.28;
 
 import {BaseAllocation, IConditionM, IERC20M} from "../BaseAllocation.sol";
-import {RestrictedTokenAward} from "../RestrictedTokenAllocation.sol";
-import {TokenOptionAllocation} from "../TokenOptionAllocation.sol";
-import {VestingAllocation} from "../VestingAllocation.sol";
 import {EnumerableSet} from "../lib/EnumberableSet.sol";
 import {MetaVestDeal, MetaVestDealLib, MetaVestType} from "../lib/MetaVestDealLib.sol";
+import {RestrictedTokenFactory} from "../lib/RestrictedTokenFactory.sol";
+import {TokenOptionFactory} from "../lib/TokenOptionFactory.sol";
+import {VestingAllocationFactory} from "../lib/VestingAllocationFactory.sol";
 import {ICyberAgreementRegistry} from "cybercorps-contracts/src/interfaces/ICyberAgreementRegistry.sol";
 
 library MetaVesTControllerStorage {
@@ -162,43 +162,6 @@ library MetaVesTControllerStorage {
         assembly {
             st.slot := position
         }
-    }
-
-    function createVestingAllocation(MetaVestDeal storage deal, address recipient) internal returns (address) {
-        MetaVesTControllerStorage.MetaVesTControllerData storage st = MetaVesTControllerStorage.getStorage();
-        return address(new VestingAllocation(deal.grantee, recipient, address(this), deal.allocation, deal.milestones));
-    }
-
-    function createTokenOptionAllocation(MetaVestDeal storage deal, address recipient) internal returns (address) {
-        MetaVesTControllerStorage.MetaVesTControllerData storage st = MetaVesTControllerStorage.getStorage();
-        return address(
-            new TokenOptionAllocation(
-                deal.grantee,
-                recipient,
-                address(this),
-                deal.paymentToken,
-                deal.exercisePrice,
-                deal.shortStopDuration,
-                deal.allocation,
-                deal.milestones
-            )
-        );
-    }
-
-    function createRestrictedTokenAward(MetaVestDeal storage deal, address recipient) internal returns (address) {
-        MetaVesTControllerStorage.MetaVesTControllerData storage st = MetaVesTControllerStorage.getStorage();
-        return address(
-            new RestrictedTokenAward(
-                deal.grantee,
-                recipient,
-                address(this),
-                deal.paymentToken,
-                deal.exercisePrice,
-                deal.shortStopDuration,
-                deal.allocation,
-                deal.milestones
-            )
-        );
     }
 
     function proposeAndSignDeal(
@@ -326,11 +289,11 @@ library MetaVesTControllerStorage {
 
         // Interaction: Create and provision MetaVesT
         if (deal.metavestType == MetaVestType.Vesting) {
-            deal.metavest = createVestingAllocation(deal, recipient);
+            deal.metavest = VestingAllocationFactory.createVestingAllocation(deal, recipient);
         } else if (deal.metavestType == MetaVestType.TokenOption) {
-            deal.metavest = createTokenOptionAllocation(deal, recipient);
+            deal.metavest = TokenOptionFactory.createTokenOptionAllocation(deal, recipient);
         } else if (deal.metavestType == MetaVestType.RestrictedTokenAward) {
-            deal.metavest = createRestrictedTokenAward(deal, recipient);
+            deal.metavest = RestrictedTokenFactory.createRestrictedTokenAward(deal, recipient);
         } else {
             return (address(0), 0, MetaVesTController_IncorrectMetaVesTType.selector);
         }
