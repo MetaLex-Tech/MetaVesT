@@ -1820,7 +1820,7 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
         // Owner should be able to upgrade it
         vm.prank(guardianSafe);
         controller.upgradeToAndCall(newImplementation, "");
-        assertEq(address(controller).getErc1967Implementation(vm), newImplementation);
+        assertEq(address(controller).getErc1967Implementation(), newImplementation);
 
         // Verify the controller still works
 
