@@ -57,6 +57,8 @@ library MetaVesTControllerStorage {
     // Storage slot for our struct
     bytes32 internal constant STORAGE_POSITION = keccak256("cybercorp.metavest.controller.storage.v1");
 
+    /// @dev opinionated time limit for a MetaVesT amendment, one calendar week in seconds
+    uint256 internal constant AMENDMENT_TIME_LIMIT = 604800;
     uint256 internal constant ARRAY_LENGTH_LIMIT = 20;
 
     struct AmendmentProposal {
@@ -116,6 +118,36 @@ library MetaVesTControllerStorage {
     }
 
     ///
+    /// Events
+    ///
+
+    event MetaVesTController_AmendmentConsentUpdated(bytes4 indexed msgSig, address indexed grantee, bool inFavor);
+    event MetaVesTController_AmendmentProposed(address indexed grant, bytes4 msgSig);
+    event MetaVesTController_AuthorityUpdated(address indexed newAuthority);
+    event MetaVesTController_ConditionUpdated(address indexed condition, bytes4 functionSig);
+    event MetaVesTController_DaoUpdated(address newDao);
+    event MetaVesTController_MajorityAmendmentProposed(string indexed set, bytes4 msgSig, bytes callData, uint256 totalVotingPower);
+    event MetaVesTController_MajorityAmendmentVoted(string indexed set, bytes4 msgSig, address grantee, bool inFavor, uint256 votingPower, uint256 currentVotingPower, uint256 totalVotingPower);
+    event MetaVesTController_SetCreated(string indexed set);
+    event MetaVesTController_SetRemoved(string indexed set);
+    event MetaVesTController_AddressAddedToSet(string set, address indexed grantee);
+    event MetaVesTController_AddressRemovedFromSet(string set, address indexed grantee);
+    event MetaVesTController_DealProposed(
+        bytes32 indexed agreementId,
+        address indexed grantee,
+        MetaVestType MetaVestType,
+        BaseAllocation.Allocation allocation,
+        BaseAllocation.Milestone[] milestones,
+        bool hasSecret,
+        address registry
+    );
+    event MetaVesTController_DealFinalizedAndMetaVestCreated(
+        bytes32 indexed agreementId,
+        address indexed recipient,
+        address metavest
+    );
+
+    ///
     /// ERRORS
     ///
 
@@ -156,6 +188,7 @@ library MetaVesTControllerStorage {
     error MetaVesTController_PartyValuesLengthMismatch();
     error MetaVesTController_CounterPartyValueMismatch();
     error MetaVesTController_UnknownError(bytes4 error, bytes data);
+    error NotRefImplementation();
 
     function getStorage() internal pure returns (MetaVesTControllerData storage st) {
         bytes32 position = STORAGE_POSITION;
@@ -175,7 +208,12 @@ library MetaVesTControllerStorage {
         bytes32 secretHash,
         uint256 expiry
     ) external returns (MetaVestDeal memory) {
-        MetaVesTControllerStorage.MetaVesTControllerData storage st = MetaVesTControllerStorage.getStorage();
+        MetaVesTControllerData storage st = getStorage();
+
+        // Check: verify inputs
+        if (parties[1] != dealDraft.grantee) revert MetaVesTController_GranteeNotDirectParty();
+        if (partyValues.length < 2) revert MetaVesTController_CounterPartyNotFound();
+        if (partyValues[1].length != partyValues[0].length) revert MetaVesTController_PartyValuesLengthMismatch();
 
         // Call internal function to avoid stack-too-deep errors
         dealDraft.agreementId = ICyberAgreementRegistry(st.registry)
@@ -196,6 +234,12 @@ library MetaVesTControllerStorage {
         st.deals[dealDraft.agreementId] = dealDraft;
         st.dealIds.push(dealDraft.agreementId);
 
+        emit MetaVesTController_DealProposed(
+            dealDraft.agreementId, dealDraft.grantee, dealDraft.metavestType, dealDraft.allocation, dealDraft.milestones,
+            secretHash > 0,
+            st.registry
+        );
+
         return dealDraft;
     }
 
@@ -206,24 +250,23 @@ library MetaVesTControllerStorage {
         string[] memory partyValues,
         bytes memory signature,
         string memory secret
-    ) external returns (address newMetavest, uint256 total, bytes4 error) {
-        MetaVesTControllerStorage.MetaVesTControllerData storage st = MetaVesTControllerStorage.getStorage();
+    ) external returns (address newMetavest, uint256 total) {
+        MetaVesTControllerData storage st = getStorage();
+        MetaVestDeal storage deal = getStorage().deals[agreementId];
 
         // Check: verify inputs
 
         if (ICyberAgreementRegistry(st.registry).isVoided(agreementId)) {
-            return (address(0), 0, MetaVesTControllerStorage.MetaVesTController_DealVoided.selector);
+            revert MetaVesTController_DealVoided();
         }
         if (ICyberAgreementRegistry(st.registry).isFinalized(agreementId)) {
-            return (address(0), 0, MetaVesTControllerStorage.MetaVesTController_DealAlreadyFinalized.selector);
+            revert MetaVesTController_DealAlreadyFinalized();
         }
 
         string[] storage counterPartyCheck = st.counterPartyValues[agreementId];
         if (keccak256(abi.encode(counterPartyCheck)) != keccak256(abi.encode(partyValues))) {
-            return (address(0), 0, MetaVesTControllerStorage.MetaVesTController_CounterPartyValueMismatch.selector);
+            revert MetaVesTController_CounterPartyValueMismatch();
         }
-
-        MetaVestDeal storage deal = MetaVesTControllerStorage.getStorage().deals[agreementId];
 
         if (
             deal.grantee == address(0) || recipient == address(0) || deal.allocation.tokenContract == address(0)
@@ -234,38 +277,38 @@ library MetaVesTControllerStorage {
                     && deal.paymentToken == address(0)
                     && deal.exercisePrice == 0)
         ) {
-            return (address(0), 0, MetaVesTController_ZeroAddress.selector);
+            revert MetaVesTController_ZeroAddress();
         }
         if (
             deal.allocation.vestingCliffCredit > deal.allocation.tokenStreamTotal
                 || deal.allocation.unlockingCliffCredit > deal.allocation.tokenStreamTotal
         ) {
-            return (address(0), 0, MetaVesTController_CliffGreaterThanTotal.selector);
+            revert MetaVesTController_CliffGreaterThanTotal();
         }
         uint256 milestoneTotal = 0;
         if (deal.milestones.length != 0) {
             if (deal.milestones.length > ARRAY_LENGTH_LIMIT) {
-                return (address(0), 0, MetaVesTController_LengthMismatch.selector);
+                revert MetaVesTController_LengthMismatch();
             }
             for (uint256 i; i < deal.milestones.length; ++i) {
                 if (deal.milestones[i].conditionContracts.length > ARRAY_LENGTH_LIMIT) {
-                    return (address(0), 0, MetaVesTController_LengthMismatch.selector);
+                    revert MetaVesTController_LengthMismatch();
                 }
                 if (deal.milestones[i].milestoneAward == 0) {
-                    return (address(0), 0, MetaVesTController_ZeroAmount.selector);
+                    revert MetaVesTController_ZeroAmount();
                 }
                 milestoneTotal += deal.milestones[i].milestoneAward;
             }
         }
         total = deal.allocation.tokenStreamTotal + milestoneTotal;
         if (total == 0) {
-            return (address(0), 0, MetaVesTController_ZeroAmount.selector);
+            revert MetaVesTController_ZeroAmount();
         }
         if (
             IERC20M(deal.allocation.tokenContract).allowance(st.authority, address(this)) < total
                 || IERC20M(deal.allocation.tokenContract).balanceOf(st.authority) < total
         ) {
-            return (address(0), 0, MetaVesTController_AmountNotApprovedForTransferFrom.selector);
+            revert MetaVesTController_AmountNotApprovedForTransferFrom();
         }
 
         // Interaction: Finalize agreement
@@ -282,7 +325,7 @@ library MetaVesTControllerStorage {
             // but we check it anyways just in case
             string[] memory registryValues = ICyberAgreementRegistry(st.registry).getSignerValues(agreementId, grantee);
             if (keccak256(abi.encode(registryValues)) != keccak256(abi.encode(partyValues))) {
-                return (address(0), 0, MetaVesTControllerStorage.MetaVesTController_CounterPartyValueMismatch.selector);
+                revert MetaVesTController_CounterPartyValueMismatch();
             }
         }
         ICyberAgreementRegistry(st.registry).finalizeContract(agreementId);
@@ -295,27 +338,34 @@ library MetaVesTControllerStorage {
         } else if (deal.metavestType == MetaVestType.RestrictedTokenAward) {
             deal.metavest = RestrictedTokenFactory.createRestrictedTokenAward(deal, recipient);
         } else {
-            return (address(0), 0, MetaVesTController_IncorrectMetaVesTType.selector);
+            revert MetaVesTController_IncorrectMetaVesTType();
         }
         st.metavestAgreementIds[deal.metavest] = agreementId;
 
-        return (deal.metavest, total, 0);
+        return (deal.metavest, total);
     }
 
-    function proposeMajorityMetavestAmendment(string memory setName, bytes4 _msgSig, bytes calldata _callData)
-        external
-        returns (uint256 totalVotingPower)
-    {
-        MetaVesTControllerStorage.MetaVesTControllerData storage st = MetaVesTControllerStorage.getStorage();
+    function proposeMajorityMetavestAmendment(string memory setName, bytes4 _msgSig, bytes calldata _callData) external {
+        MetaVesTControllerData storage st = getStorage();
 
+        // Check: verify inputs
+
+        if(!doesSetExist(setName)) revert MetaVesTController_SetDoesNotExist();
+        if(_callData.length!=68) revert MetaVesTController_LengthMismatch();
         bytes32 nameHash = keccak256(bytes(setName));
-        MetaVesTControllerStorage.MajorityAmendmentProposal storage proposal =
+        //if the majority proposal is already pending and not expired, revert
+        if ((st.functionToSetMajorityProposal[_msgSig][nameHash].isPending && block.timestamp < st.functionToSetMajorityProposal[_msgSig][nameHash].time + AMENDMENT_TIME_LIMIT) || st.setMajorityVoteActive[nameHash])
+            revert MetaVesTController_AmendmentAlreadyPending();
+        
+        MajorityAmendmentProposal storage proposal =
             st.functionToSetMajorityProposal[_msgSig][nameHash];
         proposal.isPending = true;
         proposal.dataHash = keccak256(_callData[_callData.length - 32:]);
         proposal.time = block.timestamp;
         proposal.voters = new address[](0);
         proposal.currentVotingPower = 0;
+
+        uint256 totalVotingPower = 0;
 
         for (uint256 i; i < st.sets[nameHash].length(); ++i) {
             uint256 _votingPower = BaseAllocation(st.sets[nameHash].at(i)).getMajorityVotingPower();
@@ -326,52 +376,49 @@ library MetaVesTControllerStorage {
 
         st.setMajorityVoteActive[nameHash] = true;
 
-        return totalVotingPower;
+        emit MetaVesTController_MajorityAmendmentProposed(setName, _msgSig, _callData, totalVotingPower);
     }
 
-    function conditionCheck(bytes4 msgSig) external returns (address) {
-        MetaVesTControllerStorage.MetaVesTControllerData storage st = MetaVesTControllerStorage.getStorage();
+    function conditionCheck(bytes4 msgSig) external {
+        MetaVesTControllerData storage st = getStorage();
         address[] memory conditions = st.functionToConditions[msgSig];
         for (uint256 i; i < conditions.length; ++i) {
             if (!IConditionM(conditions[i]).checkCondition(address(this), msgSig, "")) {
-                return conditions[i];
+                revert MetaVesTController_ConditionNotSatisfied(conditions[i]);
             }
         }
-        return address(0);
     }
 
-    function consentCheck(bytes4 msgSig, address _grant, bytes calldata _data) external returns (bytes4) {
-        MetaVesTControllerStorage.MetaVesTControllerData storage st = MetaVesTControllerStorage.getStorage();
+    function consentCheck(bytes4 msgSig, address _grant, bytes calldata _data) external {
+        MetaVesTControllerData storage st = getStorage();
         if (isMetavestInSet(_grant)) {
             bytes32 set = getSetOfMetavest(_grant);
-            MetaVesTControllerStorage.MajorityAmendmentProposal storage proposal =
+            MajorityAmendmentProposal storage proposal =
                 st.functionToSetMajorityProposal[msgSig][set];
             if (proposal.appliedProposalCreatedAt[_grant] == proposal.time) {
-                return MetaVesTControllerStorage.MetaVesTController_AmendmentCanOnlyBeAppliedOnce.selector;
+                revert MetaVesTController_AmendmentCanOnlyBeAppliedOnce();
             }
             if (_data.length > 32 && _data.length < 69) {
                 if (
                     !proposal.isPending || proposal.totalVotingPower > proposal.currentVotingPower * 2
                         || keccak256(_data[_data.length - 32:]) != proposal.dataHash
                 ) {
-                    return MetaVesTControllerStorage.MetaVesTController_AmendmentNeitherMutualNorMajorityConsented
-                        .selector;
+                    revert MetaVesTController_AmendmentNeitherMutualNorMajorityConsented();
                 }
             } else {
-                return MetaVesTControllerStorage.MetaVesTController_AmendmentNeitherMutualNorMajorityConsented.selector;
+                revert MetaVesTController_AmendmentNeitherMutualNorMajorityConsented();
             }
         } else {
-            MetaVesTControllerStorage.AmendmentProposal storage proposal =
+            AmendmentProposal storage proposal =
                 st.functionToGranteeToAmendmentPending[msgSig][_grant];
             if (!proposal.inFavor || proposal.dataHash != keccak256(_data)) {
-                return MetaVesTControllerStorage.MetaVesTController_AmendmentNeitherMutualNorMajorityConsented.selector;
+                revert MetaVesTController_AmendmentNeitherMutualNorMajorityConsented();
             }
         }
-        return 0;
     }
 
     function isMetavestInSet(address _metavest) internal view returns (bool) {
-        MetaVesTControllerStorage.MetaVesTControllerData storage st = MetaVesTControllerStorage.getStorage();
+        MetaVesTControllerData storage st = getStorage();
         uint256 length = st.setNames.length();
         for (uint256 i = 0; i < length; i++) {
             bytes32 nameHash = st.setNames.at(i);
@@ -383,7 +430,7 @@ library MetaVesTControllerStorage {
     }
 
     function getSetOfMetavest(address _metavest) internal view returns (bytes32) {
-        MetaVesTControllerStorage.MetaVesTControllerData storage st = MetaVesTControllerStorage.getStorage();
+        MetaVesTControllerData storage st = getStorage();
         uint256 length = st.setNames.length();
         for (uint256 i = 0; i < length; i++) {
             bytes32 nameHash = st.setNames.at(i);
@@ -392,5 +439,9 @@ library MetaVesTControllerStorage {
             }
         }
         return "";
+    }
+
+    function doesSetExist(string memory _name) internal view returns (bool) {
+        return getStorage().setNames.contains(keccak256(bytes(_name)));
     }
 }
