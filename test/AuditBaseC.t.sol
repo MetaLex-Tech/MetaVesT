@@ -2,9 +2,9 @@ pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
 
-import "../test/controller.t.sol";
+import "./lib/MetaVesTControllerTestBaseExtended.sol";
 
-contract Audit is MetaVestControllerTest {
+contract Audit is MetaVesTControllerTestBaseExtended {
 
     function test_RevertIf_AuditTerminateFailAfterWithdraw() public {
         // template from testTerminateVestAndRecoverSlowUnlock

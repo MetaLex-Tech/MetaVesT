@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity ^0.8.24;
 
-import "forge-std/Test.sol";
+import {Test} from "forge-std/Test.sol";
 import "../../src/MetaVesTController.sol";
 import {ERC1967Proxy} from "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {BorgAuth} from "cybercorps-contracts/src/libs/auth.sol";
@@ -14,8 +14,8 @@ import {MetaVestDealLib, MetaVestDeal} from "../../src/lib/MetaVestDealLib.sol";
 contract MetaVesTControllerTestBase is Test {
     using MetaVestDealLib for MetaVestDeal;
 
-    MockERC20 vestingToken = new MockERC20("Vesting Token", "VEST", 18);
-    MockERC20 paymentToken = new MockERC20("Payment Token", "PAY", 18);
+    MockERC20 vestingToken;
+    MockERC20 paymentToken;
 
     address deployer = address(0x2);
     address guardianSafe = address(0x3);
@@ -44,6 +44,11 @@ contract MetaVesTControllerTestBase is Test {
     metavestController controller;
 
     function setUp() public virtual {
+        vestingToken = new MockERC20("Vesting Token", "VEST", 18);
+        paymentToken = new MockERC20("Payment Token", "PAY", 18);
+        vm.label(address(vestingToken), "VEST");
+        vm.label(address(paymentToken), "PAY");
+
         vm.startPrank(deployer);
 
         // Deploy CyberAgreementRegistry and prepare templates
