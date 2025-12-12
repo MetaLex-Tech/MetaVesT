@@ -54,7 +54,7 @@ contract DeployYearnBorgCompensationScript is SafeTxHelper, Script {
         vm.startBroadcast(deployerPrivateKey);
 
         // Deploy MetaVesT Controller
-
+        // TODO fixme: next time use MetavestControllerFactory to deploy the controller
         metavestController controller = metavestController(address(new ERC1967Proxy{salt: salt}(
             address(new metavestController{salt: salt}()),
             abi.encodeWithSelector(

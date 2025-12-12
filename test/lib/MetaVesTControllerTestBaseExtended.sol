@@ -29,17 +29,11 @@ contract MetaVesTControllerTestBaseExtended is MetaVesTControllerTestBase {
         vm.startPrank(deployer);
 
         // Deploy MetaVesT controller
-
-        controller = metavestController(address(new ERC1967Proxy{salt: salt}(
-            address(new metavestController{salt: salt}()),
-            abi.encodeWithSelector(
-                metavestController.initialize.selector,
-                guardianSafe,
-                guardianSafe,
-                address(registry),
-                address(metavestControllerFactory)
-            )
-        )));
+        controller = metavestController(metavestControllerFactory.deployMetavestController(
+            salt,
+            guardianSafe,
+            guardianSafe
+        ));
 
         vm.stopPrank();
 

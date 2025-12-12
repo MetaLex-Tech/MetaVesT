@@ -13,6 +13,7 @@ import {MetaVesTControllerFactoryStorage} from "./storage/MetaVesTControllerFact
 import {BorgAuthACL} from "cybercorps-contracts/src/libs/auth.sol";
 import {UUPSUpgradeable} from "openzeppelin-contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import {ERC1967Proxy} from "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import {Create2} from "openzeppelin-contracts/utils/Create2.sol";
 
 /**
  * @title      MetaVesT Controller Factory
@@ -98,6 +99,28 @@ contract MetaVesTControllerFactory is BorgAuthACL, UUPSUpgradeable {
     function setRefImplementation(address newImplementation) public onlyOwner {
         MetaVesTControllerFactoryStorage.getStorageData().refImplementation = newImplementation;
         emit RefImplementationSet(newImplementation, metavestController(newImplementation).DEPLOY_VERSION());
+    }
+
+    /// @notice Computes the deterministic address for an MetavestController
+    /// @param salt Salt used for CREATE2
+    /// @return computedAddress The precomputed address of the proxy
+    function computeMetavestControllerAddress(bytes32 salt, address authority, address dao) external view returns (address) {
+        return Create2.computeAddress(
+            salt,
+            keccak256(abi.encodePacked(
+                type(ERC1967Proxy).creationCode,
+                abi.encode(
+                    MetaVesTControllerFactoryStorage.getStorageData().refImplementation,
+                    abi.encodeWithSelector(
+                        metavestController.initialize.selector,
+                        authority,
+                        dao,
+                        MetaVesTControllerFactoryStorage.getStorageData().registry,
+                        address(this)
+                    )
+                )
+            ))
+        );
     }
 
     // ========================

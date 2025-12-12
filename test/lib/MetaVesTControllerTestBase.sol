@@ -89,13 +89,14 @@ contract MetaVesTControllerTestBase is Test {
             partyFields
         );
 
+        // create2 all the way down so the outcome is consistent
         metavestControllerFactory = MetaVesTControllerFactory(address(new ERC1967Proxy{salt: salt}(
             address(new MetaVesTControllerFactory{salt: salt}()),
             abi.encodeWithSelector(
                 MetaVesTControllerFactory.initialize.selector,
                 address(auth),
                 address(registry),
-                new metavestController()
+                new metavestController{salt: salt}()
             )
         )));
 
