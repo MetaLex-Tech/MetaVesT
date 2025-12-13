@@ -1,68 +1,28 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity ^0.8.20;
 
-//import "../src/RestrictedTokenAllocation.sol";
-//import "../src/RestrictedTokenFactory.sol";
-//import "../src/TokenOptionAllocation.sol";
-//import "../src/TokenOptionFactory.sol";
+import {console2} from "forge-std/console2.sol";
+import {Initializable} from "openzeppelin-contracts-upgradeable/proxy/utils/Initializable.sol";
+import "../src/RestrictedTokenAllocation.sol";
+import "../src/TokenOptionAllocation.sol";
 import "../src/VestingAllocation.sol";
-import "../src/VestingAllocationFactory.sol";
 import "../src/interfaces/IAllocationFactory.sol";
-import "./lib/MetaVesTControllerTestBase.sol";
+import "./lib/MetaVesTControllerTestBaseExtended.sol";
 import "./mocks/MockCondition.sol";
 import {ERC1967ProxyLib} from "./lib/ERC1967ProxyLib.sol";
 
-contract MetaVestControllerTest is MetaVesTControllerTestBase {
-    using ERC1967ProxyLib for address;
+contract MetaVestControllerTest is MetaVesTControllerTestBaseExtended {
+    using MetaVestDealLib for MetaVestDeal;
 
-    address authority = guardianSafe;
-    address dao = guardianSafe;
-    address grantee = alice;
-    address transferee = address(0x101);
-
-    // Parameters
-    uint256 cap = 2000 ether;
-    uint48 cappedMinterStartTime = uint48(block.timestamp); // Minter start now
-    uint48 cappedMinterExpirationTime = uint48(cappedMinterStartTime + 1600); // Minter expired 1600 seconds after start
-
-    function setUp() public override {
-        MetaVesTControllerTestBase.setUp();
-
-        vm.startPrank(deployer);
-
-        // Deploy MetaVesT controller
-
-        vestingAllocationFactory = new VestingAllocationFactory();
-
-        controller = metavestController(address(new ERC1967Proxy{salt: salt}(
-            address(new metavestController{salt: salt}()),
-            abi.encodeWithSelector(
-                metavestController.initialize.selector,
-                guardianSafe,
-                guardianSafe,
-                address(registry),
-                address(vestingAllocationFactory)
-            )
-        )));
-
-        vm.stopPrank();
-
-        // Prepare funds
-        paymentToken.mint(
-            address(guardianSafe),
-            9999 ether
+    function test_RevertIf_InitializeImplementation() public {
+        metavestController controllerImpl = new metavestController();
+        vm.expectRevert(Initializable.InvalidInitialization.selector);
+        controllerImpl.initialize(
+            address(123), // no-op
+            address(123), // no-op
+            address(123), // no-op
+            address(123) // no-op
         );
-        vm.prank(address(guardianSafe));
-        paymentToken.approve(address(controller), 9999 ether);
-
-        vm.startPrank(guardianSafe);
-        controller.createSet("testSet");
-        vm.stopPrank();
-
-        // Guardian SAFE to delegate signing to an EOA
-        vm.prank(guardianSafe);
-        registry.setDelegation(delegate, block.timestamp + 365 days * 3); // This is a hack. One should not delegate signing for this long
-        assertTrue(registry.isValidDelegate(guardianSafe, delegate), "delegate should be Guardian SAFE's delegate");
     }
 
     function testCreateVestingAllocation() public {
@@ -70,20 +30,22 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
             templateId,
             block.timestamp, // salt
             delegatePrivateKey,
-            alice,
-            BaseAllocation.Allocation({
-                tokenContract: address(paymentToken),
-                tokenStreamTotal: 60 ether,
-                vestingCliffCredit: 30 ether,
-                unlockingCliffCredit: 30 ether,
-                vestingRate: 1 ether,
-                vestingStartTime: uint48(block.timestamp),
-                unlockRate: 1 ether,
-                unlockStartTime: uint48(block.timestamp)
-            }),
-            new BaseAllocation.Milestone[](0),
+            MetaVestDealLib.draft().setVesting(
+                alice,
+                BaseAllocation.Allocation({
+                    tokenContract: address(vestingToken),
+                    tokenStreamTotal: 60 ether,
+                    vestingCliffCredit: 30 ether,
+                    unlockingCliffCredit: 30 ether,
+                    vestingRate: 1 ether,
+                    vestingStartTime: uint48(block.timestamp),
+                    unlockRate: 1 ether,
+                    unlockStartTime: uint48(block.timestamp)
+                }),
+                new BaseAllocation.Milestone[](0)
+            ),
             "Alice",
-            cappedMinterExpirationTime // Same expiry as the minter so grantee can defer vesting contract creation as much as possible
+            metavestExpiry
         );
 
         VestingAllocation vestingAllocationAlice = VestingAllocation(_granteeSignDeal(
@@ -101,78 +63,97 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
         _granteeWithdrawAndAsserts(vestingAllocationAlice, 60 ether, "Alice full");
     }
 
-//    function testCreateTokenOptionAllocation() public {
-//        BaseAllocation.Allocation memory allocation = BaseAllocation.Allocation({
-//            tokenContract: address(paymentToken),
-//            tokenStreamTotal: 1000e18,
-//            vestingCliffCredit: 100e18,
-//            unlockingCliffCredit: 100e18,
-//            vestingRate: 10e18,
-//            vestingStartTime: uint48(block.timestamp),
-//            unlockRate: 10e18,
-//            unlockStartTime: uint48(block.timestamp)
-//        });
-//
-//        BaseAllocation.Milestone[] memory milestones = new BaseAllocation.Milestone[](1);
-//        milestones[0] = BaseAllocation.Milestone({
-//            milestoneAward: 100e18,
-//            unlockOnCompletion: true,
-//            complete: false,
-//            conditionContracts: new address[](0)
-//        });
-//
-//        address tokenOptionAllocation = controller.createMetavest(
-//            metavestController.metavestType.TokenOption,
-//            grantee,
-//            allocation,
-//            milestones,
-//            1e18,
-//            address(paymentToken),
-//            365 days,
-//            0
-//        );
-//
-//        assertEq(paymentToken.balanceOf(address(tokenOptionAllocation)), 0, "Vesting contract should not have any token (it mints on-demand)");
-//        //assertEq(controller.tokenOptionAllocations(grantee, 0), tokenOptionAllocation);
-//    }
+    function testCreateTokenOptionAllocation() public {
+        BaseAllocation.Milestone[] memory milestones = new BaseAllocation.Milestone[](1);
+        milestones[0] = BaseAllocation.Milestone({
+            milestoneAward: 100e18,
+            unlockOnCompletion: true,
+            complete: false,
+            conditionContracts: new address[](0)
+        });
 
-//    function testCreateRestrictedTokenAward() public {
-//        BaseAllocation.Allocation memory allocation = BaseAllocation.Allocation({
-//            tokenContract: address(token),
-//            tokenStreamTotal: 1000e18,
-//            vestingCliffCredit: 100e18,
-//            unlockingCliffCredit: 100e18,
-//            vestingRate: 10e18,
-//            vestingStartTime: uint48(block.timestamp),
-//            unlockRate: 10e18,
-//            unlockStartTime: uint48(block.timestamp)
-//        });
-//
-//        BaseAllocation.Milestone[] memory milestones = new BaseAllocation.Milestone[](1);
-//        milestones[0] = BaseAllocation.Milestone({
-//            milestoneAward: 100e18,
-//            unlockOnCompletion: true,
-//            complete: false,
-//            conditionContracts: new address[](0)
-//        });
-//
-//        token.approve(address(controller), 1100e18);
-//
-//        address restrictedTokenAward = controller.createMetavest(
-//            metavestController.metavestType.RestrictedTokenAward,
-//            grantee,
-//            allocation,
-//            milestones,
-//            1e18,
-//            address(paymentToken),
-//            365 days,
-//            0
-//
-//        );
-//
-//        assertEq(token.balanceOf(restrictedTokenAward), 1100e18);
-//        //assertEq(controller.restrictedTokenAllocations(grantee, 0), restrictedTokenAward);
-//    }
+        bytes32 contractIdAlice = _proposeAndSignDeal(
+            templateId,
+            block.timestamp, // salt
+            delegatePrivateKey,
+            MetaVestDealLib.draft().setTokenOption(
+                alice,
+                address(paymentToken),
+                1e18, // exercisePrice
+                365 days, // shortStopDuration
+                BaseAllocation.Allocation({
+                    tokenContract: address(vestingToken),
+                    tokenStreamTotal: 1000e18,
+                    vestingCliffCredit: 100e18,
+                    unlockingCliffCredit: 100e18,
+                    vestingRate: 10e18,
+                    vestingStartTime: uint48(block.timestamp),
+                    unlockRate: 10e18,
+                    unlockStartTime: uint48(block.timestamp)
+                }),
+                milestones
+            ),
+            "Alice",
+            metavestExpiry,
+            ""
+        );
+
+        TokenOptionAllocation metavestAlice = TokenOptionAllocation(_granteeSignDeal(
+            contractIdAlice,
+            alice, // grantee
+            alice, // recipient
+            alicePrivateKey,
+            "Alice"
+        ));
+
+        assertEq(vestingToken.balanceOf(address(metavestAlice)), 1100e18, "Vesting contract should have token in escrow");
+    }
+
+    function testCreateRestrictedTokenAward() public {
+        BaseAllocation.Milestone[] memory milestones = new BaseAllocation.Milestone[](1);
+        milestones[0] = BaseAllocation.Milestone({
+            milestoneAward: 100e18,
+            unlockOnCompletion: true,
+            complete: false,
+            conditionContracts: new address[](0)
+        });
+
+        bytes32 contractIdAlice = _proposeAndSignDeal(
+            templateId,
+            block.timestamp, // salt
+            delegatePrivateKey,
+            MetaVestDealLib.draft().setTokenOption(
+                alice,
+                address(paymentToken),
+                1e18, // exercisePrice
+                365 days, // shortStopDuration
+                BaseAllocation.Allocation({
+                    tokenContract: address(vestingToken),
+                    tokenStreamTotal: 1000e18,
+                    vestingCliffCredit: 100e18,
+                    unlockingCliffCredit: 100e18,
+                    vestingRate: 10e18,
+                    vestingStartTime: uint48(block.timestamp),
+                    unlockRate: 10e18,
+                    unlockStartTime: uint48(block.timestamp)
+                }),
+                milestones
+            ),
+            "Alice",
+            metavestExpiry,
+            ""
+        );
+
+        RestrictedTokenAward metavestAlice = RestrictedTokenAward(_granteeSignDeal(
+            contractIdAlice,
+            alice, // grantee
+            alice, // recipient
+            alicePrivateKey,
+            "Alice"
+        ));
+
+        assertEq(vestingToken.balanceOf(address(metavestAlice)), 1100e18);
+    }
 
     function testUpdateTransferability() public {
         uint256 startTimestamp = block.timestamp;
@@ -248,7 +229,7 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
 
         vm.prank(authority);
         controller.updateMetavestTransferability(mockAllocation2, true);*/
-        vm.expectRevert(abi.encodeWithSelector(metavestController.MetaVesTController_AmendmentAlreadyPending.selector));
+        vm.expectRevert(abi.encodeWithSelector(MetaVesTControllerStorage.MetaVesTController_AmendmentAlreadyPending.selector));
         vm.prank(authority);
         controller.proposeMajorityMetavestAmendment("testSet", msgSig, callData);
     }
@@ -277,27 +258,29 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
         address mockAllocation2 = createDummyVestingAllocation();
         vm.startPrank(authority);
       //  controller.createSet("testSet");
-        vm.expectRevert(abi.encodeWithSelector(metavestController.MetaVestController_MetaVestNotInSet.selector));
+        vm.expectRevert(abi.encodeWithSelector(MetaVesTControllerStorage.MetaVestController_MetaVestNotInSet.selector));
         controller.removeMetaVestFromSet("testSet", mockAllocation2);
     }
 
 
-//    function testUpdateExercisePrice() public {
-//        address tokenOptionAllocation = createDummyTokenOptionAllocation();
-//
-//        //compute msg.data for updateExerciseOrRepurchasePrice(tokenOptionAllocation, 2e18)
-//        bytes4 selector = controller.updateExerciseOrRepurchasePrice.selector;
-//        bytes memory msgData = abi.encodeWithSelector(selector, tokenOptionAllocation, 2e18);
-//
-//        controller.proposeMetavestAmendment(tokenOptionAllocation, controller.updateExerciseOrRepurchasePrice.selector, msgData);
-//
-//        vm.prank(grantee);
-//        controller.consentToMetavestAmendment(tokenOptionAllocation, controller.updateExerciseOrRepurchasePrice.selector, true);
-//
-//        controller.updateExerciseOrRepurchasePrice(tokenOptionAllocation, 2e18);
-//
-//        assertEq(TokenOptionAllocation(tokenOptionAllocation).exercisePrice(), 2e18);
-//    }
+    function testUpdateExercisePrice() public {
+        address tokenOptionAllocation = createDummyTokenOptionAllocation();
+
+        //compute msg.data for updateExerciseOrRepurchasePrice(tokenOptionAllocation, 2e18)
+        bytes4 selector = controller.updateExerciseOrRepurchasePrice.selector;
+        bytes memory msgData = abi.encodeWithSelector(selector, tokenOptionAllocation, 2e18);
+
+        vm.prank(authority);
+        controller.proposeMetavestAmendment(tokenOptionAllocation, controller.updateExerciseOrRepurchasePrice.selector, msgData);
+
+        vm.prank(grantee);
+        controller.consentToMetavestAmendment(tokenOptionAllocation, controller.updateExerciseOrRepurchasePrice.selector, true);
+
+        vm.prank(authority);
+        controller.updateExerciseOrRepurchasePrice(tokenOptionAllocation, 2e18);
+
+        assertEq(TokenOptionAllocation(tokenOptionAllocation).exercisePrice(), 2e18);
+    }
 
     function testRemoveMilestone() public {
         address vestingAllocation = createDummyVestingAllocation();
@@ -328,11 +311,11 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
             conditionContracts: new address[](0)
         });
 
-        uint256 balanceBefore = paymentToken.balanceOf(address(vestingAllocation));
+        uint256 balanceBefore = vestingToken.balanceOf(address(vestingAllocation));
         vm.prank(authority);
         controller.addMetavestMilestone(vestingAllocation, newMilestone);
         assertEq(
-            paymentToken.balanceOf(address(vestingAllocation)) - balanceBefore,
+            vestingToken.balanceOf(address(vestingAllocation)) - balanceBefore,
             50 ether,
             "vesting contract should receive token amount add by the milestone"
         );
@@ -394,7 +377,7 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
         vm.prank(authority);
         controller.terminateMetavestVesting(vestingAllocation);
 
-        vm.expectRevert(abi.encodeWithSelector(metavestController.MetaVesTController_EmergencyUnlockNotSatisfied.selector));
+        vm.expectRevert(abi.encodeWithSelector(MetaVesTControllerStorage.MetaVesTController_EmergencyUnlockNotSatisfied.selector));
         vm.prank(authority);
         controller.emergencyUpdateMetavestUnlockRate(vestingAllocation, 1e20);
         BaseAllocation.Allocation memory updatedAllocation = BaseAllocation(vestingAllocation).getMetavestDetails();
@@ -419,7 +402,7 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
         BaseAllocation.Allocation memory updatedAllocation = BaseAllocation(vestingAllocation).getMetavestDetails();
         assertEq(updatedAllocation.unlockRate, 0);
 
-        vm.expectRevert(abi.encodeWithSelector(metavestController.MetaVesTController_EmergencyUnlockNotSatisfied.selector));
+        vm.expectRevert(abi.encodeWithSelector(MetaVesTControllerStorage.MetaVesTController_EmergencyUnlockNotSatisfied.selector));
         vm.prank(authority);
         controller.emergencyUpdateMetavestUnlockRate(vestingAllocation, 1e20);
         updatedAllocation = BaseAllocation(vestingAllocation).getMetavestDetails();
@@ -443,20 +426,24 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
         assertEq(updatedAllocation.vestingRate, 20e18);
     }
 
-//    function testUpdateStopTimes() public {
-//
-//        address vestingAllocation = createDummyRestrictedTokenAward();
-//         address[] memory addresses = new address[](1);
-//        addresses[0] = vestingAllocation;
-//        bytes4 selector = bytes4(keccak256("updateMetavestStopTimes(address,uint48)"));
-//        bytes memory msgData = abi.encodeWithSelector(selector, vestingAllocation, uint48(block.timestamp + 500 days));
-//        controller.proposeMetavestAmendment(vestingAllocation, controller.updateMetavestStopTimes.selector, msgData);
-//        vm.prank(grantee);
-//        controller.consentToMetavestAmendment(vestingAllocation, controller.updateMetavestStopTimes.selector, true);
-//        uint48 newShortStopTime = uint48(block.timestamp + 500 days);
-//
-//        controller.updateMetavestStopTimes(vestingAllocation, newShortStopTime);
-//    }
+    function testUpdateStopTimes() public {
+
+        address metavest = createDummyRestrictedTokenAward();
+         address[] memory addresses = new address[](1);
+        addresses[0] = metavest;
+        bytes4 selector = bytes4(keccak256("updateMetavestStopTimes(address,uint48)"));
+        bytes memory msgData = abi.encodeWithSelector(selector, metavest, uint48(block.timestamp + 500 days));
+
+        vm.prank(authority);
+        controller.proposeMetavestAmendment(metavest, controller.updateMetavestStopTimes.selector, msgData);
+
+        vm.prank(grantee);
+        controller.consentToMetavestAmendment(metavest, controller.updateMetavestStopTimes.selector, true);
+        uint48 newShortStopTime = uint48(block.timestamp + 500 days);
+
+        vm.prank(authority);
+        controller.updateMetavestStopTimes(metavest, newShortStopTime);
+    }
 
     function testTerminateVesting() public {
         address vestingAllocation = createDummyVestingAllocation();
@@ -466,47 +453,84 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
         assertTrue(BaseAllocation(vestingAllocation).terminated());
     }
 
-//    function testRepurchaseTokens() public {
-//        uint256 startingBalance = paymentToken.balanceOf(grantee);
-//        address restrictedTokenAward = createDummyRestrictedTokenAward();
-//        uint256 repurchaseAmount = 5e18;
-//        uint256 snapshot = token.balanceOf(authority);
-//        uint256 payment = RestrictedTokenAward(restrictedTokenAward).getPaymentAmount(repurchaseAmount);
-//        controller.terminateMetavestVesting(restrictedTokenAward);
-//        paymentToken.approve(address(restrictedTokenAward), payment);
-//        vm.warp(block.timestamp + 20 days);
-//        vm.prank(authority);
-//        RestrictedTokenAward(restrictedTokenAward).repurchaseTokens(repurchaseAmount);
-//
-//        assertEq(token.balanceOf(authority), snapshot+repurchaseAmount);
-//
-//        vm.prank(grantee);
-//        RestrictedTokenAward(restrictedTokenAward).claimRepurchasedTokens();
-//        assertEq(paymentToken.balanceOf(grantee), startingBalance + payment);
-//    }
+    function testRepurchaseTokens() public {
+        uint256 startingPaymentTokenBalance = paymentToken.balanceOf(grantee);
+        address restrictedTokenAward = createDummyRestrictedTokenAward();
+        uint256 repurchaseAmount = 5e18;
+        uint256 startingVestingTokenBalance = vestingToken.balanceOf(authority);
+        uint256 payment = RestrictedTokenAward(restrictedTokenAward).getPaymentAmount(repurchaseAmount);
 
-//    function testRepurchaseTokensFuture() public {
-//        uint256 startingBalance = paymentToken.balanceOf(grantee);
-//        address restrictedTokenAward = createDummyRestrictedTokenAwardFuture();
-//
-//        uint256 snapshot = token.balanceOf(authority);
-//
-//        controller.terminateMetavestVesting(restrictedTokenAward);
-//        uint256 repurchaseAmount = RestrictedTokenAward(restrictedTokenAward).getAmountRepurchasable();
-//        uint256 payment = RestrictedTokenAward(restrictedTokenAward).getPaymentAmount(repurchaseAmount);
-//        paymentToken.approve(address(restrictedTokenAward), payment);
-//        vm.warp(block.timestamp + 20 days);
-//        vm.prank(authority);
-//        RestrictedTokenAward(restrictedTokenAward).repurchaseTokens(repurchaseAmount);
-//
-//        assertEq(token.balanceOf(authority), snapshot+repurchaseAmount);
-//
-//        vm.prank(grantee);
-//        RestrictedTokenAward(restrictedTokenAward).claimRepurchasedTokens();
-//        console.log(token.balanceOf(restrictedTokenAward));
-//        assertEq(paymentToken.balanceOf(grantee), startingBalance + payment);
-//
-//    }
+        vm.startPrank(authority);
+
+        controller.terminateMetavestVesting(restrictedTokenAward);
+        paymentToken.approve(address(restrictedTokenAward), payment);
+
+        vm.warp(block.timestamp + 20 days);
+
+        RestrictedTokenAward(restrictedTokenAward).repurchaseTokens(repurchaseAmount);
+
+        vm.stopPrank();
+
+        assertEq(vestingToken.balanceOf(authority), startingVestingTokenBalance + repurchaseAmount);
+
+        vm.prank(grantee);
+        RestrictedTokenAward(restrictedTokenAward).claimRepurchasedTokens();
+        assertEq(paymentToken.balanceOf(grantee), startingPaymentTokenBalance + payment);
+    }
+
+    function testRepurchaseTokensSpecifiedRecipient() public {
+        uint256 startingPaymentTokenBalance = paymentToken.balanceOf(grantee);
+        address restrictedTokenAward = createDummyRestrictedTokenAward(bob); // set bob as the recipient
+        uint256 repurchaseAmount = 5e18;
+        uint256 startingVestingTokenBalance = vestingToken.balanceOf(authority);
+        uint256 payment = RestrictedTokenAward(restrictedTokenAward).getPaymentAmount(repurchaseAmount);
+
+        vm.startPrank(authority);
+
+        controller.terminateMetavestVesting(restrictedTokenAward);
+        paymentToken.approve(address(restrictedTokenAward), payment);
+
+        vm.warp(block.timestamp + 20 days);
+
+        RestrictedTokenAward(restrictedTokenAward).repurchaseTokens(repurchaseAmount);
+
+        vm.stopPrank();
+
+        assertEq(vestingToken.balanceOf(authority), startingVestingTokenBalance + repurchaseAmount);
+
+        vm.prank(grantee);
+        vm.expectEmit(true, true, true, true);
+        emit BaseAllocation.MetaVesT_Withdrawn(grantee, bob, address(paymentToken), payment);
+        RestrictedTokenAward(restrictedTokenAward).claimRepurchasedTokens();
+        assertEq(paymentToken.balanceOf(bob) - startingPaymentTokenBalance, payment, "Bob should receive the payment as the specified recipient");
+    }
+
+    function testRepurchaseTokensFuture() public {
+        uint256 startingPaymentTokenBalance = paymentToken.balanceOf(grantee);
+        address restrictedTokenAward = createDummyRestrictedTokenAwardFuture();
+
+        uint256 startingVestingTokenBalance = vestingToken.balanceOf(authority);
+
+        vm.startPrank(authority);
+
+        controller.terminateMetavestVesting(restrictedTokenAward);
+        uint256 repurchaseAmount = RestrictedTokenAward(restrictedTokenAward).getAmountRepurchasable();
+        uint256 payment = RestrictedTokenAward(restrictedTokenAward).getPaymentAmount(repurchaseAmount);
+        paymentToken.approve(address(restrictedTokenAward), payment);
+        vm.warp(block.timestamp + 20 days);
+
+        RestrictedTokenAward(restrictedTokenAward).repurchaseTokens(repurchaseAmount);
+
+        vm.stopPrank();
+
+        assertEq(vestingToken.balanceOf(authority), startingVestingTokenBalance +repurchaseAmount);
+
+        vm.prank(grantee);
+        RestrictedTokenAward(restrictedTokenAward).claimRepurchasedTokens();
+        console2.log(vestingToken.balanceOf(restrictedTokenAward));
+        assertEq(paymentToken.balanceOf(grantee), startingPaymentTokenBalance + payment);
+
+    }
 
     function testTerminateTokensFuture() public {
         address vestingAllocation = createDummyVestingAllocationLargeFuture();
@@ -537,327 +561,21 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
         assertEq(controller.dao(), newDao);
     }
 
-    // Helper functions to create dummy allocations for testing
-    function createDummyVestingAllocation() internal returns (address) {
-        return createDummyVestingAllocation(""); // Expect no reverts
+    function testWithdrawFromController() public {
+        uint256 amount = 100e18;
+        vm.startPrank(authority);
+
+        paymentToken.transfer(address(controller), amount);
+
+        uint256 initialBalance = paymentToken.balanceOf(authority);
+        controller.withdrawFromController(address(paymentToken));
+        uint256 finalBalance = paymentToken.balanceOf(authority);
+
+        vm.stopPrank();
+
+        assertEq(finalBalance - initialBalance, amount);
+        assertEq(paymentToken.balanceOf(address(controller)), 0);
     }
-
-    // Helper functions to create dummy allocations for testing
-    function createDummyVestingAllocation(bytes memory expectRevertData) internal returns (address) {
-        BaseAllocation.Milestone[] memory milestones = new BaseAllocation.Milestone[](1);
-        milestones[0] = BaseAllocation.Milestone({
-            milestoneAward: 1000 ether,
-            unlockOnCompletion: true,
-            complete: false,
-            conditionContracts: new address[](0)
-        });
-
-        // Guardians to sign agreements and register on MetaVesTController
-        bytes32 contractIdAlice = _proposeAndSignDeal(
-            templateId,
-            block.timestamp, // salt
-            delegatePrivateKey,
-            alice, // = grantee
-            BaseAllocation.Allocation({
-                tokenContract: address(paymentToken),
-                tokenStreamTotal: 1000 ether,
-                vestingCliffCredit: 100 ether,
-                unlockingCliffCredit: 100 ether,
-                vestingRate: 10 ether,
-                vestingStartTime: uint48(block.timestamp),
-                unlockRate: 10 ether,
-                unlockStartTime: uint48(block.timestamp)
-            }),
-            milestones,
-            "Alice",
-            cappedMinterExpirationTime // Same expiry as the minter so grantee can defer vesting contract creation as much as possible
-        );
-
-        return _granteeSignDeal(
-            contractIdAlice,
-            alice, // grantee
-            alice, // recipient
-            alicePrivateKey,
-            "Alice",
-            expectRevertData
-        );
-    }
-
-    // Helper functions to create dummy allocations for testing
-    function createDummyVestingAllocationNoUnlock() internal returns (address) {
-        BaseAllocation.Milestone[] memory milestones = new BaseAllocation.Milestone[](1);
-        milestones[0] = BaseAllocation.Milestone({
-            milestoneAward: 1000 ether,
-            unlockOnCompletion: false,
-            complete: false,
-            conditionContracts: new address[](0)
-        });
-
-        // Guardians to sign agreements and register on MetaVesTController
-        bytes32 contractIdAlice = _proposeAndSignDeal(
-            templateId,
-            block.timestamp, // salt
-            delegatePrivateKey,
-            alice, // = grantee
-            BaseAllocation.Allocation({
-                tokenContract: address(paymentToken),
-                tokenStreamTotal: 1000 ether,
-                vestingCliffCredit: 100 ether,
-                unlockingCliffCredit: 100 ether,
-                vestingRate: 10 ether,
-                vestingStartTime: uint48(block.timestamp),
-                unlockRate: 10 ether,
-                unlockStartTime: uint48(block.timestamp)
-            }),
-            milestones,
-            "Alice",
-            cappedMinterExpirationTime // Same expiry as the minter so grantee can defer vesting contract creation as much as possible
-        );
-
-        return _granteeSignDeal(
-            contractIdAlice,
-            alice, // grantee
-            alice, // recipient
-            alicePrivateKey,
-            "Alice"
-        );
-    }
-
-    // Helper functions to create dummy allocations for testing
-    function createDummyVestingAllocationSlowUnlock() internal returns (address) {
-        BaseAllocation.Milestone[] memory milestones = new BaseAllocation.Milestone[](1);
-        milestones[0] = BaseAllocation.Milestone({
-            milestoneAward: 1000 ether,
-            unlockOnCompletion: true,
-            complete: false,
-            conditionContracts: new address[](0)
-        });
-
-        // Guardians to sign agreements and register on MetaVesTController
-        bytes32 contractIdAlice = _proposeAndSignDeal(
-            templateId,
-            block.timestamp, // salt
-            delegatePrivateKey,
-            alice, // = grantee
-            BaseAllocation.Allocation({
-                tokenContract: address(paymentToken),
-                tokenStreamTotal: 1000 ether,
-                vestingCliffCredit: 100 ether,
-                unlockingCliffCredit: 100 ether,
-                vestingRate: 10 ether,
-                vestingStartTime: uint48(block.timestamp),
-                unlockRate: 5 ether,
-                unlockStartTime: uint48(block.timestamp)
-            }),
-            milestones,
-            "Alice",
-            cappedMinterExpirationTime // Same expiry as the minter so grantee can defer vesting contract creation as much as possible
-        );
-
-        return _granteeSignDeal(
-            contractIdAlice,
-            alice, // grantee
-            alice, // recipient
-            alicePrivateKey,
-            "Alice"
-        );
-    }
-
-    // Helper functions to create dummy allocations for testing
-    function createDummyVestingAllocationLarge() internal returns (address) {
-        BaseAllocation.Milestone[] memory milestones = new BaseAllocation.Milestone[](0);
-
-        // Guardians to sign agreements and register on MetaVesTController
-        bytes32 contractIdAlice = _proposeAndSignDeal(
-            templateId,
-            block.timestamp, // salt
-            delegatePrivateKey,
-            alice, // = grantee
-            BaseAllocation.Allocation({
-                tokenContract: address(paymentToken),
-                tokenStreamTotal: 1000 ether,
-                vestingCliffCredit: 0 ether,
-                unlockingCliffCredit: 0 ether,
-                vestingRate: 10 ether,
-                vestingStartTime: uint48(block.timestamp),
-                unlockRate: 10 ether,
-                unlockStartTime: uint48(block.timestamp)
-            }),
-            milestones,
-            "Alice",
-            cappedMinterExpirationTime // Same expiry as the minter so grantee can defer vesting contract creation as much as possible
-        );
-
-        return _granteeSignDeal(
-            contractIdAlice,
-            alice, // grantee
-            alice, // recipient
-            alicePrivateKey,
-            "Alice"
-        );
-    }
-
-    // Helper functions to create dummy allocations for testing
-    function createDummyVestingAllocationLargeFuture() internal returns (address) {
-        BaseAllocation.Milestone[] memory milestones = new BaseAllocation.Milestone[](0);
-
-        // Guardians to sign agreements and register on MetaVesTController
-        bytes32 contractIdAlice = _proposeAndSignDeal(
-            templateId,
-            block.timestamp, // salt
-            delegatePrivateKey,
-            alice, // = grantee
-            BaseAllocation.Allocation({
-                tokenContract: address(paymentToken),
-                tokenStreamTotal: 1000 ether,
-                vestingCliffCredit: 0 ether,
-                unlockingCliffCredit: 0 ether,
-                vestingRate: 10 ether,
-                vestingStartTime: uint48(block.timestamp + 2000),
-                unlockRate: 10 ether,
-                unlockStartTime: uint48(block.timestamp + 2000)
-            }),
-            milestones,
-            "Alice",
-            cappedMinterExpirationTime // Same expiry as the minter so grantee can defer vesting contract creation as much as possible
-        );
-
-        return _granteeSignDeal(
-            contractIdAlice,
-            alice, // grantee
-            alice, // recipient
-            alicePrivateKey,
-            "Alice"
-        );
-    }
-
-//    function createDummyTokenOptionAllocation() internal returns (address) {
-//        BaseAllocation.Allocation memory allocation = BaseAllocation.Allocation({
-//            tokenContract: address(token),
-//            tokenStreamTotal: 1000e18,
-//            vestingCliffCredit: 100e18,
-//            unlockingCliffCredit: 100e18,
-//            vestingRate: 10e18,
-//            vestingStartTime: uint48(block.timestamp),
-//            unlockRate: 10e18,
-//            unlockStartTime: uint48(block.timestamp)
-//        });
-//
-//        BaseAllocation.Milestone[] memory milestones = new BaseAllocation.Milestone[](1);
-//        milestones[0] = BaseAllocation.Milestone({
-//            milestoneAward: 1000e18,
-//            unlockOnCompletion: true,
-//            complete: false,
-//            conditionContracts: new address[](0)
-//        });
-//
-//        token.approve(address(controller), 2000e18);
-//
-//        return controller.createMetavest(
-//            metavestController.metavestType.TokenOption,
-//            grantee,
-//            allocation,
-//            milestones,
-//            5e17,
-//            address(paymentToken),
-//            1 days,
-//            0
-//        );
-//    }
-
-
-//   function createDummyRestrictedTokenAward() internal returns (address) {
-//        BaseAllocation.Allocation memory allocation = BaseAllocation.Allocation({
-//            tokenContract: address(token),
-//            tokenStreamTotal: 1000e18,
-//            vestingCliffCredit: 100e18,
-//            unlockingCliffCredit: 100e18,
-//            vestingRate: 10e18,
-//            vestingStartTime: uint48(block.timestamp),
-//            unlockRate: 10e18,
-//            unlockStartTime: uint48(block.timestamp)
-//        });
-//
-//        BaseAllocation.Milestone[] memory milestones = new BaseAllocation.Milestone[](1);
-//        milestones[0] = BaseAllocation.Milestone({
-//            milestoneAward: 1000e18,
-//            unlockOnCompletion: true,
-//            complete: false,
-//            conditionContracts: new address[](0)
-//        });
-//
-//        token.approve(address(controller), 2100e18);
-//
-//        return controller.createMetavest(
-//            metavestController.metavestType.RestrictedTokenAward,
-//            grantee,
-//            allocation,
-//            milestones,
-//            1e18,
-//            address(paymentToken),
-//            1 days,
-//            0
-//
-//        );
-//    }
-//
-//    function createDummyRestrictedTokenAwardFuture() internal returns (address) {
-//        BaseAllocation.Allocation memory allocation = BaseAllocation.Allocation({
-//            tokenContract: address(token),
-//            tokenStreamTotal: 1000e18,
-//            vestingCliffCredit: 100e18,
-//            unlockingCliffCredit: 100e18,
-//            vestingRate: 10e18,
-//            vestingStartTime: uint48(block.timestamp+1000),
-//            unlockRate: 10e18,
-//            unlockStartTime: uint48(block.timestamp+1000)
-//        });
-//
-//        BaseAllocation.Milestone[] memory milestones = new BaseAllocation.Milestone[](1);
-//        milestones[0] = BaseAllocation.Milestone({
-//            milestoneAward: 1000e18,
-//            unlockOnCompletion: true,
-//            complete: false,
-//            conditionContracts: new address[](0)
-//        });
-//
-//        token.approve(address(controller), 2100e18);
-//
-//        return controller.createMetavest(
-//            metavestController.metavestType.RestrictedTokenAward,
-//            grantee,
-//            allocation,
-//            milestones,
-//            1e18,
-//            address(paymentToken),
-//            1 days,
-//            0
-//
-//        );
-//    }
-
-
-    function testGetMetaVestType() public {
-        address vestingAllocation = createDummyVestingAllocation();
-//        address tokenOptionAllocation = createDummyTokenOptionAllocation();
-//        address restrictedTokenAward = createDummyRestrictedTokenAward();
-
-        assertEq(controller.getMetaVestType(vestingAllocation), 1);
-//        assertEq(controller.getMetaVestType(tokenOptionAllocation), 2);
-//        assertEq(controller.getMetaVestType(restrictedTokenAward), 3);
-    }
-
-//    function testWithdrawFromController() public {
-//        uint256 amount = 100e18;
-//        token.transfer(address(controller), amount);
-//
-//        uint256 initialBalance = token.balanceOf(authority);
-//        controller.withdrawFromController(address(token));
-//        uint256 finalBalance = token.balanceOf(authority);
-//
-//        assertEq(finalBalance - initialBalance, amount);
-//        assertEq(token.balanceOf(address(controller)), 0);
-//    }
 
     function test_RevertIf_CreateMetavestWithZeroAddress() public {
         BaseAllocation.Milestone[] memory milestones = new BaseAllocation.Milestone[](0);
@@ -867,20 +585,22 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
             templateId,
             block.timestamp, // salt
             delegatePrivateKey,
-            alice, // = grantee
-            BaseAllocation.Allocation({
-                tokenContract: address(0), // zero address
-                tokenStreamTotal: 1000 ether,
-                vestingCliffCredit: 100 ether,
-                unlockingCliffCredit: 100 ether,
-                vestingRate: 10 ether,
-                vestingStartTime: uint48(block.timestamp),
-                unlockRate: 10 ether,
-                unlockStartTime: uint48(block.timestamp)
-            }),
-            milestones,
+            MetaVestDealLib.draft().setVesting(
+                alice, // = grantee
+                BaseAllocation.Allocation({
+                    tokenContract: address(0), // zero address
+                    tokenStreamTotal: 1000 ether,
+                    vestingCliffCredit: 100 ether,
+                    unlockingCliffCredit: 100 ether,
+                    vestingRate: 10 ether,
+                    vestingStartTime: uint48(block.timestamp),
+                    unlockRate: 10 ether,
+                    unlockStartTime: uint48(block.timestamp)
+                }),
+                milestones
+            ),
             "Alice",
-            cappedMinterExpirationTime // Same expiry as the minter so grantee can defer vesting contract creation as much as possible
+            metavestExpiry
         );
 
         _granteeSignDeal(
@@ -889,20 +609,20 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
             alice, // recipient
             alicePrivateKey,
             "Alice",
-            abi.encodeWithSelector(metavestController.MetaVesTController_ZeroAddress.selector)
+            abi.encodeWithSelector(MetaVesTControllerStorage.MetaVesTController_ZeroAddress.selector)
         );
     }
 
     function testTerminateVestAndRecovers() public {
         address vestingAllocation = createDummyVestingAllocation();
-        uint256 snapshot = paymentToken.balanceOf(authority);
+        uint256 snapshot = vestingToken.balanceOf(authority);
         VestingAllocation(vestingAllocation).confirmMilestone(0);
         vm.warp(block.timestamp + 50 seconds);
 
-        uint256 authorityBalanceBefore = paymentToken.balanceOf(address(authority));
+        uint256 authorityBalanceBefore = vestingToken.balanceOf(address(authority));
         vm.prank(authority);
         controller.terminateMetavestVesting(vestingAllocation);
-        assertEq(paymentToken.balanceOf(
+        assertEq(vestingToken.balanceOf(
             address(authority)) - authorityBalanceBefore,
             400 ether, // 1000 + 1000 - 1000 - 100 - 10 * 50
             "authority should receive unvested funds"
@@ -911,12 +631,12 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
         vm.startPrank(grantee);
         VestingAllocation(vestingAllocation).withdraw(VestingAllocation(vestingAllocation).getAmountWithdrawable());
         vm.stopPrank();
-        assertEq(paymentToken.balanceOf(vestingAllocation), 0);
+        assertEq(vestingToken.balanceOf(vestingAllocation), 0);
     }
 
     function testTerminateVestAndRecoverSlowUnlock() public {
         address vestingAllocation = createDummyVestingAllocationSlowUnlock();
-        uint256 snapshot = paymentToken.balanceOf(authority);
+        uint256 snapshot = vestingToken.balanceOf(authority);
         VestingAllocation(vestingAllocation).confirmMilestone(0);
         vm.warp(block.timestamp + 25 seconds);
         vm.prank(authority);
@@ -926,18 +646,18 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
         vm.warp(block.timestamp + 25 seconds);
         VestingAllocation(vestingAllocation).withdraw(VestingAllocation(vestingAllocation).getAmountWithdrawable());
         vm.stopPrank();
-        assertEq(paymentToken.balanceOf(vestingAllocation), 0);
+        assertEq(vestingToken.balanceOf(vestingAllocation), 0);
     }
 
     function testTerminateRecoverAll() public {
         address vestingAllocation = createDummyVestingAllocationLarge();
-        uint256 snapshot = paymentToken.balanceOf(authority);
+        uint256 snapshot = vestingToken.balanceOf(authority);
         vm.warp(block.timestamp + 25 seconds);
 
-        uint256 authorityBalanceBefore = paymentToken.balanceOf(address(authority));
+        uint256 authorityBalanceBefore = vestingToken.balanceOf(address(authority));
         vm.prank(authority);
         controller.terminateMetavestVesting(vestingAllocation);
-        assertEq(paymentToken.balanceOf(
+        assertEq(vestingToken.balanceOf(
             address(authority)) - authorityBalanceBefore,
             750 ether, // 1000 - 10 * 25
             "authority should receive unvested funds"
@@ -946,22 +666,22 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
         vm.startPrank(grantee);
         VestingAllocation(vestingAllocation).withdraw(VestingAllocation(vestingAllocation).getAmountWithdrawable());
         vm.stopPrank();
-        assertEq(paymentToken.balanceOf(vestingAllocation), 0);
+        assertEq(vestingToken.balanceOf(vestingAllocation), 0);
     }
 
     function testTerminateRecoverChunksBefore() public {
         address vestingAllocation = createDummyVestingAllocationLarge();
-        uint256 snapshot = paymentToken.balanceOf(authority);
+        uint256 snapshot = vestingToken.balanceOf(authority);
         vm.warp(block.timestamp + 25 seconds);
         vm.startPrank(grantee);
         VestingAllocation(vestingAllocation).withdraw(VestingAllocation(vestingAllocation).getAmountWithdrawable());
         vm.stopPrank();
         vm.warp(block.timestamp + 25 seconds);
 
-        uint256 authorityBalanceBefore = paymentToken.balanceOf(address(authority));
+        uint256 authorityBalanceBefore = vestingToken.balanceOf(address(authority));
         vm.prank(authority);
         controller.terminateMetavestVesting(vestingAllocation);
-        assertEq(paymentToken.balanceOf(
+        assertEq(vestingToken.balanceOf(
             address(authority)) - authorityBalanceBefore,
             500 ether, // 1000 - 10 * 50
             "authority should receive unvested funds"
@@ -970,165 +690,181 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
         vm.startPrank(grantee);
         VestingAllocation(vestingAllocation).withdraw(VestingAllocation(vestingAllocation).getAmountWithdrawable());
         vm.stopPrank();
-        assertEq(paymentToken.balanceOf(vestingAllocation), 0);
+        assertEq(vestingToken.balanceOf(vestingAllocation), 0);
     }
 
-//    function testConfirmingMilestoneRestrictedTokenAllocation() public {
-//        address vestingAllocation = createDummyRestrictedTokenAward();
-//        uint256 snapshot = token.balanceOf(authority);
-//        VestingAllocation(vestingAllocation).confirmMilestone(0);
-//        vm.warp(block.timestamp + 50 seconds);
-//        vm.startPrank(grantee);
-//        VestingAllocation(vestingAllocation).withdraw(VestingAllocation(vestingAllocation).getAmountWithdrawable());
-//        vm.stopPrank();
-//    }
-//
-//        function testConfirmingMilestoneTokenOption() public {
-//        address vestingAllocation = createDummyTokenOptionAllocation();
-//        uint256 snapshot = token.balanceOf(authority);
-//        TokenOptionAllocation(vestingAllocation).confirmMilestone(0);
-//        vm.warp(block.timestamp + 50 seconds);
-//        vm.startPrank(grantee);
-//        //exercise max available
-//        ERC20Stable(paymentToken).approve(vestingAllocation, TokenOptionAllocation(vestingAllocation).getPaymentAmount(TokenOptionAllocation(vestingAllocation).getAmountExercisable()));
-//        TokenOptionAllocation(vestingAllocation).exerciseTokenOption(TokenOptionAllocation(vestingAllocation).getAmountExercisable());
-//        TokenOptionAllocation(vestingAllocation).withdraw(VestingAllocation(vestingAllocation).getAmountWithdrawable());
-//        vm.stopPrank();
-//    }
-
-    function testUnlockMilestoneNotUnlocked() public {
-        address vestingAllocation = createDummyVestingAllocationNoUnlock();
-        uint256 snapshot = paymentToken.balanceOf(authority);
-        VestingAllocation(vestingAllocation).confirmMilestone(0);
+    function testConfirmingMilestoneRestrictedTokenAllocation() public {
+        address metavest = createDummyRestrictedTokenAward();
+        RestrictedTokenAward(metavest).confirmMilestone(0);
         vm.warp(block.timestamp + 50 seconds);
         vm.startPrank(grantee);
-        VestingAllocation(vestingAllocation).withdraw(VestingAllocation(vestingAllocation).getAmountWithdrawable());
-        vm.warp(block.timestamp + 1050 seconds);
-        VestingAllocation(vestingAllocation).withdraw(VestingAllocation(vestingAllocation).getAmountWithdrawable());
+        RestrictedTokenAward(metavest).withdraw(RestrictedTokenAward(metavest).getAmountWithdrawable());
         vm.stopPrank();
     }
 
-//    function testTerminateTokenOptionAndRecover() public {
-//        address tokenOptionAllocation = createDummyTokenOptionAllocation();
-//        uint256 snapshot = token.balanceOf(authority);
-//        vm.warp(block.timestamp + 25 seconds);
-//        vm.prank(grantee);
-//        ERC20Stable(paymentToken).approve(tokenOptionAllocation, 350e18);
-//        vm.prank(grantee);
-//        TokenOptionAllocation(tokenOptionAllocation).exerciseTokenOption(350e18);
-//        controller.terminateMetavestVesting(tokenOptionAllocation);
-//        vm.startPrank(grantee);
-//        vm.warp(block.timestamp + 1 days + 25 seconds);
-//        assertEq(TokenOptionAllocation(tokenOptionAllocation).getAmountExercisable(), 0);
-//        TokenOptionAllocation(tokenOptionAllocation).withdraw(TokenOptionAllocation(tokenOptionAllocation).getAmountWithdrawable());
-//        vm.stopPrank();
-//        assertEq(token.balanceOf(tokenOptionAllocation), 0);
-//        vm.warp(block.timestamp + 365 days);
-//        vm.prank(authority);
-//        TokenOptionAllocation(tokenOptionAllocation).recoverForfeitTokens();
-//    }
+    function testConfirmingMilestoneTokenOption() public {
+        address metavest = createDummyTokenOptionAllocation();
+        TokenOptionAllocation(metavest).confirmMilestone(0);
+        vm.warp(block.timestamp + 50 seconds);
 
-//    function testTerminateEarlyTokenOptionAndRecover() public {
-//        address tokenOptionAllocation = createDummyTokenOptionAllocation();
-//        uint256 snapshot = token.balanceOf(authority);
-//        vm.warp(block.timestamp + 5 seconds);
-//       // vm.prank(grantee);
-//       /* ERC20Stable(paymentToken).approve(tokenOptionAllocation, 350e18);
-//        vm.prank(grantee);
-//        TokenOptionAllocation(tokenOptionAllocation).exerciseTokenOption(350e18);*/
-//        controller.terminateMetavestVesting(tokenOptionAllocation);
-//        vm.warp(block.timestamp + 365 days);
-//        vm.prank(authority);
-//        TokenOptionAllocation(tokenOptionAllocation).recoverForfeitTokens();
-//    }
+        // Fund grantee
+        uint256 vestingTokenExercisable = TokenOptionAllocation(metavest).getAmountExercisable();
+        uint256 paymentTokenAmount = TokenOptionAllocation(metavest).getPaymentAmount(vestingTokenExercisable);
+        paymentToken.mint(grantee, paymentTokenAmount);
 
+        vm.startPrank(grantee);
+        //exercise max available
+        paymentToken.approve(metavest, TokenOptionAllocation(metavest).getPaymentAmount(TokenOptionAllocation(metavest).getAmountExercisable()));
+        TokenOptionAllocation(metavest).exerciseTokenOption(vestingTokenExercisable);
+        TokenOptionAllocation(metavest).withdraw(VestingAllocation(metavest).getAmountWithdrawable());
+        vm.stopPrank();
+    }
 
-//    function testTerminateRestrictedTokenAwardAndRecover() public {
-//        address restrictedTokenAward = createDummyRestrictedTokenAward();
-//        uint256 snapshot = token.balanceOf(authority);
-//        vm.warp(block.timestamp + 25 seconds);
-//        controller.terminateMetavestVesting(restrictedTokenAward);
-//        vm.startPrank(grantee);
-//        RestrictedTokenAward(restrictedTokenAward).withdraw(RestrictedTokenAward(restrictedTokenAward).getAmountWithdrawable());
-//        vm.stopPrank();
-//        uint256 amt = RestrictedTokenAward(restrictedTokenAward).getAmountRepurchasable();
-//        uint256 payamt = RestrictedTokenAward(restrictedTokenAward).getPaymentAmount(amt);
-//        vm.warp(block.timestamp + 20 days);
-//        paymentToken.approve(address(restrictedTokenAward), payamt);
-//        RestrictedTokenAward(restrictedTokenAward).repurchaseTokens(amt);
-//
-//        vm.startPrank(grantee);
-//        RestrictedTokenAward(restrictedTokenAward).claimRepurchasedTokens();
-//        assertEq(token.balanceOf(restrictedTokenAward), 0);
-//        assertEq(paymentToken.balanceOf(restrictedTokenAward), 0);
-//    }
+    function testUnlockMilestoneNotUnlocked() public {
+        address metavest = createDummyVestingAllocationNoUnlock();
+        VestingAllocation(metavest).confirmMilestone(0);
+        vm.warp(block.timestamp + 50 seconds);
+        vm.startPrank(grantee);
+        VestingAllocation(metavest).withdraw(VestingAllocation(metavest).getAmountWithdrawable());
+        vm.warp(block.timestamp + 1050 seconds);
+        VestingAllocation(metavest).withdraw(VestingAllocation(metavest).getAmountWithdrawable());
+        vm.stopPrank();
+    }
 
-//    function testChangeVestingAndUnlockingRate() public {
-//        address restrictedTokenAward = createDummyRestrictedTokenAward();
-//        uint256 snapshot = token.balanceOf(authority);
-//        vm.warp(block.timestamp + 25 seconds);
-//
-//        bytes4 msgSig = bytes4(keccak256("updateMetavestUnlockRate(address,uint160)"));
-//        bytes memory callData = abi.encodeWithSelector(msgSig, restrictedTokenAward, 50e18);
-//
-//        vm.prank(authority);
-//        controller.proposeMetavestAmendment(restrictedTokenAward, msgSig, callData);
-//
-//        vm.prank(grantee);
-//        controller.consentToMetavestAmendment(restrictedTokenAward, msgSig, true);
-//
-//        vm.prank(authority);
-//        controller.updateMetavestUnlockRate(restrictedTokenAward, 50e18);
-//
-//        msgSig = bytes4(keccak256("updateMetavestVestingRate(address,uint160)"));
-//        callData = abi.encodeWithSelector(msgSig, restrictedTokenAward, 50e18);
-//
-//        vm.prank(authority);
-//        controller.proposeMetavestAmendment(restrictedTokenAward, msgSig, callData);
-//
-//        vm.prank(grantee);
-//        controller.consentToMetavestAmendment(restrictedTokenAward, msgSig, true);
-//
-//        vm.prank(authority);
-//        controller.updateMetavestVestingRate(restrictedTokenAward, 50e18);
-//
-//        vm.startPrank(grantee);
-//        RestrictedTokenAward(restrictedTokenAward).withdraw(RestrictedTokenAward(restrictedTokenAward).getAmountWithdrawable());
-//        vm.stopPrank();
-//
-//    }
+    function testTerminateTokenOptionAndRecover() public {
+        address tokenOptionAllocation = createDummyTokenOptionAllocation();
+        vm.warp(block.timestamp + 25 seconds);
 
-//    function testZeroReclaim() public {
-//        address restrictedTokenAward = createDummyRestrictedTokenAward();
-//        vm.warp(block.timestamp + 15 seconds);
-//        vm.startPrank(grantee);
-//        RestrictedTokenAward(restrictedTokenAward).withdraw(RestrictedTokenAward(restrictedTokenAward).getAmountWithdrawable());
-//        vm.stopPrank();
-//        //create call data to propose setting vesting to 0
-//        bytes4 msgSig = bytes4(keccak256("updateMetavestVestingRate(address,uint160)"));
-//        bytes memory callData = abi.encodeWithSelector(msgSig, restrictedTokenAward, 0);
-//
-//        vm.prank(authority);
-//        controller.proposeMetavestAmendment(restrictedTokenAward, msgSig, callData);
-//
-//        vm.prank(grantee);
-//        controller.consentToMetavestAmendment(restrictedTokenAward, msgSig, true);
-//
-//        vm.prank(authority);
-//        controller.updateMetavestVestingRate(restrictedTokenAward, 0);
-//
-//        vm.startPrank(authority);
-//        controller.terminateMetavestVesting(restrictedTokenAward);
-//        vm.warp(block.timestamp + 155 days);
-//        uint256 amt = RestrictedTokenAward(restrictedTokenAward).getAmountRepurchasable();
-//        uint256 payamt = RestrictedTokenAward(restrictedTokenAward).getPaymentAmount(amt);
-//        paymentToken.approve(address(restrictedTokenAward), payamt);
-//        RestrictedTokenAward(restrictedTokenAward).repurchaseTokens(amt);
-//                 vm.stopPrank();
-//        vm.prank(grantee);
-//        RestrictedTokenAward(restrictedTokenAward).claimRepurchasedTokens();
-//        console.log(token.balanceOf(restrictedTokenAward));
-//    }
+        // Fund grantee
+        paymentToken.mint(grantee, 350e18);
+
+        vm.prank(grantee);
+        paymentToken.approve(tokenOptionAllocation, 350e18);
+
+        vm.prank(grantee);
+        TokenOptionAllocation(tokenOptionAllocation).exerciseTokenOption(350e18);
+
+        vm.prank(authority);
+        controller.terminateMetavestVesting(tokenOptionAllocation);
+
+        vm.startPrank(grantee);
+        vm.warp(block.timestamp + 1 days + 25 seconds);
+        assertEq(TokenOptionAllocation(tokenOptionAllocation).getAmountExercisable(), 0);
+        TokenOptionAllocation(tokenOptionAllocation).withdraw(TokenOptionAllocation(tokenOptionAllocation).getAmountWithdrawable());
+        vm.stopPrank();
+        assertEq(vestingToken.balanceOf(tokenOptionAllocation), 0);
+        vm.warp(block.timestamp + 365 days);
+        vm.prank(authority);
+        TokenOptionAllocation(tokenOptionAllocation).recoverForfeitTokens();
+    }
+
+    function testTerminateEarlyTokenOptionAndRecover() public {
+        address tokenOptionAllocation = createDummyTokenOptionAllocation();
+        vm.warp(block.timestamp + 5 seconds);
+
+        vm.startPrank(authority);
+
+        controller.terminateMetavestVesting(tokenOptionAllocation);
+        vm.warp(block.timestamp + 365 days);
+        TokenOptionAllocation(tokenOptionAllocation).recoverForfeitTokens();
+
+        vm.stopPrank();
+    }
+
+    function testTerminateRestrictedTokenAwardAndRecover() public {
+        address restrictedTokenAward = createDummyRestrictedTokenAward();
+        vm.warp(block.timestamp + 25 seconds);
+
+        vm.prank(authority);
+        controller.terminateMetavestVesting(restrictedTokenAward);
+
+        vm.startPrank(grantee);
+        RestrictedTokenAward(restrictedTokenAward).withdraw(RestrictedTokenAward(restrictedTokenAward).getAmountWithdrawable());
+        vm.stopPrank();
+
+        uint256 amt = RestrictedTokenAward(restrictedTokenAward).getAmountRepurchasable();
+        uint256 payamt = RestrictedTokenAward(restrictedTokenAward).getPaymentAmount(amt);
+        vm.warp(block.timestamp + 20 days);
+
+        vm.startPrank(authority);
+
+        paymentToken.approve(address(restrictedTokenAward), payamt);
+        RestrictedTokenAward(restrictedTokenAward).repurchaseTokens(amt);
+
+        vm.stopPrank();
+
+        vm.prank(grantee);
+        RestrictedTokenAward(restrictedTokenAward).claimRepurchasedTokens();
+        
+        assertEq(vestingToken.balanceOf(restrictedTokenAward), 0);
+        assertEq(paymentToken.balanceOf(restrictedTokenAward), 0);
+    }
+
+    function testChangeVestingAndUnlockingRate() public {
+        address restrictedTokenAward = createDummyRestrictedTokenAward();
+        vm.warp(block.timestamp + 25 seconds);
+
+        bytes4 msgSig = bytes4(keccak256("updateMetavestUnlockRate(address,uint160)"));
+        bytes memory callData = abi.encodeWithSelector(msgSig, restrictedTokenAward, 50e18);
+
+        vm.prank(authority);
+        controller.proposeMetavestAmendment(restrictedTokenAward, msgSig, callData);
+
+        vm.prank(grantee);
+        controller.consentToMetavestAmendment(restrictedTokenAward, msgSig, true);
+
+        vm.prank(authority);
+        controller.updateMetavestUnlockRate(restrictedTokenAward, 50e18);
+
+        msgSig = bytes4(keccak256("updateMetavestVestingRate(address,uint160)"));
+        callData = abi.encodeWithSelector(msgSig, restrictedTokenAward, 50e18);
+
+        vm.prank(authority);
+        controller.proposeMetavestAmendment(restrictedTokenAward, msgSig, callData);
+
+        vm.prank(grantee);
+        controller.consentToMetavestAmendment(restrictedTokenAward, msgSig, true);
+
+        vm.prank(authority);
+        controller.updateMetavestVestingRate(restrictedTokenAward, 50e18);
+
+        vm.startPrank(grantee);
+        RestrictedTokenAward(restrictedTokenAward).withdraw(RestrictedTokenAward(restrictedTokenAward).getAmountWithdrawable());
+        vm.stopPrank();
+
+    }
+
+    function testZeroReclaim() public {
+        address restrictedTokenAward = createDummyRestrictedTokenAward();
+        vm.warp(block.timestamp + 15 seconds);
+        vm.startPrank(grantee);
+        RestrictedTokenAward(restrictedTokenAward).withdraw(RestrictedTokenAward(restrictedTokenAward).getAmountWithdrawable());
+        vm.stopPrank();
+        //create call data to propose setting vesting to 0
+        bytes4 msgSig = bytes4(keccak256("updateMetavestVestingRate(address,uint160)"));
+        bytes memory callData = abi.encodeWithSelector(msgSig, restrictedTokenAward, 0);
+
+        vm.prank(authority);
+        controller.proposeMetavestAmendment(restrictedTokenAward, msgSig, callData);
+
+        vm.prank(grantee);
+        controller.consentToMetavestAmendment(restrictedTokenAward, msgSig, true);
+
+        vm.prank(authority);
+        controller.updateMetavestVestingRate(restrictedTokenAward, 0);
+
+        vm.startPrank(authority);
+        controller.terminateMetavestVesting(restrictedTokenAward);
+        vm.warp(block.timestamp + 155 days);
+        uint256 amt = RestrictedTokenAward(restrictedTokenAward).getAmountRepurchasable();
+        uint256 payamt = RestrictedTokenAward(restrictedTokenAward).getPaymentAmount(amt);
+        paymentToken.approve(address(restrictedTokenAward), payamt);
+        RestrictedTokenAward(restrictedTokenAward).repurchaseTokens(amt);
+                 vm.stopPrank();
+        vm.prank(grantee);
+        RestrictedTokenAward(restrictedTokenAward).claimRepurchasedTokens();
+        console2.log(vestingToken.balanceOf(restrictedTokenAward));
+    }
 
     function testZeroReclaimVesting() public {
         address vestingAllocation = createDummyVestingAllocation();
@@ -1210,88 +946,130 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
         vm.stopPrank();
     }
 
-//    function testLargeReducOption() public {
-//        address restrictedTokenAward = createDummyTokenOptionAllocation();
-//        vm.warp(block.timestamp + 5 seconds);
-//        vm.startPrank(grantee);
-//        //approve amount to exercise by getting amount to exercise and price
-//        ERC20Stable(paymentToken).approve(restrictedTokenAward, TokenOptionAllocation(restrictedTokenAward).getPaymentAmount(TokenOptionAllocation(restrictedTokenAward).getAmountExercisable()));
-//        TokenOptionAllocation(restrictedTokenAward).exerciseTokenOption(TokenOptionAllocation(restrictedTokenAward).getAmountExercisable());
-//        RestrictedTokenAward(restrictedTokenAward).withdraw(RestrictedTokenAward(restrictedTokenAward).getAmountWithdrawable());
-//        vm.stopPrank();
-//        //create call data to propose setting vesting to 0
-//        bytes4 msgSig = bytes4(keccak256("updateMetavestVestingRate(address,uint160)"));
-//        bytes memory callData = abi.encodeWithSelector(msgSig, restrictedTokenAward, 10e18);
-//
-//        vm.prank(authority);
-//        controller.proposeMetavestAmendment(restrictedTokenAward, msgSig, callData);
-//
-//        vm.prank(grantee);
-//        controller.consentToMetavestAmendment(restrictedTokenAward, msgSig, true);
-//
-//        vm.prank(authority);
-//        controller.updateMetavestVestingRate(restrictedTokenAward, 10e18);
-//        vm.warp(block.timestamp + 5 seconds);
-//        vm.startPrank(authority);
-//        controller.terminateMetavestVesting(restrictedTokenAward);
-//        vm.stopPrank();
-//        vm.warp(block.timestamp + 155 seconds);
-//        vm.startPrank(grantee);
-//         ERC20Stable(paymentToken).approve(restrictedTokenAward, TokenOptionAllocation(restrictedTokenAward).getPaymentAmount(TokenOptionAllocation(restrictedTokenAward).getAmountExercisable()));
-//        TokenOptionAllocation(restrictedTokenAward).exerciseTokenOption(TokenOptionAllocation(restrictedTokenAward).getAmountExercisable());
-//        RestrictedTokenAward(restrictedTokenAward).withdraw(RestrictedTokenAward(restrictedTokenAward).getAmountWithdrawable());
-//        vm.stopPrank();
-//        console.log(token.balanceOf(restrictedTokenAward));
-//    }
+    function testLargeReducOption() public {
+        address restrictedTokenAward = createDummyTokenOptionAllocation();
+        vm.warp(block.timestamp + 5 seconds);
 
+        {
+            // Fund grantee
+            uint256 vestingTokenExercisableAmount = TokenOptionAllocation(restrictedTokenAward).getAmountExercisable();
+            uint256 paymentTokenAmount = TokenOptionAllocation(restrictedTokenAward).getPaymentAmount(vestingTokenExercisableAmount);
+            deal(address(paymentToken), grantee, paymentTokenAmount);
+            uint256 vestingTokenBalanceBefore = vestingToken.balanceOf(grantee);
+            uint256 paymentTokenBalanceBefore = paymentToken.balanceOf(grantee);
 
+            vm.startPrank(grantee);
+            //approve amount to exercise by getting amount to exercise and price
+            paymentToken.approve(restrictedTokenAward, paymentTokenAmount);
+            TokenOptionAllocation(restrictedTokenAward).exerciseTokenOption(vestingTokenExercisableAmount);
+            RestrictedTokenAward(restrictedTokenAward).withdraw(RestrictedTokenAward(restrictedTokenAward).getAmountWithdrawable());
+            vm.stopPrank();
 
-//    function testReclaim() public {
-//        address restrictedTokenAward = createDummyRestrictedTokenAward();
-//        vm.warp(block.timestamp + 15 seconds);
-//        vm.startPrank(grantee);
-//        RestrictedTokenAward(restrictedTokenAward).withdraw(RestrictedTokenAward(restrictedTokenAward).getAmountWithdrawable());
-//        vm.stopPrank();
-//
-//        vm.startPrank(authority);
-//        controller.terminateMetavestVesting(restrictedTokenAward);
-//        vm.warp(block.timestamp + 155 days);
-//        uint256 amt = RestrictedTokenAward(restrictedTokenAward).getAmountRepurchasable();
-//        uint256 payamt = RestrictedTokenAward(restrictedTokenAward).getPaymentAmount(amt);
-//        paymentToken.approve(address(restrictedTokenAward), payamt);
-//        RestrictedTokenAward(restrictedTokenAward).repurchaseTokens(amt);
-//         vm.stopPrank();
-//        vm.prank(grantee);
-//        RestrictedTokenAward(restrictedTokenAward).claimRepurchasedTokens();
-//        console.log(token.balanceOf(restrictedTokenAward));
-//    }
+            assertEq(vestingToken.balanceOf(grantee) - vestingTokenBalanceBefore, 150 ether, "grantee should have exercised 100 + 10 * 5 = 150 tokens");
+            assertEq(paymentTokenBalanceBefore - paymentToken.balanceOf(grantee), 75 ether, "grantee should have paid 150 * 0.5 = 75 tokens");
+        }
 
+        //create call data to propose setting vesting to 0
+        bytes4 msgSig = bytes4(keccak256("updateMetavestVestingRate(address,uint160)"));
+        bytes memory callData = abi.encodeWithSelector(msgSig, restrictedTokenAward, 20e18);
 
+        vm.prank(authority);
+        controller.proposeMetavestAmendment(restrictedTokenAward, msgSig, callData);
 
-//    function test_RevertIf_UpdateExercisePriceForVesting() public {
-//        address vestingAllocation = createDummyVestingAllocation();
-//        controller.updateExerciseOrRepurchasePrice(vestingAllocation, 2e18);
-//    }
+        vm.prank(grantee);
+        controller.consentToMetavestAmendment(restrictedTokenAward, msgSig, true);
 
-//    function test_RevertIf_RepurchaseTokensAfterExpiry() public {
-//        address restrictedTokenAward = createDummyRestrictedTokenAward();
-//
-//        // Fast forward time to after the short stop date
-//        vm.warp(block.timestamp + 366 days);
-//
-//        RestrictedTokenAward(restrictedTokenAward).repurchaseTokens(500e18);
-//    }
+        vm.prank(authority);
+        controller.updateMetavestVestingRate(restrictedTokenAward, 20e18);
+        vm.warp(block.timestamp + 5 seconds);
+        vm.startPrank(authority);
+        controller.terminateMetavestVesting(restrictedTokenAward);
+        vm.stopPrank();
+        vm.warp(block.timestamp + 155 seconds);
 
-//    function test_RevertIf_RepurchaseTokensInsufficientAllowance() public {
-//        address restrictedTokenAward = createDummyRestrictedTokenAward();
-//
-//        // Not approving any tokens
-//       RestrictedTokenAward(restrictedTokenAward).repurchaseTokens(500e18);
-//    }
+        {
+            // Fund grantee
+            uint256 vestingTokenExercisableAmount = TokenOptionAllocation(restrictedTokenAward).getAmountExercisable();
+            uint256 paymentTokenAmount = TokenOptionAllocation(restrictedTokenAward).getPaymentAmount(vestingTokenExercisableAmount);
+            deal(address(paymentToken), grantee, paymentTokenAmount);
+            uint256 vestingTokenBalanceBefore = vestingToken.balanceOf(grantee);
+            uint256 paymentTokenBalanceBefore = paymentToken.balanceOf(grantee);
+
+            vm.startPrank(grantee);
+
+            paymentToken.approve(restrictedTokenAward, paymentTokenAmount);
+            TokenOptionAllocation(restrictedTokenAward).exerciseTokenOption(vestingTokenExercisableAmount);
+            RestrictedTokenAward(restrictedTokenAward).withdraw(RestrictedTokenAward(restrictedTokenAward).getAmountWithdrawable());
+            vm.stopPrank();
+
+            assertEq(vestingToken.balanceOf(grantee) - vestingTokenBalanceBefore, 150 ether, "grantee should have exercised 100 + 20 * (5 + 5) - 150 = 150 tokens");
+            assertEq(paymentTokenBalanceBefore - paymentToken.balanceOf(grantee), 75 ether, "grantee should have paid 150 * 0.5 = 75 tokens");
+        }
+    }
+
+    function testReclaim() public {
+        address restrictedTokenAward = createDummyRestrictedTokenAward();
+        vm.warp(block.timestamp + 15 seconds);
+        vm.startPrank(grantee);
+        RestrictedTokenAward(restrictedTokenAward).withdraw(RestrictedTokenAward(restrictedTokenAward).getAmountWithdrawable());
+        assertEq(vestingToken.balanceOf(grantee), 250 ether, "grantee should receive 100 + 10 * 15 = 250 tokens");
+        vm.stopPrank();
+
+        vm.startPrank(authority);
+        controller.terminateMetavestVesting(restrictedTokenAward);
+        vm.warp(block.timestamp + 155 days);
+        uint256 amt = RestrictedTokenAward(restrictedTokenAward).getAmountRepurchasable();
+        uint256 payamt = RestrictedTokenAward(restrictedTokenAward).getPaymentAmount(amt);
+
+        uint256 authorityVestingTokenBalanceBefore = vestingToken.balanceOf(authority);
+        paymentToken.approve(address(restrictedTokenAward), payamt);
+        RestrictedTokenAward(restrictedTokenAward).repurchaseTokens(amt);
+        assertEq(vestingToken.balanceOf(authority) - authorityVestingTokenBalanceBefore, 1750 ether, "authority should have repurchased 1000 + 1000 - 250 = 1750 token");
+        vm.stopPrank();
+
+        vm.prank(grantee);
+        RestrictedTokenAward(restrictedTokenAward).claimRepurchasedTokens();
+        assertEq(paymentToken.balanceOf(grantee), 1750 ether, "grantee should receive repurchase payment of 1750 * 1 = 1750 tokens");
+    }
+
+    function test_RevertIf_UpdateExercisePriceForVesting() public {
+        address vestingAllocation = createDummyVestingAllocation();
+
+        vm.prank(authority);
+        vm.expectRevert(MetaVesTControllerStorage.MetaVesTController_AmendmentNeitherMutualNorMajorityConsented.selector);
+        controller.updateExerciseOrRepurchasePrice(vestingAllocation, 2e18);
+    }
+
+    function test_RevertIf_RepurchaseTokensBeforeShortStop() public {
+        address restrictedTokenAward = createDummyRestrictedTokenAward();
+
+        // Terminate, then immediate repurchase before short stop date
+        vm.startPrank(authority);
+        controller.terminateMetavestVesting(restrictedTokenAward);
+        vm.expectRevert(BaseAllocation.MetaVesT_ShortStopTimeNotReached.selector);
+        RestrictedTokenAward(restrictedTokenAward).repurchaseTokens(500e18);
+        vm.stopPrank();
+    }
+
+    function test_RevertIf_RepurchaseTokensInsufficientAllowance() public {
+        address restrictedTokenAward = createDummyRestrictedTokenAward();
+
+        vm.startPrank(authority);
+
+        // Terminate, then fast forward time to after the short stop date
+        controller.terminateMetavestVesting(restrictedTokenAward);
+        vm.warp(block.timestamp + 1 days);
+
+        // Not approving any tokens
+        vm.expectRevert(SafeTransferLib.TransferFromFailed.selector);
+        RestrictedTokenAward(restrictedTokenAward).repurchaseTokens(500e18);
+
+        vm.stopPrank();
+    }
 
     function test_RevertIf_InitiateAuthorityUpdateNonAuthority() public {
         vm.prank(address(0x1234));
-        vm.expectRevert(abi.encodeWithSelector(metavestController.MetaVesTController_OnlyAuthority.selector));
+        vm.expectRevert(abi.encodeWithSelector(MetaVesTControllerStorage.MetaVesTController_OnlyAuthority.selector));
         controller.initiateAuthorityUpdate(address(0x5678));
     }
 
@@ -1300,13 +1078,13 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
         controller.initiateAuthorityUpdate(address(0x5678));
 
         vm.prank(address(0x1234));
-        vm.expectRevert(abi.encodeWithSelector(metavestController.MetaVesTController_OnlyPendingAuthority.selector));
+        vm.expectRevert(abi.encodeWithSelector(MetaVesTControllerStorage.MetaVesTController_OnlyPendingAuthority.selector));
         controller.acceptAuthorityRole();
     }
 
     function test_RevertIf_InitiateDaoUpdateNonDao() public {
         vm.prank(address(0x1234));
-        vm.expectRevert(abi.encodeWithSelector(metavestController.MetaVesTController_OnlyDAO.selector));
+        vm.expectRevert(abi.encodeWithSelector(MetaVesTControllerStorage.MetaVesTController_OnlyDAO.selector));
         controller.initiateDaoUpdate(address(0x5678));
     }
 
@@ -1315,7 +1093,7 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
         controller.initiateDaoUpdate(address(0x5678));
 
         vm.prank(address(0x1234));
-        vm.expectRevert(abi.encodeWithSelector(metavestController.MetaVesTController_OnlyPendingDao.selector));
+        vm.expectRevert(abi.encodeWithSelector(MetaVesTControllerStorage.MetaVesTController_OnlyPendingDao.selector));
         controller.acceptDaoRole();
     }
 
@@ -1340,7 +1118,7 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
     function test_RevertIf_UpdateFunctionConditionNonDao() public {
         bytes4 functionSig = bytes4(keccak256("updateMetavestStopTimes(address,uint48)"));
         address condition = address(0x1234);
-        vm.expectRevert(abi.encodeWithSelector(metavestController.MetaVesTController_OnlyDAO.selector));
+        vm.expectRevert(abi.encodeWithSelector(MetaVesTControllerStorage.MetaVesTController_OnlyDAO.selector));
         controller.updateFunctionCondition(condition, functionSig);
     }
 
@@ -1381,7 +1159,7 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
         assert(controller.functionToConditions(functionSig, 0) == address(condition));
         // create a dummy metavest
         createDummyVestingAllocation(
-            abi.encodeWithSelector(metavestController.MetaVesTController_ConditionNotSatisfied.selector, condition) // Expected revert
+            abi.encodeWithSelector(MetaVesTControllerStorage.MetaVesTController_ConditionNotSatisfied.selector, condition) // Expected revert
         );
     }
 
@@ -1401,253 +1179,7 @@ contract MetaVestControllerTest is MetaVesTControllerTestBase {
         controller.updateFunctionCondition(address(condition), functionSig);
         assert(controller.functionToConditions(functionSig, 0) == address(condition));
         vm.prank(dao);
-        vm.expectRevert(abi.encodeWithSelector(metavestController.MetaVestController_DuplicateCondition.selector));
+        vm.expectRevert(abi.encodeWithSelector(MetaVesTControllerStorage.MetaVestController_DuplicateCondition.selector));
         controller.updateFunctionCondition(address(condition), functionSig);
-    }
-
-    // TODO deprecated: do we still need this?
-//    function test_RevertIf_ExceedCap() public {
-//        // Add a large grant that exceeds the cap
-//        bytes32 contractIdChad = _proposeAndSignDeal(
-//            templateId,
-//            block.timestamp, // salt
-//            delegatePrivateKey,
-//            chad,
-//            BaseAllocation.Allocation({
-//                tokenContract: address(paymentToken),
-//                tokenStreamTotal: 2001 ether,
-//                vestingCliffCredit: 2001 ether,
-//                unlockingCliffCredit: 2001 ether,
-//                vestingRate: 0,
-//                vestingStartTime: 0,
-//                unlockRate: 0,
-//                unlockStartTime: 0
-//            }),
-//            new BaseAllocation.Milestone[](0),
-//            "Chad",
-//            cappedMinterExpirationTime // Same expiry as the minter so grantee can defer vesting contract creation as much as possible
-//        );
-//        VestingAllocation vestingAllocationChad = VestingAllocation(_granteeSignDeal(
-//            contractIdChad,
-//            chad, // grantee
-//            chad, // recipient
-//            chadPrivateKey,
-//            "Chad"
-//        ));
-//
-//        vm.prank(chad);
-//        vm.expectRevert(abi.encodeWithSelector(IZkCappedMinterV2.ZkCappedMinterV2__CapExceeded.selector, address(controller), 2001 ether));
-//        vestingAllocationChad.withdraw(2001 ether);
-//    }
-
-    function test_RevertIf_IncorrectGrantorSignature() public {
-        // Should not be able to propose a deal without grantor's authorization
-        _proposeAndSignDeal(
-            templateId,
-            block.timestamp, // salt
-            alicePrivateKey, // Should fail because Alice is not delegated by the grantor
-            alice, // grantee
-            BaseAllocation.Allocation({
-                tokenContract: address(paymentToken),
-                tokenStreamTotal: 100 ether,
-                vestingCliffCredit: 10 ether,
-                unlockingCliffCredit: 10 ether,
-                vestingRate: 1 ether,
-                vestingStartTime: uint48(block.timestamp),
-                unlockRate: 1 ether,
-                unlockStartTime: uint48(block.timestamp)
-            }),
-            new BaseAllocation.Milestone[](0),
-            "Alice",
-            block.timestamp + 7 days,
-            abi.encodeWithSelector(CyberAgreementRegistry.SignatureVerificationFailed.selector) // Expected revert
-        );
-    }
-
-    function test_RevertIf_IncorrectGranteeSignature() public {
-        bytes32 contractIdAlice = _proposeAndSignDeal(
-            templateId,
-            block.timestamp, // salt
-            delegatePrivateKey,
-            alice,
-            BaseAllocation.Allocation({
-                tokenContract: address(paymentToken),
-                tokenStreamTotal: 100 ether,
-                vestingCliffCredit: 10 ether,
-                unlockingCliffCredit: 10 ether,
-                vestingRate: 1 ether,
-                vestingStartTime: uint48(block.timestamp),
-                unlockRate: 1 ether,
-                unlockStartTime: uint48(block.timestamp)
-            }),
-            new BaseAllocation.Milestone[](0),
-            "Alice",
-            block.timestamp + 7 days
-        );
-
-        // Should not be able to sign Alice's agreement with other's signature
-        _granteeSignDeal(
-            contractIdAlice,
-            alice,
-            alice,
-            bobPrivateKey, // Wrong signer
-            "Alice",
-            abi.encodeWithSelector(CyberAgreementRegistry.SignatureVerificationFailed.selector) // Expected revert
-        );
-    }
-
-    function test_GranteeDelegateSignature() public {
-        // Alice to delegate to Bob
-        vm.prank(alice);
-        registry.setDelegation(bob, block.timestamp + 60);
-        assertTrue(registry.isValidDelegate(alice, bob), "Bob should be Alice's delegate");
-
-        // Bob should be able to sign for Alice now
-        bytes32 contractId = _proposeAndSignDeal(
-            templateId,
-            block.timestamp, // salt
-            delegatePrivateKey,
-            alice,
-            BaseAllocation.Allocation({
-                tokenContract: address(paymentToken),
-                tokenStreamTotal: 100 ether,
-                vestingCliffCredit: 10 ether,
-                unlockingCliffCredit: 10 ether,
-                vestingRate: 1 ether,
-                vestingStartTime: uint48(block.timestamp),
-                unlockRate: 1 ether,
-                unlockStartTime: uint48(block.timestamp)
-            }),
-            new BaseAllocation.Milestone[](0),
-            "Alice",
-            cappedMinterExpirationTime // Same expiry as the minter so grantee can defer vesting contract creation as much as possible
-        );
-        VestingAllocation vestingAllocation = VestingAllocation(_granteeSignDeal(
-            contractId,
-            alice,
-            alice,
-            bobPrivateKey, // Use Bob to sign
-            "Alice"
-        ));
-        assertEq(vestingAllocation.grantee(), alice, "Alice should be the grantee");
-
-        // Wait until expiry
-        skip(61);
-
-        // Bob should no longer be able to sign for Alice
-        assertFalse(registry.isValidDelegate(alice, bob), "Bob should no longer be Alice's delegate");
-    }
-
-    // TODO WIP: re-purpose it for withdrawing funds from active metavest
-//    function test_TogglePauseMinting() public {
-//        IZkCappedMinterV2 controllerOwnedMinter = IZkCappedMinterV2(zkCappedMinterFactory.createCappedMinter(
-//            address(paymentToken),
-//            address(controller), // Note MetaVesTController being the admin
-//            cap,
-//            cappedMinterStartTime,
-//            cappedMinterExpirationTime,
-//            uint256(salt)
-//        ));
-//        vm.prank(authority);
-//        controller.setZkCappedMinter(address(controllerOwnedMinter));
-//
-//        assertFalse(controllerOwnedMinter.paused(), "minter should not be paused yet");
-//
-//        // Authority should be able to pause minting through controller
-//        vm.prank(authority);
-//        controller.pauseZkCappedMinter();
-//        assertTrue(controllerOwnedMinter.paused(), "minter should be paused now");
-//
-//        vm.prank(authority);
-//        controller.unpauseZkCappedMinter();
-//        assertFalse(controllerOwnedMinter.paused(), "minter should be unpaused now");
-//    }
-//
-//    function test_RevertIf_PauseMintingNonAuthority() public {
-//        // Non-authority should not be able to pause minting through controller
-//        vm.expectRevert(abi.encodeWithSelector(metavestController.MetaVesTController_OnlyAuthority.selector));
-//        controller.pauseZkCappedMinter();
-//    }
-//
-//    function test_CloseMinting() public {
-//        IZkCappedMinterV2 controllerOwnedMinter = IZkCappedMinterV2(zkCappedMinterFactory.createCappedMinter(
-//            address(paymentToken),
-//            address(controller), // Note MetaVesTController being the admin
-//            cap,
-//            cappedMinterStartTime,
-//            cappedMinterExpirationTime,
-//            uint256(salt)
-//        ));
-//        vm.prank(authority);
-//        controller.setZkCappedMinter(address(controllerOwnedMinter));
-//
-//        assertFalse(controllerOwnedMinter.closed(), "minter should not be closed yet");
-//
-//        // Authority should be able to close minting through controller
-//        vm.prank(authority);
-//        controller.closeZkCappedMinter();
-//        assertTrue(controllerOwnedMinter.closed(), "minter should be closed now");
-//    }
-//
-//    function test_RevertIf_CloseMintingNonAuthority() public {
-//        // Non-authority should not be able to close minting through controller
-//        vm.expectRevert(abi.encodeWithSelector(metavestController.MetaVesTController_OnlyAuthority.selector));
-//        controller.closeZkCappedMinter();
-//    }
-
-    // TODO deprecated: can we re-purpose it?
-//    function test_RevertIf_MintUnauthorized() public {
-//        // Should not be able to mint arbitrarily
-//        vm.prank(alice);
-//        vm.expectRevert(abi.encodeWithSelector(metavestController.MetaVesTController_UnauthorizedToMint.selector));
-//        controller.mint(alice, 1 ether);
-//    }
-
-    function test_UpgradeMetaVesTController() public {
-        // Deploy new implementation
-        address newImplementation = address(new metavestController());
-
-        // Upgrade to new implementation without initialization data
-
-        // Non-owner should not be able to upgrade it
-        vm.expectRevert(abi.encodeWithSelector(metavestController.MetaVesTController_OnlyAuthority.selector));
-        controller.upgradeToAndCall(newImplementation, "");
-
-        // Owner should be able to upgrade it
-        vm.prank(guardianSafe);
-        controller.upgradeToAndCall(newImplementation, "");
-        assertEq(address(controller).getErc1967Implementation(vm), newImplementation);
-
-        // Verify the controller still works
-
-        bytes32 contractIdAlice = _proposeAndSignDeal(
-            templateId,
-            block.timestamp, // salt
-            delegatePrivateKey,
-            alice,
-            BaseAllocation.Allocation({
-                tokenContract: address(paymentToken),
-                // 100k ZK total, the first half unlocks with a cliff and the second half unlocks over an year
-                tokenStreamTotal: 60 ether,
-                vestingCliffCredit: 30 ether,
-                unlockingCliffCredit: 30 ether,
-                vestingRate: 1 ether,
-                vestingStartTime: uint48(block.timestamp),
-                unlockRate: 1 ether,
-                unlockStartTime: uint48(block.timestamp)
-            }),
-            new BaseAllocation.Milestone[](0),
-            "Alice",
-            cappedMinterExpirationTime // Same expiry as the minter so grantee can defer vesting contract creation as much as possible
-        );
-
-        VestingAllocation vestingAllocationAlice = VestingAllocation(_granteeSignDeal(
-            contractIdAlice,
-            alice, // grantee
-            alice, // recipient
-            alicePrivateKey,
-            "Alice"
-        ));
-        assertEq(vestingAllocationAlice.grantee(), alice);
     }
 }

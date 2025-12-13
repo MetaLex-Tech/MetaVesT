@@ -206,5 +206,7 @@ forge script scripts/proposeAllGuardiansMetavestDeals.s.sol --rpc-url <your-targ
 
 To run tests:
 ```bash
-forge test --via-ir --fork-url <your-target-network-rpc> -vvv
+# Excluding acceptance tests because deployment may have not happened yet
+# Use Ethereum mainnet RPC for tests because YearnBorgCompensation integration tests depends on it
+forge test --via-ir --fork-url <eth-mainnet-rpc> -vvv --nmc YearnBorgCompensationAcceptanceTest
 ```

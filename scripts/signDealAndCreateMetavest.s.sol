@@ -10,7 +10,6 @@ import {ERC1967Proxy} from "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.so
 import {ISafeProxyFactory, IGnosisSafe} from "../test/lib/safe.sol";
 import {SafeTxHelper} from "./lib/SafeTxHelper.sol";
 import {Script} from "forge-std/Script.sol";
-import {VestingAllocationFactory} from "../src/VestingAllocationFactory.sol";
 import {console2} from "forge-std/console2.sol";
 import {metavestController} from "../src/MetaVesTController.sol";
 

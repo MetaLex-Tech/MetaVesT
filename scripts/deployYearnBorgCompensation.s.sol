@@ -10,7 +10,6 @@ import {ERC1967Proxy} from "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.so
 import {ERC20} from "openzeppelin-contracts/token/ERC20/ERC20.sol";
 import {SafeTxHelper} from "./lib/SafeTxHelper.sol";
 import {Script} from "forge-std/Script.sol";
-import {VestingAllocationFactory} from "../src/VestingAllocationFactory.sol";
 import {console2} from "forge-std/console2.sol";
 import {metavestController} from "../src/MetaVesTController.sol";
 
@@ -47,7 +46,7 @@ contract DeployYearnBorgCompensationScript is SafeTxHelper, Script {
         console2.log("Salt string: ", saltStr);
         console2.log("Guardian Safe: ", address(config.borgSafe));
         console2.log("CyberAgreementRegistry: ", address(config.registry));
-        console2.log("VestingAllocationFactory: ", address(config.vestingAllocationFactory));
+        console2.log("MetavestControllerFactory: ", address(config.metavestControllerFactory));
         console2.log("");
 
         bytes32 salt = keccak256(bytes(saltStr));
@@ -55,7 +54,7 @@ contract DeployYearnBorgCompensationScript is SafeTxHelper, Script {
         vm.startBroadcast(deployerPrivateKey);
 
         // Deploy MetaVesT Controller
-
+        // TODO fixme: next time use MetavestControllerFactory to deploy the controller
         metavestController controller = metavestController(address(new ERC1967Proxy{salt: salt}(
             address(new metavestController{salt: salt}()),
             abi.encodeWithSelector(
@@ -63,7 +62,7 @@ contract DeployYearnBorgCompensationScript is SafeTxHelper, Script {
                 address(config.borgSafe),
                 address(config.borgSafe),
                 address(config.registry),
-                address(config.vestingAllocationFactory)
+                address(config.metavestControllerFactory)
             )
         )));
 

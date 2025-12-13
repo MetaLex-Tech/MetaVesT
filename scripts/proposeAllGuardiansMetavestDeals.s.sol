@@ -11,7 +11,6 @@ import {ISafeProxyFactory, IGnosisSafe} from "../test/lib/safe.sol";
 import {ProposeMetaVestDealScript} from "./proposeMetavestDeal.s.sol";
 import {SafeTxHelper} from "./lib/SafeTxHelper.sol";
 import {Script} from "forge-std/Script.sol";
-import {VestingAllocationFactory} from "../src/VestingAllocationFactory.sol";
 import {YearnBorgCompensation2025_2026} from "./lib/YearnBorgCompensation2025_2026.sol";
 import {YearnBorgCompensationSepolia2025_2026} from "./lib/YearnBorgCompensationSepolia2025_2026.sol";
 import {console2} from "forge-std/console2.sol";
@@ -49,7 +48,7 @@ contract ProposeAllGuardiansMetaVestDealScript is ProposeMetaVestDealScript {
         console2.log("=== ProposeAllGuardiansMetaVestDealScript ===");
         console2.log("Proposer: ", proposer);
         console2.log("CyberAgreementRegistry: ", address(config.registry));
-        console2.log("VestingAllocationFactory: ", address(config.vestingAllocationFactory));
+        console2.log("MetavestControllerFactory: ", address(config.metavestControllerFactory));
         console2.log("MetavesTController: ", address(config.controller));
         console2.log("");
 

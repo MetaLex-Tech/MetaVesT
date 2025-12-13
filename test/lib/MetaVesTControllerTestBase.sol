@@ -1,17 +1,21 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity ^0.8.24;
 
-import "forge-std/Test.sol";
+import {Test} from "forge-std/Test.sol";
 import "../../src/MetaVesTController.sol";
-import "../../src/VestingAllocationFactory.sol";
 import {ERC1967Proxy} from "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {BorgAuth} from "cybercorps-contracts/src/libs/auth.sol";
 import {CyberAgreementRegistry} from "cybercorps-contracts/src/CyberAgreementRegistry.sol";
 import {CyberAgreementUtils} from "cybercorps-contracts/test/libs/CyberAgreementUtils.sol";
 import {MockERC20} from "../mocks/MockERC20.sol";
+import {MetaVesTControllerFactory} from "../../src/MetaVesTControllerFactory.sol";
+import {MetaVestDealLib, MetaVestDeal} from "../../src/lib/MetaVestDealLib.sol";
 
 contract MetaVesTControllerTestBase is Test {
-    MockERC20 paymentToken = new MockERC20("Payment Token", "PAY", 18);
+    using MetaVestDealLib for MetaVestDeal;
+
+    MockERC20 vestingToken;
+    MockERC20 paymentToken;
 
     address deployer = address(0x2);
     address guardianSafe = address(0x3);
@@ -35,16 +39,20 @@ contract MetaVesTControllerTestBase is Test {
     BorgAuth auth;
     CyberAgreementRegistry registry;
 
-    VestingAllocationFactory vestingAllocationFactory;
+    MetaVesTControllerFactory metavestControllerFactory;
 
     metavestController controller;
 
     function setUp() public virtual {
+        vestingToken = new MockERC20("Vesting Token", "VEST", 18);
+        paymentToken = new MockERC20("Payment Token", "PAY", 18);
+        vm.label(address(vestingToken), "VEST");
+        vm.label(address(paymentToken), "PAY");
+
         vm.startPrank(deployer);
 
         // Deploy CyberAgreementRegistry and prepare templates
 
-        // TODO who should be the owner of auth?
         auth = new BorgAuth{salt: salt}(deployer);
         registry = CyberAgreementRegistry(address(new ERC1967Proxy{salt: salt}(
             address(new CyberAgreementRegistry{salt: salt}()),
@@ -81,33 +89,77 @@ contract MetaVesTControllerTestBase is Test {
             partyFields
         );
 
+        // create2 all the way down so the outcome is consistent
+        metavestControllerFactory = MetaVesTControllerFactory(address(new ERC1967Proxy{salt: salt}(
+            address(new MetaVesTControllerFactory{salt: salt}()),
+            abi.encodeWithSelector(
+                MetaVesTControllerFactory.initialize.selector,
+                address(auth),
+                address(registry),
+                new metavestController{salt: salt}()
+            )
+        )));
+
         vm.stopPrank();
     }
 
     function _granteeWithdrawAndAsserts(VestingAllocation vestingAllocation, uint256 amount, string memory assertName) internal {
         address grantee = vestingAllocation.grantee();
-        uint256 balanceBefore = paymentToken.balanceOf(grantee);
+        uint256 balanceBefore = vestingToken.balanceOf(grantee);
 
         vm.prank(grantee);
         vestingAllocation.withdraw(amount);
 
-        assertEq(paymentToken.balanceOf(grantee), balanceBefore + amount, string(abi.encodePacked(assertName, ": unexpected received amount")));
-        assertEq(paymentToken.balanceOf(address(vestingAllocation)), 0, string(abi.encodePacked(assertName, ": vesting contract should not have any token (it mints on-demand)")));
+        assertEq(vestingToken.balanceOf(grantee), balanceBefore + amount, string(abi.encodePacked(assertName, ": unexpected received amount")));
+        assertEq(vestingToken.balanceOf(address(vestingAllocation)), 0, string(abi.encodePacked(assertName, ": vesting contract should not have any token (it mints on-demand)")));
     }
 
+    /// @notice Shortcut for:
+    /// - no revert
+    /// - automatically generate the correct parties
     function _proposeAndSignDeal(
         bytes32 templateId,
         uint256 agreementSalt,
         uint256 grantorOrDelegatePrivateKey,
-        address grantee,
-        BaseAllocation.Allocation memory allocation,
-        BaseAllocation.Milestone[] memory milestones,
+        MetaVestDeal memory dealDraft,
         string memory partyName,
         uint256 expiry
     ) internal returns(bytes32) {
         return _proposeAndSignDeal(
-            templateId, agreementSalt, grantorOrDelegatePrivateKey, grantee, allocation, milestones, partyName, expiry,
-            "" // Not expecting revert
+            templateId,
+            agreementSalt,
+            grantorOrDelegatePrivateKey,
+            dealDraft,
+            partyName,
+            expiry,
+            ""
+        );
+    }
+
+    /// @notice Shortcut for:
+    /// - automatically generate the correct parties
+    function _proposeAndSignDeal(
+        bytes32 templateId,
+        uint256 agreementSalt,
+        uint256 grantorOrDelegatePrivateKey,
+        MetaVestDeal memory dealDraft,
+        string memory partyName,
+        uint256 expiry,
+        bytes memory expectRevertData
+    ) internal returns(bytes32) {
+        address[] memory parties = new address[](2);
+        parties[0] = address(guardianSafe);
+        parties[1] = dealDraft.grantee;
+
+        return _proposeAndSignDeal(
+            templateId,
+            agreementSalt,
+            grantorOrDelegatePrivateKey,
+            parties,
+            dealDraft,
+            partyName,
+            expiry,
+            expectRevertData
         );
     }
 
@@ -115,25 +167,24 @@ contract MetaVesTControllerTestBase is Test {
         bytes32 templateId,
         uint256 agreementSalt,
         uint256 grantorOrDelegatePrivateKey,
-        address grantee,
-        BaseAllocation.Allocation memory allocation,
-        BaseAllocation.Milestone[] memory milestones,
+        address[] memory parties,
+        MetaVestDeal memory dealDraft,
         string memory partyName,
         uint256 expiry,
         bytes memory expectRevertData
     ) internal returns(bytes32) {
         string[] memory globalValues = new string[](11);
-        globalValues[0] = "0"; // metavestType: Vesting
+        globalValues[0] = vm.toString(uint256(dealDraft.metavestType)); // metavestType
         globalValues[1] = vm.toString(address(guardianSafe)); // grantor
-        globalValues[2] = vm.toString(grantee); // grantee
-        globalValues[3] = vm.toString(allocation.tokenContract); // tokenContract
-        globalValues[4] = vm.toString(allocation.tokenStreamTotal / 1 ether); //tokenStreamTotal (human-readable)
-        globalValues[5] = vm.toString(allocation.vestingCliffCredit / 1 ether); // vestingCliffCredit (human-readable)
-        globalValues[6] = vm.toString(allocation.unlockingCliffCredit / 1 ether); // unlockingCliffCredit (human-readable)
-        globalValues[7] = vm.toString(allocation.vestingRate * 365 days / 1 ether); // vestingRate (annually) (human-readable)
-        globalValues[8] = vm.toString(allocation.vestingStartTime); // vestingStartTime
-        globalValues[9] = vm.toString(allocation.unlockRate * 365 days / 1 ether); // unlockRate (annually) (human-readable)
-        globalValues[10] = vm.toString(allocation.unlockStartTime); // unlockStartTime
+        globalValues[2] = vm.toString(dealDraft.grantee); // grantee
+        globalValues[3] = vm.toString(dealDraft.allocation.tokenContract); // tokenContract
+        globalValues[4] = vm.toString(dealDraft.allocation.tokenStreamTotal / 1 ether); //tokenStreamTotal (human-readable)
+        globalValues[5] = vm.toString(dealDraft.allocation.vestingCliffCredit / 1 ether); // vestingCliffCredit (human-readable)
+        globalValues[6] = vm.toString(dealDraft.allocation.unlockingCliffCredit / 1 ether); // unlockingCliffCredit (human-readable)
+        globalValues[7] = vm.toString(dealDraft.allocation.vestingRate * 365 days / 1 ether); // vestingRate (annually) (human-readable)
+        globalValues[8] = vm.toString(dealDraft.allocation.vestingStartTime); // vestingStartTime
+        globalValues[9] = vm.toString(dealDraft.allocation.unlockRate * 365 days / 1 ether); // unlockRate (annually) (human-readable)
+        globalValues[10] = vm.toString(dealDraft.allocation.unlockStartTime); // unlockStartTime
 
         // TODO what to do with milestones, which could be of dynamic lengths
 
@@ -145,13 +196,10 @@ contract MetaVesTControllerTestBase is Test {
         partyValues[0][3] = "Foundation";
         partyValues[1] = new string[](4);
         partyValues[1][0] = partyName;
-        partyValues[1][1] = vm.toString(grantee); // evmAddress
+        partyValues[1][1] = vm.toString(dealDraft.grantee); // evmAddress
         partyValues[1][2] = "email@company.com";
         partyValues[1][3] = "individual";
 
-        address[] memory parties = new address[](2);
-        parties[0] = address(guardianSafe);
-        parties[1] = grantee;
         bytes32 expectedContractId = keccak256(
             abi.encode(
                 templateId,
@@ -180,10 +228,7 @@ contract MetaVesTControllerTestBase is Test {
         bytes32 contractId = controller.proposeAndSignDeal(
             templateId,
             agreementSalt,
-            metavestController.metavestType.Vesting,
-            grantee,
-            allocation,
-            milestones,
+            dealDraft,
             globalValues,
             parties,
             partyValues,
@@ -221,10 +266,10 @@ contract MetaVesTControllerTestBase is Test {
         string memory partyName,
         bytes memory expectRevertData
     ) internal returns(address) {
-        metavestController.DealData memory deal = controller.getDeal(contractId);
+        MetaVestDeal memory deal = controller.getDeal(contractId);
 
         string[] memory globalValues = new string[](11);
-        globalValues[0] = "0"; // metavestType: Vesting
+        globalValues[0] = vm.toString(uint256(deal.metavestType)); // metavestType
         globalValues[1] = vm.toString(address(guardianSafe)); // grantor
         globalValues[2] = vm.toString(grantee); // grantee
         globalValues[3] = vm.toString(deal.allocation.tokenContract); // tokenContract

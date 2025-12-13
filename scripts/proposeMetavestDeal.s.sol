@@ -10,11 +10,12 @@ import {ISafeProxyFactory, IGnosisSafe} from "../test/lib/safe.sol";
 import {CyberAgreementUtils} from "./lib/CyberAgreementUtils.sol";
 import {SafeTxHelper} from "./lib/SafeTxHelper.sol";
 import {Script} from "forge-std/Script.sol";
-import {VestingAllocationFactory} from "../src/VestingAllocationFactory.sol";
 import {console2} from "forge-std/console2.sol";
 import {metavestController} from "../src/MetaVesTController.sol";
+import {MetaVestDealLib, MetaVestDeal} from "../src/lib/MetaVestDealLib.sol";
 
 contract ProposeMetaVestDealScript is SafeTxHelper, Script {
+    using MetaVestDealLib for MetaVestDeal;
     using YearnBorgCompensation2025_2026 for YearnBorgCompensation2025_2026.Config;
 
     /// @dev For running from `forge script`. Provide the deployer private key through env var.
@@ -67,7 +68,7 @@ contract ProposeMetaVestDealScript is SafeTxHelper, Script {
         console2.log("Guardian Safe: ", address(config.borgSafe));
         console2.log("Payment token: ", address(config.paymentToken));
         console2.log("CyberAgreementRegistry: ", address(config.registry));
-        console2.log("VestingAllocationFactory: ", address(config.vestingAllocationFactory));
+        console2.log("MetavestControllerFactory: ", address(config.metavestControllerFactory));
         console2.log("MetavesTController: ", address(config.controller));
         console2.log("");
 
@@ -104,10 +105,11 @@ contract ProposeMetaVestDealScript is SafeTxHelper, Script {
             bytes32 contractId = config.controller.proposeAndSignDeal(
                 guardianInfo.compTemplate.id,
                 agreementSalt,
-                metavestController.metavestType.Vesting,
-                guardianInfo.partyInfo.evmAddress,
-                allocation,
-                config.milestones,
+                MetaVestDealLib.draft().setVesting(
+                    guardianInfo.partyInfo.evmAddress,
+                    allocation,
+                    config.milestones
+                ),
                 globalValues,
                 parties,
                 partyValues,

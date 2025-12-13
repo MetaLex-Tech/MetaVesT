@@ -9,7 +9,7 @@ import {CyberAgreementRegistry} from "cybercorps-contracts/src/CyberAgreementReg
 import {ERC1967Proxy} from "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {SafeTxHelper} from "./lib/SafeTxHelper.sol";
 import {Script} from "forge-std/Script.sol";
-import {VestingAllocationFactory} from "../src/VestingAllocationFactory.sol";
+import {MetaVesTControllerFactory} from "../src/MetaVesTControllerFactory.sol";
 import {console2} from "forge-std/console2.sol";
 import {metavestController} from "../src/MetaVesTController.sol";
 
@@ -37,14 +37,18 @@ contract DeployYearnBorgCompensationPrerequisitesScript is SafeTxHelper, Script 
         string memory saltStr,
         YearnBorgCompensation2025_2026.Config memory config
     ) public virtual returns(
-        VestingAllocationFactory
+        MetaVesTControllerFactory
     ) {
         address deployer = vm.addr(deployerPrivateKey);
+
+        BorgAuth auth = config.registry.AUTH();
 
         console2.log("");
         console2.log("=== DeployYearnBorgCompensationPrerequisitesScript ===");
         console2.log("Deployer: ", deployer);
         console2.log("Salt string: ", saltStr);
+        console2.log("CyberAgreementRegistry: ", address(config.registry));
+        console2.log("Auth: ", address(auth));
         console2.log("");
 
         bytes32 salt = keccak256(bytes(saltStr));
@@ -53,16 +57,24 @@ contract DeployYearnBorgCompensationPrerequisitesScript is SafeTxHelper, Script 
 
         // Deploy MetaVesT pre-requisites
 
-        VestingAllocationFactory vestingAllocationFactory = new VestingAllocationFactory{salt: salt}();
+        MetaVesTControllerFactory metavestControllerFactory = MetaVesTControllerFactory(address(new ERC1967Proxy{salt: salt}(
+            address(new MetaVesTControllerFactory{salt: salt}()),
+            abi.encodeWithSelector(
+                MetaVesTControllerFactory.initialize.selector,
+                address(auth),
+                address(config.registry),
+                new metavestController{salt: salt}()
+            )
+        )));
 
         vm.stopBroadcast();
 
         // Output logs
 
         console2.log("Deployed addresses:");
-        console2.log("  VestingAllocationFactory: ", address(vestingAllocationFactory));
+        console2.log("  MetaVesTControllerFactory: ", address(metavestControllerFactory));
         console2.log("");
 
-        return vestingAllocationFactory;
+        return metavestControllerFactory;
     }
 }

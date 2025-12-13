@@ -12,7 +12,6 @@ import {IZkCappedMinterV2Factory} from "../src/interfaces/zk-governance/IZkCappe
 import {SafeTxHelper} from "./lib/SafeTxHelper.sol";
 import {CyberAgreementUtils} from "./lib/CyberAgreementUtils.sol";
 import {Script} from "forge-std/Script.sol";
-import {VestingAllocationFactory} from "../src/VestingAllocationFactory.sol";
 import {ZkCappedMinterV2} from "zk-governance/l2-contracts/src/ZkCappedMinterV2.sol";
 import {ZkTokenV2} from "zk-governance/l2-contracts/src/ZkTokenV2.sol";
 import {console2} from "forge-std/console2.sol";

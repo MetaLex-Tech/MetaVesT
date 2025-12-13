@@ -2,7 +2,6 @@
 pragma solidity ^0.8.20;
 
 import "../src/MetaVesTController.sol";
-import "../src/VestingAllocationFactory.sol";
 import "./lib/MetaVesTControllerTestBase.sol";
 import {Test} from "forge-std/Test.sol";
 import {console2} from "forge-std/console2.sol";
@@ -15,6 +14,7 @@ import {ProposeAllGuardiansMetaVestDealScript} from "../scripts/proposeAllGuardi
 import {SignDealAndCreateMetavestScript} from "../scripts/signDealAndCreateMetavest.s.sol";
 import {YearnBorgCompensation2025_2026} from "../scripts/lib/YearnBorgCompensation2025_2026.sol";
 import {GnosisTransaction} from "./lib/safe.sol";
+import {MetaVesTControllerFactory} from "../src/MetaVesTControllerFactory.sol";
 
 // Test with fresh deployment (except third-party dependencies)
 // - Use third-party dependencies on Ethereum mainnet
@@ -54,7 +54,7 @@ contract YearnBorgCompensationTest is
         deal(borgDelegate, 1 ether);
         deal(chad, 1 ether);
 
-        VestingAllocationFactory vestingAllocationFactory;
+        MetaVesTControllerFactory metavestControllerFactory;
         metavestController controller;
         GnosisTransaction[] memory safeTxsCreateAllTemplates;
         GnosisTransaction[] memory safeTxs2025_2026;
@@ -86,14 +86,14 @@ contract YearnBorgCompensationTest is
         auth = config2025_2026.registry.AUTH();
 
         // Deploy prerequisites
-        vestingAllocationFactory = DeployYearnBorgCompensationPrerequisitesScript.deployPrerequisites(
+        metavestControllerFactory = DeployYearnBorgCompensationPrerequisitesScript.deployPrerequisites(
             deployerPrivateKey,
             saltStr,
             config2025_2026
         );
 
         // Update configs with deployed contracts
-        config2025_2026.vestingAllocationFactory = vestingAllocationFactory;
+        config2025_2026.metavestControllerFactory = metavestControllerFactory;
 
         // Update configs with test BORG delegate
         config2025_2026.borgAgreementDelegate = borgDelegate;
@@ -159,7 +159,7 @@ contract YearnBorgCompensationTest is
         vm.assertEq(config2025_2026.controller.authority(), address(config2025_2026.borgSafe), "2025-2026 MetaVesTController's authority should be BORG SAFE");
         vm.assertEq(config2025_2026.controller.dao(), address(config2025_2026.borgSafe), "2025-2026 MetaVesTController's DAO should be BORG SAFE");
         vm.assertEq(config2025_2026.controller.registry(), address(config2025_2026.registry), "2025-2026 Unexpected MetaVesTController registry");
-        vm.assertEq(config2025_2026.controller.vestingFactory(), address(config2025_2026.vestingAllocationFactory), "2025-2026 Unexpected MetaVesTController vesting allocation factory");
+        vm.assertEq(config2025_2026.controller.upgradeFactory(), address(config2025_2026.metavestControllerFactory), "2025-2026 Unexpected MetaVesTControllerFactory");
 
         // BORG provisioning
         assertTrue(config2025_2026.registry.isValidDelegate(address(config2025_2026.borgSafe), borgDelegate), "delegate should be BORG SAFE's delegate");

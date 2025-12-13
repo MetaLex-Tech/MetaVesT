@@ -6,7 +6,7 @@ import {CommonBase} from "forge-std/Base.sol";
 import {CyberAgreementRegistry} from "cybercorps-contracts/src/CyberAgreementRegistry.sol";
 import {IGnosisSafe} from "../../test/lib/safe.sol";
 import {BaseAllocation} from "../../src/BaseAllocation.sol";
-import {VestingAllocationFactory} from "../../src/VestingAllocationFactory.sol";
+import {MetaVesTControllerFactory} from "../../src/MetaVesTControllerFactory.sol";
 import {metavestController} from "../../src/MetaVesTController.sol";
 import {YearnBorgCompensation2025_2026} from "./YearnBorgCompensation2025_2026.sol";
 
@@ -35,7 +35,7 @@ library YearnBorgCompensationSepolia2025_2026 {
 
             metalexSafe: metalexSafe,
             registry: CyberAgreementRegistry(0xa9E808B8eCBB60Bb19abF026B5b863215BC4c134),
-            vestingAllocationFactory: VestingAllocationFactory(0x87dC5e3FBFE8B5F2B74C64eE34da8bdc9fedCb0f),
+            metavestControllerFactory: MetaVesTControllerFactory(0xDeaDbeefdEAdbeefdEadbEEFdeadbeEFdEaDbeeF), // TODO TBD
             controller: metavestController(0xFa5Ab18bD5E02B1d6430e91C32C5CB5e7F43bB65),
 
             // Yearn BORG Compensation Agreement
