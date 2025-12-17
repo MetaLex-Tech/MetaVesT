@@ -47,7 +47,7 @@ contract MetaVesTFactoryTest is Test {
         address _dao = address(0xB);
         address _paymentToken = address(0xC);
         
-        address _controller = factory.deployMetavestAndController(_authority, _dao, address(_factory), address(_factory2), address(_factory3));
+        address _controller = factory.deployMetavestAndController(_authority, _dao, address(0), address(_factory), address(_factory2), address(_factory3));
     }
 
     function testDeployMetavestAndController() public {
@@ -56,7 +56,7 @@ contract MetaVesTFactoryTest is Test {
         address _paymentToken = address(0xC);
         
 
-        address _controller = factory.deployMetavestAndController(_authority, _dao, address(_factory), address(_factory2), address(_factory3));
+        address _controller = factory.deployMetavestAndController(_authority, _dao, address(0), address(_factory), address(_factory2), address(_factory3));
         metavestController controller = metavestController(_controller);
     }
 
@@ -64,7 +64,7 @@ contract MetaVesTFactoryTest is Test {
         address _authority = address(0);
         address _dao = address(0);
         address _paymentToken = address(0);
-        factory.deployMetavestAndController(_authority, _dao, address(0), address(0), address(0));
+        factory.deployMetavestAndController(_authority, _dao, address(0), address(0), address(0), address(0));
     }   
 
 
