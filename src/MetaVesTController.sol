@@ -36,10 +36,15 @@ contract metavestController is SafeTransferLib {
 
     address public authority;
     address public dao;
-    address public recipientOverride; // TODO: unaudited beta feature
     address public vestingFactory;
     address public tokenOptionFactory;
     address public restrictedTokenFactory;
+
+    // TODO: unaudited beta feature
+    // Overrides all downstream metavest vaults's recipient addresses. Set by authority only (address(0) = unset).
+    // Individual metavest grantees may have their own desired recipients set, but this value would override them if set.
+    address public recipientOverride;
+
     address internal _pendingAuthority;
     address internal _pendingDao;
 

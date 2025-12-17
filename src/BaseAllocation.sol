@@ -161,7 +161,6 @@ abstract contract BaseAllocation is ReentrancyGuard, SafeTransferLib{
 
         address public grantee; // grantee of the tokens
         address public pendingGrantee; // address of the pending grantee
-        address public desiredRecipient; // recipient of the tokens (if not overridden by the controller)
         bool transferable; // whether grantee can transfer their MetaVesT in whole
         Milestone[] public milestones; // array of Milestone structs
         Allocation public allocation; // struct containing vesting and unlocking details
@@ -171,6 +170,11 @@ abstract contract BaseAllocation is ReentrancyGuard, SafeTransferLib{
         GovType public govType;
         bool public terminated;
         uint256 public terminationTime;
+
+        // TODO: unaudited beta feature
+        // Specifies desired recipient of the tokens. Set by grantee only (address(0) = unset)
+        // Note this is a preference and it could be overridden by the controller.
+        address public desiredRecipient;
 
         /// @notice BaseAllocation constructor
         /// @param _grantee: address of the grantee, cannot be a zero address
