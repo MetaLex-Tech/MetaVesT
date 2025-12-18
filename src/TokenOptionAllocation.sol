@@ -12,7 +12,7 @@ contract TokenOptionAllocation is BaseAllocation {
     uint256 public shortStopDuration;
     uint256 public shortStopTime;
 
-    event MetaVesT_TokenOptionExercised(address indexed _grantee, address indexed _recipient, uint256 _tokensToExercise, uint256 _paymentAmount);
+    event MetaVesT_TokenOptionExercised(address indexed _grantee, uint256 _tokensToExercise, uint256 _paymentAmount);
 
     /// @notice Constructor to create a TokenOptionAllocation
     /// @param _grantee - address of the grantee
@@ -143,10 +143,9 @@ contract TokenOptionAllocation is BaseAllocation {
         uint256 paymentAmount = getPaymentAmount(_tokensToExercise);
         if(paymentAmount == 0) revert MetaVesT_TooSmallAmount();
 
-        address recipient = getRecipient();
-        safeTransferFrom(paymentToken, recipient, getAuthority(), paymentAmount);
+        safeTransferFrom(paymentToken, grantee, getAuthority(), paymentAmount);
         tokensExercised += _tokensToExercise;
-        emit MetaVesT_TokenOptionExercised(grantee, recipient, _tokensToExercise, paymentAmount);
+        emit MetaVesT_TokenOptionExercised(grantee, _tokensToExercise, paymentAmount);
     }
 
     /// @notice Allows the controller to terminate the TokenOptionAllocation
