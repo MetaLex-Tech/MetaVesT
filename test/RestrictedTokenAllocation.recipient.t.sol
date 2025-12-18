@@ -2,7 +2,6 @@
 pragma solidity ^0.8.20;
 
 import {BaseAllocation} from "../src/BaseAllocation.sol";
-import {MetaVesTFactory} from "../src/MetaVesTFactory.sol";
 import {RestrictedTokenAward} from "../src/RestrictedTokenAllocation.sol";
 import {RestrictedTokenFactory} from "../src/RestrictedTokenFactory.sol";
 import {Test, console2} from "forge-std/Test.sol";
@@ -24,23 +23,20 @@ contract RestrictedTokenAwardRecipientTest is Test {
     MockERC20 vestingToken = new MockERC20("Vesting Token", "VEST", 6);
     MockERC20 paymentToken = new MockERC20("Payment Token", "PAY", 6);
 
-    MetaVesTFactory controllerFactory;
     metavestController controller;
     RestrictedTokenAward vault;
 
     function setUp() public {
         vm.startPrank(deployer);
 
-        controllerFactory = new MetaVesTFactory{salt: salt}();
-
-        controller = metavestController(controllerFactory.deployMetavestAndController(
+        controller = new metavestController{salt: salt}(
             authority,
             authority,
             address(0), // _recipientOverride
             address(new VestingAllocationFactory{salt: salt}()),
             address(new TokenOptionFactory{salt: salt}()),
             address(new RestrictedTokenFactory{salt: salt}())
-        ));
+        );
 
         // Prepare funds
 
