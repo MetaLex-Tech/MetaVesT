@@ -118,6 +118,7 @@ abstract contract BaseAllocation is ReentrancyGuard, SafeTransferLib{
         error MetaVesT_NotTerminated();
         error MetaVesT_MilestoneIndexCompletedOrDoesNotExist();
         error MetaVesT_ConditionNotSatisfied();
+        error MetaVesT_AlreadyStarted();
         error MetaVesT_AlreadyTerminated();
         error MetaVesT_MoreThanAvailable();
         error MetaVesT_VestNotTransferable();
@@ -137,8 +138,10 @@ abstract contract BaseAllocation is ReentrancyGuard, SafeTransferLib{
         event MetaVest_TransferRightsPending(address indexed grantee, address indexed pendingGrantee);
         event MetaVesT_TransferredRights(address indexed grantee, address transferee);
         event MetaVesT_DesiredRecipientUpdated(address indexed grantee, address newDesiredRecipient);
-        event MetaVesT_UnlockRateUpdated(address indexed grantee, uint208 unlockRate);
-        event MetaVesT_VestingRateUpdated(address indexed grantee, uint208 vestingRate);
+        event MetaVesT_UnlockRateUpdated(address indexed grantee, uint160 unlockRate);
+        event MetaVesT_VestingRateUpdated(address indexed grantee, uint160 vestingRate);
+        event MetaVesT_UnlockStartTimeUpdated(address indexed grantee, uint48 unlockStartTime);
+        event MetaVesT_VestingStartTimeUpdated(address indexed grantee, uint48 vestingStartTime);
         event MetaVesT_Withdrawn(address indexed grantee, address indexed recipient, address indexed tokenAddress, uint256 amount);
         event MetaVesT_PriceUpdated(address indexed grantee, uint256 exercisePrice);
         event MetaVesT_RepurchaseAndWithdrawal(address indexed grantee, address indexed tokenAddress, uint256 withdrawalAmount, uint256 repurchaseAmount);
@@ -218,7 +221,7 @@ abstract contract BaseAllocation is ReentrancyGuard, SafeTransferLib{
             emit MetaVesT_TransferabilityUpdated(grantee, _transferable);
         }
 
-        /// @notice updates the vesting rate of the VestingAllocation
+        /// @notice updates the vesting rate of the Allocation
         /// @dev onlyController -- must be called from the metavest controller
         /// @param _newVestingRate - the updated vesting rate in tokens per second in the vesting token decimal
         function updateVestingRate(uint160 _newVestingRate) external onlyController {
@@ -227,13 +230,45 @@ abstract contract BaseAllocation is ReentrancyGuard, SafeTransferLib{
             emit MetaVesT_VestingRateUpdated(grantee, _newVestingRate);
         }
 
-        /// @notice updates the unlock rate of the VestingAllocation
+        /// @notice updates the vesting start time of the Allocation
+        /// @dev onlyController -- must be called from the metavest controller
+        /// @param _newVestingStartTime - the updated vesting start time
+        function updateVestingStartTime(uint48 _newVestingStartTime) external onlyController {
+            if (terminated) revert MetaVesT_AlreadyTerminated();
+
+            // It is not allowed to update start time if it has already passed, because
+            // the contract treats vested tokens as permanent and therefore would not allow any change to the start time,
+            // which would change the number of vested token at that very moment.
+            if (allocation.vestingStartTime <= block.timestamp || _newVestingStartTime <= block.timestamp) revert MetaVesT_AlreadyStarted();
+
+            allocation.vestingStartTime = _newVestingStartTime;
+            emit MetaVesT_VestingStartTimeUpdated(grantee, _newVestingStartTime);
+        }
+
+        /// @notice updates the unlock rate of the Allocation
         /// @dev onlyController -- must be called from the metavest controller
         /// @param _newUnlockRate - the updated unlock rate in tokens per second in the vesting token decimal
         function updateUnlockRate(uint160 _newUnlockRate) external onlyController {
             allocation.unlockRate = _newUnlockRate;
             emit MetaVesT_UnlockRateUpdated(grantee, _newUnlockRate);
         }
+
+        /// @notice updates the unlock start time of the Allocation
+        /// @dev onlyController -- must be called from the metavest controller
+        /// @param _newUnlockStartTime - the updated unlock start time
+        function updateUnlockStartTime(uint48 _newUnlockStartTime) external onlyController {
+            if (terminated) revert MetaVesT_AlreadyTerminated();
+
+            // It is not allowed to update start time if it has already passed, because
+            // the contract treats unlock tokens as permanent and therefore would not allow any change to the start time,
+            // which would change the number of unlock token at that very moment.
+            if (allocation.unlockStartTime <= block.timestamp || _newUnlockStartTime <= block.timestamp) revert MetaVesT_AlreadyStarted();
+
+            allocation.unlockStartTime = _newUnlockStartTime;
+            emit MetaVesT_UnlockStartTimeUpdated(grantee, _newUnlockStartTime);
+        }
+
+        // TODO WIP: updateUnlockStartTime()
 
         /// @notice Sets the governing power type for the MetaVesT
         /// @param _govType: the type of governing power to be used

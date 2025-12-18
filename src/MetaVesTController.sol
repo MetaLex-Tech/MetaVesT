@@ -569,6 +569,18 @@ contract metavestController is SafeTransferLib {
         BaseAllocation(_grant).updateUnlockRate(_unlockRate);
     }
 
+    /// @notice for 'authority' to update a MetaVesT's unlockStartTime (including any transferees)
+    /// @dev '_unlockStartTime' is subject to the rules as defined in `BaseAllocation.updateUnlockStartTime()`
+    /// @param _grant address of grantee whose MetaVesT is being updated
+    /// @param _unlockStartTime token unlock rate in tokens per second
+    function updateMetavestUnlockStartTime(
+        address _grant,
+        uint48 _unlockStartTime
+    ) external onlyAuthority conditionCheck consentCheck(_grant, msg.data) {
+        _resetAmendmentParams(_grant, msg.sig);
+        BaseAllocation(_grant).updateUnlockStartTime(_unlockStartTime);
+    }
+
     /// @notice for 'authority' to update a MetaVesT's vestingRate (including any transferees)
     /// @dev a '_vestingRate' of 0 is permissible to enable temporary freezes of allocation vestings by authority, but to permanently terminate vesting, call 'terminateMetavestVesting'
     /// @param _grant address of grantee whose MetaVesT is being updated
@@ -579,6 +591,18 @@ contract metavestController is SafeTransferLib {
     ) external onlyAuthority conditionCheck consentCheck(_grant, msg.data) {
         _resetAmendmentParams(_grant, msg.sig);
         BaseAllocation(_grant).updateVestingRate(_vestingRate);
+    }
+
+    /// @notice for 'authority' to update a MetaVesT's vestingStartTime (including any transferees)
+    /// @dev '_vestingStartTime' is subject to the rules as defined in `BaseAllocation.updateVestingStartTime()`
+    /// @param _grant address of grantee whose MetaVesT is being updated
+    /// @param _vestingStartTime token vesting rate in tokens per second
+    function updateMetavestVestingStartTime(
+        address _grant,
+        uint48 _vestingStartTime
+    ) external onlyAuthority conditionCheck consentCheck(_grant, msg.data) {
+        _resetAmendmentParams(_grant, msg.sig);
+        BaseAllocation(_grant).updateVestingStartTime(_vestingStartTime);
     }
 
     /// @notice for authority to update a MetaVesT's stopTime and/or shortStopTime, as applicable (including any transferees)
