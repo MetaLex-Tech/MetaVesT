@@ -10,8 +10,8 @@ import {VestingAllocationFactory} from "../src/VestingAllocationFactory.sol";
 import {metavestController} from "../src/MetaVesTController.sol";
 import {MockERC20} from "./mocks/MockERC20.sol";
 
-contract BaseAllocationRecipientTest is Test {
-    string saltStr = "BaseAllocationRecipientTest";
+contract BaseAllocationAbstractBetaTest is Test {
+    string saltStr = "BaseAllocationAbstractBetaTest";
     bytes32 salt = keccak256(bytes(saltStr));
 
     address deployer = makeAddr("deployer");
@@ -164,7 +164,7 @@ contract BaseAllocationRecipientTest is Test {
             new BaseAllocation.Milestone[](0),
             1e6, // no-op: exercisePrice
             address(paymentToken),
-            block.timestamp, // no-op: _shortStopDuration
+            0, // no-op: _shortStopDuration
             0 // no-op: _longStopDate
         ));
     }

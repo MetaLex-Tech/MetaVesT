@@ -268,8 +268,6 @@ abstract contract BaseAllocation is ReentrancyGuard, SafeTransferLib{
             emit MetaVesT_UnlockStartTimeUpdated(grantee, _newUnlockStartTime);
         }
 
-        // TODO WIP: updateUnlockStartTime()
-
         /// @notice Sets the governing power type for the MetaVesT
         /// @param _govType: the type of governing power to be used
         function setGovVariables(GovType _govType) external onlyController {

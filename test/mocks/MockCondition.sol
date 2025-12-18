@@ -95,3 +95,10 @@ contract SignatureCondition is BaseCondition {
         } else return false; // Default case, should not reach here
     }
 }
+
+/// @title FalseCondition - A condition that always fails
+contract FalseCondition is BaseCondition {
+    function checkCondition(address _contract, bytes4 _functionSignature, bytes memory data) public view override returns (bool) {
+        return false;
+    }
+}
