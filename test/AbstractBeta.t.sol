@@ -23,6 +23,9 @@ contract AbstractBetaTest is Test {
 
     AbstractBeta.Config config = AbstractBetaSepolia.getDefault();
     AbstractBeta.GrantInfo[] grants;
+    string setName = "grants";
+//    string setNameVestingStartTime = "updateMetavestVestingStartTime";
+//    string setNameUnlockStartTime = "updateMetavestUnlockStartTime";
 
     /// @notice Assumes Sepolia testnet
     function setUp() public {
@@ -47,6 +50,15 @@ contract AbstractBetaTest is Test {
         deal(address(config.vestingToken), config.authority, 100_000_000_000 ether);
         ERC20(config.vestingToken).approve(address(config.controllerWithoutOverride), 100_000_000_000 ether);
         ERC20(config.vestingToken).approve(address(config.controllerWithOverride), 100_000_000_000 ether);
+
+        // TODO this should be part of Safe txs, too
+        config.controllerWithoutOverride.createSet(setName);
+        config.controllerWithOverride.createSet(setName);
+//        config.controllerWithoutOverride.createSet(setNameVestingStartTime);
+//        config.controllerWithOverride.createSet(setNameVestingStartTime);
+//        config.controllerWithoutOverride.createSet(setNameUnlockStartTime);
+//        config.controllerWithOverride.createSet(setNameUnlockStartTime);
+
         console2.log("Deploying grants:");
         for (uint256 i = 0; i < safeTxs.length; i++) {
             (bool success, bytes memory ret) = safeTxs[i].to.call{value: safeTxs[i].value}(safeTxs[i].data);
@@ -54,6 +66,11 @@ contract AbstractBetaTest is Test {
             loadedGrants[i].metavest = abi.decode(ret, (address));
             grants.push(loadedGrants[i]); // Save it to storage
             console2.log("  #%s: %s", vm.toString(i), loadedGrants[i].metavest);
+
+            // TODO this should be part of Safe txs, too
+            metavestController(safeTxs[i].to).addMetaVestToSet(setName, loadedGrants[i].metavest);
+//            metavestController(safeTxs[i].to).addMetaVestToSet(setNameVestingStartTime, loadedGrants[i].metavest);
+//            metavestController(safeTxs[i].to).addMetaVestToSet(setNameUnlockStartTime, loadedGrants[i].metavest);
         }
         console2.log("");
         vm.stopPrank();
@@ -64,9 +81,7 @@ contract AbstractBetaTest is Test {
         for (uint256 i = 0; i < grants.length; i++) {
             RestrictedTokenAward vault = RestrictedTokenAward(grants[i].metavest);
 
-            metavestController controller = (grants[i].controllerType == AbstractBeta.ControllerType.WithoutOverride)
-                ? config.controllerWithoutOverride
-                : config.controllerWithOverride;
+            metavestController controller = AbstractBeta.getController(config, grants[i].controllerType);
 
             assertEq(vault.controller(), address(controller), string(abi.encodePacked("unexpected controller for grant #", vm.toString(i))));
 
@@ -90,5 +105,99 @@ contract AbstractBetaTest is Test {
             assertEq(tokenContract, config.vestingToken, string(abi.encodePacked("unexpected vestingToken for grant #", vm.toString(i))));
             assertEq(vault.paymentToken(), config.paymentToken, string(abi.encodePacked("unexpected paymentToken for grant #", vm.toString(i))));
         }
+    }
+
+    /// @notice Authority should be able to update the start times
+    function test_updateStartTimes() public {
+        uint48 now = uint48(block.timestamp);
+
+        // 60 days later
+        vm.warp(now + 60 days);
+
+        // (1) Propose amendment for updating vestingStartTime
+
+        vm.startPrank(config.authority);
+        config.controllerWithoutOverride.proposeMajorityMetavestAmendment(
+            setName,
+            metavestController.updateMetavestVestingStartTime.selector,
+            abi.encodeWithSelector(
+                metavestController.updateMetavestVestingStartTime.selector,
+                address(0), // no-op
+                now + 90 days
+            )
+        );
+        config.controllerWithOverride.proposeMajorityMetavestAmendment(
+            setName,
+            metavestController.updateMetavestVestingStartTime.selector,
+            abi.encodeWithSelector(
+                metavestController.updateMetavestVestingStartTime.selector,
+                address(0), // no-op
+                now + 90 days
+            )
+        );
+        vm.stopPrank();
+
+        // Approve amendment
+        for (uint256 i = 0; i < grants.length; i++) {
+            metavestController controller = AbstractBeta.getController(config, grants[i].controllerType);
+            vm.prank(grants[i].grantee);
+            controller.voteOnMetavestAmendment(grants[i].metavest, setName, metavestController.updateMetavestVestingStartTime.selector, true);
+        }
+
+        // Execute amendment
+        vm.startPrank(config.authority);
+        for (uint256 i = 0; i < grants.length; i++) {
+            metavestController controller = AbstractBeta.getController(config, grants[i].controllerType);
+            controller.updateMetavestVestingStartTime(grants[i].metavest, now + 90 days);
+
+            {
+                (,,,, uint48 vestingStartTime,, uint48 unlockStartTime,) = RestrictedTokenAward(grants[0].metavest).allocation();
+                assertEq(vestingStartTime, now + 90 days, string(abi.encodePacked("unexpected vestingStartTime after amendment for grant #", vm.toString(i))));
+            }
+        }
+        vm.stopPrank();
+
+        // (2) Propose amendment for updating unlockStartTime
+
+        vm.startPrank(config.authority);
+        config.controllerWithoutOverride.proposeMajorityMetavestAmendment(
+            setName,
+            metavestController.updateMetavestUnlockStartTime.selector,
+            abi.encodeWithSelector(
+                metavestController.updateMetavestUnlockStartTime.selector,
+                address(0), // no-op
+                now + 90 days
+            )
+        );
+        config.controllerWithOverride.proposeMajorityMetavestAmendment(
+            setName,
+            metavestController.updateMetavestUnlockStartTime.selector,
+            abi.encodeWithSelector(
+                metavestController.updateMetavestUnlockStartTime.selector,
+                address(0), // no-op
+                now + 90 days
+            )
+        );
+        vm.stopPrank();
+
+        // Approve amendment
+        for (uint256 i = 0; i < grants.length; i++) {
+            metavestController controller = AbstractBeta.getController(config, grants[i].controllerType);
+            vm.prank(grants[i].grantee);
+            controller.voteOnMetavestAmendment(grants[i].metavest, setName, metavestController.updateMetavestUnlockStartTime.selector, true);
+        }
+
+        // Execute amendment
+        vm.startPrank(config.authority);
+        for (uint256 i = 0; i < grants.length; i++) {
+            metavestController controller = AbstractBeta.getController(config, grants[i].controllerType);
+            controller.updateMetavestUnlockStartTime(grants[i].metavest, now + 90 days);
+
+            {
+                (,,,, uint48 vestingStartTime,, uint48 unlockStartTime,) = RestrictedTokenAward(grants[0].metavest).allocation();
+                assertEq(unlockStartTime, now + 90 days, string(abi.encodePacked("unexpected unlockStartTime after amendment for grant #", vm.toString(i))));
+            }
+        }
+        vm.stopPrank();
     }
 }

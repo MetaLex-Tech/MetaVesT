@@ -111,4 +111,10 @@ library AbstractBeta {
             unlockStartTime: config.vestingAndUnlockStartTime
         });
     }
+
+    function getController(Config memory config, ControllerType controllerType) external view returns(metavestController) {
+        return (controllerType == AbstractBeta.ControllerType.WithoutOverride)
+            ? config.controllerWithoutOverride
+            : config.controllerWithOverride;
+    }
 }
