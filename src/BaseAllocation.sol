@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-pragma solidity 0.8.20;
+pragma solidity ^0.8.20;
 
 /// @notice interface to a MetaLeX condition contract
 /// @dev see https://github.com/MetaLex-Tech/BORG-CORE/tree/main/src/libs/conditions
@@ -134,8 +134,8 @@ abstract contract BaseAllocation is ReentrancyGuard, SafeTransferLib{
         event MetaVesT_TransferabilityUpdated(address indexed grantee, bool isTransferable);
         event MetaVest_TransferRightsPending(address indexed grantee, address indexed pendingGrantee);
         event MetaVesT_TransferredRights(address indexed grantee, address transferee);
-        event MetaVesT_UnlockRateUpdated(address indexed grantee, uint208 unlockRate);
-        event MetaVesT_VestingRateUpdated(address indexed grantee, uint208 vestingRate);
+        event MetaVesT_UnlockRateUpdated(address indexed grantee, uint160 unlockRate);
+        event MetaVesT_VestingRateUpdated(address indexed grantee, uint160 vestingRate);
         event MetaVesT_Withdrawn(address indexed grantee, address indexed tokenAddress, uint256 amount);
         event MetaVesT_PriceUpdated(address indexed grantee, uint256 exercisePrice);
         event MetaVesT_RepurchaseAndWithdrawal(address indexed grantee, address indexed tokenAddress, uint256 withdrawalAmount, uint256 repurchaseAmount);
@@ -207,7 +207,7 @@ abstract contract BaseAllocation is ReentrancyGuard, SafeTransferLib{
             emit MetaVesT_TransferabilityUpdated(grantee, _transferable);
         }
 
-        /// @notice updates the vesting rate of the VestingAllocation
+        /// @notice updates the vesting rate of the Allocation
         /// @dev onlyController -- must be called from the metavest controller
         /// @param _newVestingRate - the updated vesting rate in tokens per second in the vesting token decimal
         function updateVestingRate(uint160 _newVestingRate) external onlyController {
@@ -216,7 +216,7 @@ abstract contract BaseAllocation is ReentrancyGuard, SafeTransferLib{
             emit MetaVesT_VestingRateUpdated(grantee, _newVestingRate);
         }
 
-        /// @notice updates the unlock rate of the VestingAllocation
+        /// @notice updates the unlock rate of the Allocation
         /// @dev onlyController -- must be called from the metavest controller
         /// @param _newUnlockRate - the updated unlock rate in tokens per second in the vesting token decimal
         function updateUnlockRate(uint160 _newUnlockRate) external onlyController {

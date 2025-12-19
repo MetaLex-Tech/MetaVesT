@@ -6,7 +6,7 @@
                                      *************************************
                                                                         */
 
-pragma solidity 0.8.20;
+pragma solidity ^0.8.20;
 
 //import "./MetaVesT.sol";
 import "./interfaces/IAllocationFactory.sol";
