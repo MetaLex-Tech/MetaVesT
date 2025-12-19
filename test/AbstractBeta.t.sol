@@ -23,9 +23,6 @@ contract AbstractBetaTest is Test {
 
     AbstractBeta.Config config = AbstractBetaSepolia.getDefault();
     AbstractBeta.GrantInfo[] grants;
-    string setName = "grants";
-//    string setNameVestingStartTime = "updateMetavestVestingStartTime";
-//    string setNameUnlockStartTime = "updateMetavestUnlockStartTime";
 
     /// @notice Assumes Sepolia testnet
     function setUp() public {
@@ -51,14 +48,6 @@ contract AbstractBetaTest is Test {
         ERC20(config.vestingToken).approve(address(config.controllerWithoutOverride), 100_000_000_000 ether);
         ERC20(config.vestingToken).approve(address(config.controllerWithOverride), 100_000_000_000 ether);
 
-        // TODO this should be part of Safe txs, too
-        config.controllerWithoutOverride.createSet(setName);
-        config.controllerWithOverride.createSet(setName);
-//        config.controllerWithoutOverride.createSet(setNameVestingStartTime);
-//        config.controllerWithOverride.createSet(setNameVestingStartTime);
-//        config.controllerWithoutOverride.createSet(setNameUnlockStartTime);
-//        config.controllerWithOverride.createSet(setNameUnlockStartTime);
-
         console2.log("Deploying grants:");
         for (uint256 i = 0; i < safeTxs.length; i++) {
             (bool success, bytes memory ret) = safeTxs[i].to.call{value: safeTxs[i].value}(safeTxs[i].data);
@@ -66,11 +55,6 @@ contract AbstractBetaTest is Test {
             loadedGrants[i].metavest = abi.decode(ret, (address));
             grants.push(loadedGrants[i]); // Save it to storage
             console2.log("  #%s: %s", vm.toString(i), loadedGrants[i].metavest);
-
-            // TODO this should be part of Safe txs, too
-            metavestController(safeTxs[i].to).addMetaVestToSet(setName, loadedGrants[i].metavest);
-//            metavestController(safeTxs[i].to).addMetaVestToSet(setNameVestingStartTime, loadedGrants[i].metavest);
-//            metavestController(safeTxs[i].to).addMetaVestToSet(setNameUnlockStartTime, loadedGrants[i].metavest);
         }
         console2.log("");
         vm.stopPrank();
@@ -114,7 +98,31 @@ contract AbstractBetaTest is Test {
         // 60 days later
         vm.warp(now + 60 days);
 
-        // (1) Propose amendment for updating vestingStartTime
+        // (1) Add all vaults to sets
+
+        string memory setName = "grants";
+//    string setNameVestingStartTime = "updateMetavestVestingStartTime";
+//    string setNameUnlockStartTime = "updateMetavestUnlockStartTime";
+
+        vm.startPrank(config.authority);
+
+        config.controllerWithoutOverride.createSet(setName);
+        config.controllerWithOverride.createSet(setName);
+//        config.controllerWithoutOverride.createSet(setNameVestingStartTime);
+//        config.controllerWithOverride.createSet(setNameVestingStartTime);
+//        config.controllerWithoutOverride.createSet(setNameUnlockStartTime);
+//        config.controllerWithOverride.createSet(setNameUnlockStartTime);
+
+        for (uint256 i = 0; i < grants.length; i++) {
+            metavestController controller = AbstractBeta.getController(config, grants[i].controllerType);
+            controller.addMetaVestToSet(setName, grants[i].metavest);
+//            metavestController(safeTxs[i].to).addMetaVestToSet(setNameVestingStartTime, loadedGrants[i].metavest);
+//            metavestController(safeTxs[i].to).addMetaVestToSet(setNameUnlockStartTime, loadedGrants[i].metavest);
+        }
+
+        vm.stopPrank();
+
+        // (2a) Propose amendment for updating vestingStartTime
 
         vm.startPrank(config.authority);
         config.controllerWithoutOverride.proposeMajorityMetavestAmendment(
@@ -157,7 +165,7 @@ contract AbstractBetaTest is Test {
         }
         vm.stopPrank();
 
-        // (2) Propose amendment for updating unlockStartTime
+        // (2b) Propose amendment for updating unlockStartTime
 
         vm.startPrank(config.authority);
         config.controllerWithoutOverride.proposeMajorityMetavestAmendment(
