@@ -176,6 +176,12 @@ To set up the project locally, follow these steps:
    ```
 3. **Compile Contracts**
 
-   ```base
+   ```bash
    forge build --optimize --optimizer-runs 200 --use solc:0.8.28 --sizes
+   ```
+   
+4. **Test Deploy**
+   ```bash
+   cp .env.production.yearn-director-compensation.2025 .env
+   forge test --use solc:0.8.28 --fork-url https://your/mainnet/rpc -vvv --mc YearnDirectorCompTest   
    ```

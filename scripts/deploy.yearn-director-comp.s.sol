@@ -15,9 +15,15 @@ import {BaseAllocation} from "../src/BaseAllocation.sol";
 contract DeployYearnDirectorCompScript is Script {
     function run() public {
         runWithArgs(
-            "MetaLexMetaVest.yearn.2025",
+            // Ethereum mainnet
+            "MetaLexMetaVest.yearn.2025.1",
             vm.envUint("DEPLOYER_PRIVATE_KEY"),
-            YearnDirectorCompSepolia2025.getDefault()
+            YearnDirectorComp2025.getDefault()
+
+            // Sepolia
+//            "MetaLexMetaVest.yearn.2025",
+//            vm.envUint("DEPLOYER_PRIVATE_KEY"),
+//            YearnDirectorCompSepolia2025.getDefault()
         );
     }
 
@@ -27,8 +33,10 @@ contract DeployYearnDirectorCompScript is Script {
         YearnDirectorComp2025.Config memory config
     ) public returns (
         metavestController controller,
-        YearnDirectorComp2025.GrantInfo[] memory,
-        GnosisTransaction[] memory
+        YearnDirectorComp2025.GrantInfo[] memory grants,
+        GnosisTransaction[] memory provisionSafeTxs,
+        GnosisTransaction[] memory grantSafeTxs,
+        GnosisTransaction[] memory allSafeTxs
     ) {
         bytes32 salt = keccak256(bytes(saltStr));
         address deployer = vm.addr(deployerPrivateKey);
@@ -37,6 +45,9 @@ contract DeployYearnDirectorCompScript is Script {
         console2.log("=== DeployYearnDirectorCompControllersScript ===");
         console2.log("saltStr: %s", saltStr);
         console2.log("deployer: %s", deployer);
+        console2.log("vestingToken: %s", config.vestingToken);
+        console2.log("dao: %s", config.dao);
+        console2.log("authority: %s", config.authority);
         console2.log("");
 
         YearnDirectorComp2025.GrantInfo[] memory grants = YearnDirectorComp2025.loadGrants();
@@ -71,7 +82,7 @@ contract DeployYearnDirectorCompScript is Script {
         }
 
         console2.log("Preparing Safe tx for approving vesting tokens...");
-        GnosisTransaction[] memory provisionSafeTxs = new GnosisTransaction[](1);
+        provisionSafeTxs = new GnosisTransaction[](1);
         provisionSafeTxs[0] = GnosisTransaction({
             to: config.vestingToken,
             value: 0,
@@ -83,9 +94,9 @@ contract DeployYearnDirectorCompScript is Script {
         });
 
         console2.log("Preparing Safe txs for grants creation:");
-        GnosisTransaction[] memory grantSafeTxs = _generateGrantSafeTxs(config, grants);
+        grantSafeTxs = _generateGrantSafeTxs(config, grants);
 
-        GnosisTransaction[] memory allSafeTxs = new GnosisTransaction[](provisionSafeTxs.length + grantSafeTxs.length);
+        allSafeTxs = new GnosisTransaction[](provisionSafeTxs.length + grantSafeTxs.length);
 
         // (2b) Create Safe txs JSON file
 
@@ -113,6 +124,8 @@ contract DeployYearnDirectorCompScript is Script {
         return (
             config.controller,
             grants,
+            provisionSafeTxs,
+            grantSafeTxs,
             allSafeTxs
         );
     }

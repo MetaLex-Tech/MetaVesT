@@ -64,4 +64,8 @@ library SafeUtils {
             }))
         );
     }
+
+    function parseSafeTxJson(string memory json) internal returns (SafeTxImport memory) {
+        return abi.decode(vm.parseJson(json), (SafeTxImport));
+    }
 }

@@ -24,7 +24,7 @@ library YearnDirectorCompSepolia2025 {
             dao: 0x4F22ba82a6B71F7305d1be7Ae7323811f9D555Ab, // dev Safe
             authority: 0x4F22ba82a6B71F7305d1be7Ae7323811f9D555Ab, // dev Safe
 
-            vestingAndUnlockStartTime: 1756684800, // TODO TBD: for now it is 2025/09/01 00:00 UTC
+            vestingAndUnlockStartTime: 1759276800, // Oct  1 00:00:00 UTC 2025
             vestingAndUnlockRate: 159, // ceil(5000e6 / (365 * 24 * 3600))
             vestingAndUnlockCliff: 0, // no cliff
             exercisePrice: 0, // no-op

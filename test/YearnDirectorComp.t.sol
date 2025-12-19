@@ -21,20 +21,24 @@ contract YearnDirectorCompTest is Test {
     uint256 deployerPrivateKey = vm.envUint("DEPLOYER_PRIVATE_KEY");
     address deployer;
 
-    YearnDirectorComp2025.Config config = YearnDirectorCompSepolia2025.getDefault();
+    // Test with mainnet configs
+    YearnDirectorComp2025.Config config = YearnDirectorComp2025.getDefault();
     YearnDirectorComp2025.GrantInfo[] grants;
 
     /// @notice Assumes Sepolia testnet
-    function setUp() public {
+    function setUp() public virtual {
         (deployer, deployerPrivateKey) = makeAddrAndKey("deployer");
 
         // Deploy controllers and prepare txs for grants
         YearnDirectorComp2025.GrantInfo[] memory loadedGrants;
-        GnosisTransaction[] memory safeTxs;
+        GnosisTransaction[] memory provisionSafeTxs;
+        GnosisTransaction[] memory grantSafeTxs;
         (
             config.controller,
             loadedGrants,
-            safeTxs
+            provisionSafeTxs,
+            grantSafeTxs,
+
         ) = (new DeployYearnDirectorCompScript()).runWithArgs(
             saltStr,
             deployerPrivateKey,
@@ -46,9 +50,15 @@ contract YearnDirectorCompTest is Test {
         deal(address(config.vestingToken), config.authority, 5000e6);
         ERC20(config.vestingToken).approve(address(config.controller), 5000e6);
 
+        console2.log("Provisioning Safe funds...");
+        for (uint256 i = 0; i < provisionSafeTxs.length; i++) {
+            (bool success, bytes memory ret) = provisionSafeTxs[i].to.call{value: provisionSafeTxs[i].value}(provisionSafeTxs[i].data);
+            assertTrue(success, string(abi.encodePacked("call #", vm.toString(i + 1), " failed: ", vm.toString(ret))));
+        }
+
         console2.log("Deploying grants:");
-        for (uint256 i = 0; i < safeTxs.length; i++) {
-            (bool success, bytes memory ret) = safeTxs[i].to.call{value: safeTxs[i].value}(safeTxs[i].data);
+        for (uint256 i = 0; i < grantSafeTxs.length; i++) {
+            (bool success, bytes memory ret) = grantSafeTxs[i].to.call{value: grantSafeTxs[i].value}(grantSafeTxs[i].data);
             assertTrue(success, string(abi.encodePacked("call #", vm.toString(i + 1), " failed: ", vm.toString(ret))));
             loadedGrants[i].metavest = abi.decode(ret, (address));
             grants.push(loadedGrants[i]); // Save it to storage

@@ -58,7 +58,7 @@ library YearnDirectorComp2025 {
             shortStopDuration: 0, // no-op
 
             // Grants
-            controller: metavestController(0xDeaDbeefdEAdbeefdEadbEEFdeadbeEFdEaDbeeF) // TODO TBD
+            controller: metavestController(0x98fAbbf1E0924E5a7FCB8192Aecb155c70f468Bb)
         });
     }
 
