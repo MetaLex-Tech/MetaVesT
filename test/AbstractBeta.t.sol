@@ -207,5 +207,21 @@ contract AbstractBetaTest is Test {
             }
         }
         vm.stopPrank();
+
+        // Simulate and verify withdrawal on new schedules
+
+        vm.warp(now + 90 days + 200); // enough time to withdraw all
+
+        for (uint256 i = 0; i < grants.length; i++) {
+            ERC20 vestingToken = ERC20(config.vestingToken);
+            RestrictedTokenAward vault = RestrictedTokenAward(grants[i].metavest);
+            address recipient = vault.getRecipient();
+            uint256 vestingTokenBalanceBefore = vestingToken.balanceOf(recipient);
+
+            vm.startPrank(grants[i].grantee);
+            vault.withdraw(grants[i].amount);
+            assertEq(vestingToken.balanceOf(recipient) - vestingTokenBalanceBefore, grants[i].amount, "unexpected vesting token amount after withdrawal");
+            vm.stopPrank();
+        }
     }
 }
