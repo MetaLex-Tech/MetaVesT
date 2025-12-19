@@ -51,7 +51,7 @@ library YearnDirectorComp2025 {
             dao: 0xFEB4acf3df3cDEA7399794D0869ef76A6EfAff52, // ychad.eth
             authority: 0xFEB4acf3df3cDEA7399794D0869ef76A6EfAff52, // ychad.eth
 
-            vestingAndUnlockStartTime: 1756684800, // TODO TBD: for now it is 2025/09/01 00:00 UTC
+            vestingAndUnlockStartTime: 1759276800, // Oct  1 00:00:00 UTC 2025
             vestingAndUnlockRate: 159, // ceil(5000e6 / (365 * 24 * 3600))
             vestingAndUnlockCliff: 0, // no cliff
             exercisePrice: 0, // no-op
