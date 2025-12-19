@@ -1,5 +1,7 @@
+import {ERC20} from "openzeppelin-contracts/token/ERC20/ERC20.sol";
 import {YearnDirectorCompSepolia2025} from "./lib/YearnDirectorCompSepolia2025.sol";
 import {YearnDirectorComp2025} from "./lib/YearnDirectorComp2025.sol";
+import {SafeUtils} from "./lib/SafeUtils.sol";
 import {MockERC20} from "../test/mocks/MockERC20.sol";
 import {GnosisTransaction} from "./lib/safe.sol";
 import {RestrictedTokenFactory} from "../src/RestrictedTokenFactory.sol";
@@ -58,17 +60,60 @@ contract DeployYearnDirectorCompScript is Script {
         console2.log("Deployed controller: %s", address(config.controller));
         console2.log("");
 
-        // (2) Deploy grants (must be performed by authority)
-
-        console2.log("Creating Safe txs for grants:");
-        GnosisTransaction[] memory safeTxs = _generateGrantSafeTxs(config, grants);
-
         vm.stopBroadcast();
+
+        // (2a) Prepare Safe txs (vesting token approval & grants creation)
+
+        // Calculate total vesting token needed for all grants
+        uint256 totalVestingTokenAmount = 0;
+        for (uint256 i = 0; i < grants.length; i++) {
+            totalVestingTokenAmount += grants[i].amount;
+        }
+
+        console2.log("Preparing Safe tx for approving vesting tokens...");
+        GnosisTransaction[] memory provisionSafeTxs = new GnosisTransaction[](1);
+        provisionSafeTxs[0] = GnosisTransaction({
+            to: config.vestingToken,
+            value: 0,
+            data: abi.encodeWithSelector(
+                ERC20.approve.selector,
+                address(config.controller),
+                totalVestingTokenAmount
+            )
+        });
+
+        console2.log("Preparing Safe txs for grants creation:");
+        GnosisTransaction[] memory grantSafeTxs = _generateGrantSafeTxs(config, grants);
+
+        GnosisTransaction[] memory allSafeTxs = new GnosisTransaction[](provisionSafeTxs.length + grantSafeTxs.length);
+
+        // (2b) Create Safe txs JSON file
+
+        {
+            uint256 safeTxIdx = 0;
+            for (uint256 i = 0; i < provisionSafeTxs.length; i++) {
+                allSafeTxs[safeTxIdx++] = provisionSafeTxs[i];
+            }
+            for (uint256 i = 0; i < grantSafeTxs.length; i++) {
+                allSafeTxs[safeTxIdx++] = grantSafeTxs[i];
+            }
+
+            string memory safeTxJson = SafeUtils.formatSafeTxJson(allSafeTxs);
+
+            console2.log("Safe tx JSON (can be imported to Safe Transaction Builder):");
+            console2.log("==== JSON data start ====");
+            console2.log(safeTxJson);
+            console2.log("==== JSON data end ====");
+
+            string memory safeTxJsonPath = "./out/safeTxs.json";
+            vm.writeJson(safeTxJson, safeTxJsonPath);
+            console2.log("JSON file written to: %s", safeTxJsonPath);
+        }
 
         return (
             config.controller,
             grants,
-            safeTxs
+            allSafeTxs
         );
     }
 
