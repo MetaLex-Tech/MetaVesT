@@ -27,9 +27,7 @@ library AbstractBetaSepolia {
 
             // Sat Jan  1 00:00:00 UTC 2028
             // Will update the start times once finalized
-            vestingAndUnlockStartTime: 1830297600,
-            vestingAndUnlockRate: 100 ether,
-            vestingAndUnlockCliff: 0,
+            unlockStartTime: 1830297600,
             exercisePrice: 10e6,
             shortStopDuration: 0,
 

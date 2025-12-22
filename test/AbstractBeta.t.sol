@@ -13,6 +13,7 @@ import {DeployAbstractBetaScript} from "../scripts/deploy.abstract-beta.s.sol";
 import {AbstractBetaSepolia} from "../scripts/lib/AbstractBetaSepolia.sol";
 import {AbstractBeta} from "../scripts/lib/AbstractBeta.sol";
 import {GnosisTransaction} from "../scripts/lib/safe.sol";
+import {MockERC20} from "../test/mocks/MockERC20.sol";
 
 contract AbstractBetaTest is Test {
     string saltStr = "AbstractBetaTest";
@@ -21,12 +22,19 @@ contract AbstractBetaTest is Test {
     uint256 deployerPrivateKey = vm.envUint("DEPLOYER_PRIVATE_KEY");
     address deployer;
 
-    AbstractBeta.Config config = AbstractBetaSepolia.getDefault();
+    // Test against mainnet configs
+    AbstractBeta.Config config = AbstractBeta.getDefault();
     AbstractBeta.GrantInfo[] grants;
 
     /// @notice Assumes Sepolia testnet
     function setUp() public {
         (deployer, deployerPrivateKey) = makeAddrAndKey("deployer");
+
+        // Simulate the authority deploy their vesting token
+        vm.startPrank(config.authority);
+        config.vestingToken = address(new MockERC20("Vesting Token", "VEST", 18));
+        MockERC20(config.vestingToken).mint(config.authority, 100_000_000_000 ether);
+        vm.stopPrank();
 
         // Deploy controllers and prepare txs for grants
         AbstractBeta.GrantInfo[] memory loadedGrants;
@@ -44,7 +52,6 @@ contract AbstractBetaTest is Test {
 
         // Simulate authority creating the grants
         vm.startPrank(config.authority);
-        deal(address(config.vestingToken), config.authority, 100_000_000_000 ether);
         ERC20(config.vestingToken).approve(address(config.controllerWithoutOverride), 100_000_000_000 ether);
         ERC20(config.vestingToken).approve(address(config.controllerWithOverride), 100_000_000_000 ether);
 
@@ -80,92 +87,39 @@ contract AbstractBetaTest is Test {
                 address tokenContract
             ) = vault.allocation();
             assertEq(tokenStreamTotal, grants[i].amount, string(abi.encodePacked("unexpected tokenStreamTotal for grant #", vm.toString(i))));
-            assertEq(vestingCliffCredit, config.vestingAndUnlockCliff, string(abi.encodePacked("unexpected vestingCliffCredit for grant #", vm.toString(i))));
-            assertEq(unlockingCliffCredit, config.vestingAndUnlockCliff, string(abi.encodePacked("unexpected unlockingCliffCredit for grant #", vm.toString(i))));
-            assertEq(vestingRate, config.vestingAndUnlockRate, string(abi.encodePacked("unexpected vestingRate for grant #", vm.toString(i))));
-            assertEq(unlockRate, config.vestingAndUnlockRate, string(abi.encodePacked("unexpected unlockRate for grant #", vm.toString(i))));
-            assertEq(vestingStartTime, config.vestingAndUnlockStartTime, string(abi.encodePacked("unexpected vestingStartTime for grant #", vm.toString(i))));
-            assertEq(unlockStartTime, config.vestingAndUnlockStartTime, string(abi.encodePacked("unexpected unlockStartTime for grant #", vm.toString(i))));
+            assertEq(vestingCliffCredit, grants[i].vestingCliffCredit, string(abi.encodePacked("unexpected vestingCliffCredit for grant #", vm.toString(i))));
+            assertEq(unlockingCliffCredit, grants[i].unlockingCliffCredit, string(abi.encodePacked("unexpected unlockingCliffCredit for grant #", vm.toString(i))));
+            assertEq(vestingRate, grants[i].vestingRate, string(abi.encodePacked("unexpected vestingRate for grant #", vm.toString(i))));
+            assertEq(unlockRate, grants[i].unlockRate, string(abi.encodePacked("unexpected unlockRate for grant #", vm.toString(i))));
+            assertEq(vestingStartTime, grants[i].vestingStartTime, string(abi.encodePacked("unexpected vestingStartTime for grant #", vm.toString(i))));
+            assertEq(unlockStartTime, config.unlockStartTime, string(abi.encodePacked("unexpected unlockStartTime for grant #", vm.toString(i))));
             assertEq(tokenContract, config.vestingToken, string(abi.encodePacked("unexpected vestingToken for grant #", vm.toString(i))));
             assertEq(vault.paymentToken(), config.paymentToken, string(abi.encodePacked("unexpected paymentToken for grant #", vm.toString(i))));
         }
     }
 
-    /// @notice Authority should be able to update the start times
-    function test_updateStartTimes() public {
-        uint48 now = uint48(block.timestamp);
-
-        // 60 days later
-        vm.warp(now + 60 days);
+    /// @notice Authority should be able to update the unlock start times later
+    function test_updateUnlockStartTimes() public {
+        uint48 now = 1772323200; // 2026/03/01
+        vm.warp(now);
 
         // (1) Add all vaults to sets
 
         string memory setName = "grants";
-//    string setNameVestingStartTime = "updateMetavestVestingStartTime";
-//    string setNameUnlockStartTime = "updateMetavestUnlockStartTime";
 
         vm.startPrank(config.authority);
 
         config.controllerWithoutOverride.createSet(setName);
         config.controllerWithOverride.createSet(setName);
-//        config.controllerWithoutOverride.createSet(setNameVestingStartTime);
-//        config.controllerWithOverride.createSet(setNameVestingStartTime);
-//        config.controllerWithoutOverride.createSet(setNameUnlockStartTime);
-//        config.controllerWithOverride.createSet(setNameUnlockStartTime);
 
         for (uint256 i = 0; i < grants.length; i++) {
             metavestController controller = AbstractBeta.getController(config, grants[i].controllerType);
             controller.addMetaVestToSet(setName, grants[i].metavest);
-//            metavestController(safeTxs[i].to).addMetaVestToSet(setNameVestingStartTime, loadedGrants[i].metavest);
-//            metavestController(safeTxs[i].to).addMetaVestToSet(setNameUnlockStartTime, loadedGrants[i].metavest);
         }
 
         vm.stopPrank();
 
-        // (2a) Propose amendment for updating vestingStartTime
-
-        vm.startPrank(config.authority);
-        config.controllerWithoutOverride.proposeMajorityMetavestAmendment(
-            setName,
-            metavestController.updateMetavestVestingStartTime.selector,
-            abi.encodeWithSelector(
-                metavestController.updateMetavestVestingStartTime.selector,
-                address(0), // no-op
-                now + 90 days
-            )
-        );
-        config.controllerWithOverride.proposeMajorityMetavestAmendment(
-            setName,
-            metavestController.updateMetavestVestingStartTime.selector,
-            abi.encodeWithSelector(
-                metavestController.updateMetavestVestingStartTime.selector,
-                address(0), // no-op
-                now + 90 days
-            )
-        );
-        vm.stopPrank();
-
-        // Approve amendment
-        for (uint256 i = 0; i < grants.length; i++) {
-            metavestController controller = AbstractBeta.getController(config, grants[i].controllerType);
-            vm.prank(grants[i].grantee);
-            controller.voteOnMetavestAmendment(grants[i].metavest, setName, metavestController.updateMetavestVestingStartTime.selector, true);
-        }
-
-        // Execute amendment
-        vm.startPrank(config.authority);
-        for (uint256 i = 0; i < grants.length; i++) {
-            metavestController controller = AbstractBeta.getController(config, grants[i].controllerType);
-            controller.updateMetavestVestingStartTime(grants[i].metavest, now + 90 days);
-
-            {
-                (,,,, uint48 vestingStartTime,, uint48 unlockStartTime,) = RestrictedTokenAward(grants[0].metavest).allocation();
-                assertEq(vestingStartTime, now + 90 days, string(abi.encodePacked("unexpected vestingStartTime after amendment for grant #", vm.toString(i))));
-            }
-        }
-        vm.stopPrank();
-
-        // (2b) Propose amendment for updating unlockStartTime
+        // (2) Propose amendment for updating unlockStartTime
 
         vm.startPrank(config.authority);
         config.controllerWithoutOverride.proposeMajorityMetavestAmendment(
@@ -210,7 +164,7 @@ contract AbstractBetaTest is Test {
 
         // Simulate and verify withdrawal on new schedules
 
-        vm.warp(now + 90 days + 200); // enough time to withdraw all
+        vm.warp(now + 365 days * 4); // enough time to withdraw all
 
         for (uint256 i = 0; i < grants.length; i++) {
             ERC20 vestingToken = ERC20(config.vestingToken);

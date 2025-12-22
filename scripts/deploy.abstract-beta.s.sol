@@ -13,9 +13,15 @@ import {BaseAllocation} from "../src/BaseAllocation.sol";
 contract DeployAbstractBetaScript is Script {
     function run() public {
         runWithArgs(
-            "MetaLexMetaVest.Abstract.v0.1.0",
+            // Ethereum mainnet
+            "MetaLexMetaVest.Abstract.v1.0.0",
             vm.envUint("DEPLOYER_PRIVATE_KEY"),
             AbstractBetaSepolia.getDefault()
+
+            // Sepolia
+//            "MetaLexMetaVest.Abstract.v0.1.0",
+//            vm.envUint("DEPLOYER_PRIVATE_KEY"),
+//            AbstractBetaSepolia.getDefault()
         );
     }
 
@@ -110,12 +116,12 @@ contract DeployAbstractBetaScript is Script {
                     BaseAllocation.Allocation({
                         tokenContract: config.vestingToken,
                         tokenStreamTotal: grant.amount,
-                        vestingCliffCredit: config.vestingAndUnlockCliff,
-                        unlockingCliffCredit: config.vestingAndUnlockCliff,
-                        vestingRate: config.vestingAndUnlockRate,
-                        vestingStartTime: config.vestingAndUnlockStartTime,
-                        unlockRate: config.vestingAndUnlockRate,
-                        unlockStartTime: config.vestingAndUnlockStartTime
+                        vestingCliffCredit: grant.vestingCliffCredit,
+                        unlockingCliffCredit: grant.unlockingCliffCredit,
+                        vestingRate: grant.vestingRate,
+                        vestingStartTime: grant.vestingStartTime,
+                        unlockRate: grant.unlockRate,
+                        unlockStartTime: config.unlockStartTime
                     }),
                     new BaseAllocation.Milestone[](0),
                     config.exercisePrice,
@@ -128,6 +134,11 @@ contract DeployAbstractBetaScript is Script {
             console2.log("  #%d:", i + 1);
             console2.log("    grantee: %s", grant.grantee);
             console2.log("    amount: %d", grant.amount);
+            console2.log("    vestingStartTime: %d", grant.vestingStartTime);
+            console2.log("    vestingCliffCredit: %d", grant.vestingCliffCredit);
+            console2.log("    vestingRate: %d", grant.vestingRate);
+            console2.log("    unlockingCliffCredit: %d", grant.unlockingCliffCredit);
+            console2.log("    unlockRate: %d", grant.unlockRate);
             console2.log("    controllerType: %d", uint8(grant.controllerType));
             console2.log("");
         }

@@ -30,9 +30,7 @@ library AbstractBeta {
         address authority;
         address escrowMultisig;
 
-        uint48 vestingAndUnlockStartTime;
-        uint160 vestingAndUnlockRate;
-        uint128 vestingAndUnlockCliff;
+        uint48 unlockStartTime;
         uint256 exercisePrice;
         uint256 shortStopDuration;
 
@@ -46,6 +44,12 @@ library AbstractBeta {
     struct GrantInfo {
         address grantee;
         uint256 amount;
+        uint128 vestingCliffCredit;
+        uint128 unlockingCliffCredit;
+        uint160 vestingRate;
+        uint48 vestingStartTime;
+        uint160 unlockRate;
+        // Note unlockStartTime, exercisePrice and shortStopDuration are universal and not grant-specific
         ControllerType controllerType;
         address metavest;
     }
@@ -65,10 +69,7 @@ library AbstractBeta {
             escrowMultisig: 0xDeaDbeefdEAdbeefdEadbEEFdeadbeEFdEaDbeeF, // TODO TBD
 
             // Sat Jan  1 00:00:00 UTC 2028
-            // Will update the start times once finalized
-            vestingAndUnlockStartTime: 1830297600, // TODO TBD
-            vestingAndUnlockRate: 1, // TODO TBD
-            vestingAndUnlockCliff: 0, // TODO TBD
+            unlockStartTime: 1830297600, // TODO TBD
             exercisePrice: 1e6, // TODO TBD
             shortStopDuration: 0, // TODO TBD
 
@@ -89,6 +90,11 @@ library AbstractBeta {
             grants[i] = GrantInfo({
                 grantee: address(uint160(vm.envUint(string(abi.encodePacked("GRANTEE_ADDR_", vm.toString(i)))))),
                 amount: vm.envUint(string(abi.encodePacked("GRANTEE_AMOUNT_", vm.toString(i)))),
+                vestingStartTime: uint48(vm.envUint(string(abi.encodePacked("GRANTEE_VESTING_START_TIME_", vm.toString(i))))),
+                vestingCliffCredit: uint128(vm.envUint(string(abi.encodePacked("GRANTEE_VESTING_CLIFF_CREDIT_", vm.toString(i))))),
+                vestingRate: uint160(vm.envUint(string(abi.encodePacked("GRANTEE_VESTING_RATE_", vm.toString(i))))),
+                unlockingCliffCredit: uint128(vm.envUint(string(abi.encodePacked("GRANTEE_UNLOCKING_CLIFF_CREDIT_", vm.toString(i))))),
+                unlockRate: uint160(vm.envUint(string(abi.encodePacked("GRANTEE_UNLOCK_RATE_", vm.toString(i))))),
                 controllerType: ControllerType(vm.envUint(string(abi.encodePacked("GRANTEE_CONTROLLER_TYPE_", vm.toString(i))))),
                 metavest: address(0)
             });
@@ -103,12 +109,12 @@ library AbstractBeta {
         return BaseAllocation.Allocation({
             tokenContract: address(config.vestingToken),
             tokenStreamTotal: grant.amount,
-            vestingCliffCredit: config.vestingAndUnlockCliff,
-            unlockingCliffCredit: config.vestingAndUnlockCliff,
-            vestingRate: config.vestingAndUnlockRate,
-            vestingStartTime: config.vestingAndUnlockStartTime,
-            unlockRate: config.vestingAndUnlockRate,
-            unlockStartTime: config.vestingAndUnlockStartTime
+            vestingCliffCredit: grant.vestingCliffCredit,
+            unlockingCliffCredit: grant.unlockingCliffCredit,
+            vestingRate: grant.vestingRate,
+            vestingStartTime: grant.vestingStartTime,
+            unlockRate: grant.unlockRate,
+            unlockStartTime: config.unlockStartTime
         });
     }
 

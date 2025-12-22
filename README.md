@@ -179,3 +179,7 @@ To set up the project locally, follow these steps:
    ```base
    forge build --optimize --optimizer-runs 200 --use solc:0.8.28 --sizes
    ```
+
+## Deployment
+
+[//]: # (TODO Explain env vars)
