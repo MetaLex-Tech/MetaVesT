@@ -35,15 +35,20 @@ contract AbstractBetaTest is Test {
         config.vestingToken = address(new MockERC20("Vesting Token", "VEST", 18));
         MockERC20(config.vestingToken).mint(config.authority, 100_000_000_000 ether);
         vm.stopPrank();
+        console2.log("Vesting token deployed: %s", config.vestingToken);
 
         // Deploy controllers and prepare txs for grants
         AbstractBeta.GrantInfo[] memory loadedGrants;
-        GnosisTransaction[] memory safeTxs;
+        GnosisTransaction[] memory provisionSafeTxs;
+        GnosisTransaction[] memory grantSafeTxs;
+        GnosisTransaction[] memory allSafeTxs;
         (
             config.controllerWithoutOverride,
             config.controllerWithOverride,
             loadedGrants,
-            safeTxs
+            provisionSafeTxs,
+            grantSafeTxs,
+            allSafeTxs
         ) = (new DeployAbstractBetaScript()).runWithArgs(
             saltStr,
             deployerPrivateKey,
@@ -55,14 +60,21 @@ contract AbstractBetaTest is Test {
         ERC20(config.vestingToken).approve(address(config.controllerWithoutOverride), 100_000_000_000 ether);
         ERC20(config.vestingToken).approve(address(config.controllerWithOverride), 100_000_000_000 ether);
 
+        console2.log("Provisioning Safe funds...");
+        for (uint256 i = 0; i < provisionSafeTxs.length; i++) {
+            (bool success, bytes memory ret) = provisionSafeTxs[i].to.call{value: provisionSafeTxs[i].value}(provisionSafeTxs[i].data);
+            assertTrue(success, string(abi.encodePacked("call #", vm.toString(i + 1), " failed: ", vm.toString(ret))));
+        }
+
         console2.log("Deploying grants:");
-        for (uint256 i = 0; i < safeTxs.length; i++) {
-            (bool success, bytes memory ret) = safeTxs[i].to.call{value: safeTxs[i].value}(safeTxs[i].data);
-            assertTrue(success, string(abi.encodePacked("call #", vm.toString(i), " failed: ", vm.toString(ret))));
+        for (uint256 i = 0; i < grantSafeTxs.length; i++) {
+            (bool success, bytes memory ret) = grantSafeTxs[i].to.call{value: grantSafeTxs[i].value}(grantSafeTxs[i].data);
+            assertTrue(success, string(abi.encodePacked("call #", vm.toString(i + 1), " failed: ", vm.toString(ret))));
             loadedGrants[i].metavest = abi.decode(ret, (address));
             grants.push(loadedGrants[i]); // Save it to storage
-            console2.log("  #%s: %s", vm.toString(i), loadedGrants[i].metavest);
+            console2.log("  #%s: %s", vm.toString(i + 1), loadedGrants[i].metavest);
         }
+
         console2.log("");
         vm.stopPrank();
     }
