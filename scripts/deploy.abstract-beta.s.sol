@@ -46,6 +46,8 @@ contract DeployAbstractBetaScript is Script {
         console2.log("=== DeployAbstractBetaControllersScript ===");
         console2.log("saltStr: %s", saltStr);
         console2.log("deployer: %s", deployer);
+        console2.log("vesting token: %s", config.vestingToken);
+        console2.log("payment token: %s", config.paymentToken);
         console2.log("");
 
         AbstractBeta.GrantInfo[] memory grants = AbstractBeta.loadGrants();

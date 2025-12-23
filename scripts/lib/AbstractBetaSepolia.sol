@@ -16,26 +16,26 @@ library AbstractBetaSepolia {
 
             // External dependencies
 
-            vestingToken: 0xB9E5Ae881f36083cB914205F19EAa265D76eeF53, // mock vesting token
-            paymentToken: 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48, // mock payment token
+            vestingToken: 0xA581b1b0D31B0528C20801E56EeEaF0834a8C907, // mock vesting token
+            paymentToken: 0xB9E5Ae881f36083cB914205F19EAa265D76eeF53, // mock payment token
 
             // Authority
 
-            dao: 0x8E9603BcB5D974Ed9C870510F3665F67CE5c5bDe, // dev wallet
-            authority: 0x8E9603BcB5D974Ed9C870510F3665F67CE5c5bDe, // dev wallet
-            escrowMultisig: 0x8E9603BcB5D974Ed9C870510F3665F67CE5c5bDe, // dev wallet
+            dao: 0x4F22ba82a6B71F7305d1be7Ae7323811f9D555Ab, // dev Safe
+            authority: 0x4F22ba82a6B71F7305d1be7Ae7323811f9D555Ab, // dev Safe
+            escrowMultisig: 0x4F22ba82a6B71F7305d1be7Ae7323811f9D555Ab, // dev Safe
 
             // Sat Jan  1 00:00:00 UTC 2028
             // Will update the start times once finalized
             unlockStartTime: 1830297600,
-            exercisePrice: 10e6,
+            exercisePrice: 1e6,
             shortStopDuration: 0,
 
             // Grants (without override) (grantee can specify their desired recipient addresses)
-            controllerWithoutOverride: metavestController(0xDeaDbeefdEAdbeefdEadbEEFdeadbeEFdEaDbeeF), // TODO TBD
+            controllerWithoutOverride: metavestController(0xCEf4761CC320Fdc28034f00B754E8b608028f420),
 
             // Grants (with override) (authority overrides all grantees' recipient address)
-            controllerWithOverride: metavestController(0xDeaDbeefdEAdbeefdEadbEEFdeadbeEFdEaDbeeF) // TODO TBD
+            controllerWithOverride: metavestController(0x387116083c8788426Fc91d6689972e2ad6d54512)
         });
     }
 }
