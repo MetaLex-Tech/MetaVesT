@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import "./BaseAllocation.sol";
 
-pragma solidity 0.8.20;
+pragma solidity ^0.8.20;
 
 contract RestrictedTokenAward is BaseAllocation {
 
@@ -15,6 +15,7 @@ contract RestrictedTokenAward is BaseAllocation {
 
     /// @notice Constructor to deploy a new RestrictedTokenAward
     /// @param _grantee - address of the grantee
+    /// @param _desiredRecipient address of the fund recipient
     /// @param _controller - address of the controller
     /// @param _paymentToken - address of the payment token
     /// @param _repurchasePrice - price at which the restricted tokens can be repurchased in vesting token decimals but only up to payment decimal precision
@@ -23,6 +24,7 @@ contract RestrictedTokenAward is BaseAllocation {
     /// @param _milestones - milestones with their conditions and awards
     constructor (
         address _grantee,
+        address _desiredRecipient,
         address _controller,
         address _paymentToken,
         uint256 _repurchasePrice,
@@ -31,6 +33,7 @@ contract RestrictedTokenAward is BaseAllocation {
         Milestone[] memory _milestones
     ) BaseAllocation(
          _grantee,
+         _desiredRecipient,
          _controller
     ) {
         //perform input validation
@@ -152,9 +155,11 @@ contract RestrictedTokenAward is BaseAllocation {
     function claimRepurchasedTokens() external onlyGrantee nonReentrant {
         if(IERC20M(paymentToken).balanceOf(address(this)) == 0) revert MetaVesT_MoreThanAvailable();
         uint256 _amount = IERC20M(paymentToken).balanceOf(address(this));
-        safeTransfer(paymentToken, msg.sender, _amount);
+
+        address recipient = getRecipient();
+        safeTransfer(paymentToken, recipient, _amount);
         tokensRepurchasedWithdrawn += _amount;
-        emit MetaVesT_Withdrawn(msg.sender, paymentToken, _amount);
+        emit MetaVesT_Withdrawn(grantee, recipient, paymentToken, _amount);
     }
 
     /// @notice Allows the controller to terminate the RestrictedTokenAward

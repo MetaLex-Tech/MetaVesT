@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-pragma solidity 0.8.20;
+pragma solidity ^0.8.20;
 
 import "../../src/BaseAllocation.sol";
 
@@ -93,5 +93,12 @@ contract SignatureCondition is BaseCondition {
         } else if (logic == Logic.OR) {
             return signatureCount >= threshold;
         } else return false; // Default case, should not reach here
+    }
+}
+
+/// @title FalseCondition - A condition that always fails
+contract FalseCondition is BaseCondition {
+    function checkCondition(address _contract, bytes4 _functionSignature, bytes memory data) public view override returns (bool) {
+        return false;
     }
 }

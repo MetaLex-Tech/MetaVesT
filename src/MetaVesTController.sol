@@ -6,7 +6,7 @@
                                      *************************************
                                                                         */
 
-pragma solidity 0.8.20;
+pragma solidity ^0.8.20;
 
 //import "./MetaVesT.sol";
 import "./interfaces/IAllocationFactory.sol";
@@ -39,6 +39,12 @@ contract metavestController is SafeTransferLib {
     address public vestingFactory;
     address public tokenOptionFactory;
     address public restrictedTokenFactory;
+
+    // TODO: unaudited beta feature
+    // Overrides all downstream metavest vaults's recipient addresses. Set by authority only (address(0) = unset).
+    // Individual metavest grantees may have their own desired recipients set, but this value would override them if set.
+    address public recipientOverride;
+
     address internal _pendingAuthority;
     address internal _pendingDao;
 
@@ -90,6 +96,7 @@ contract metavestController is SafeTransferLib {
     event MetaVesTController_SetRemoved(string indexed set);
     event MetaVesTController_AddressAddedToSet(string set, address indexed grantee);
     event MetaVesTController_AddressRemovedFromSet(string set, address indexed grantee);
+    event MetaVesTController_RecipientOverrideUpdated(address indexed newRecipientOverride);
 
     ///
     /// ERRORS
@@ -173,13 +180,23 @@ contract metavestController is SafeTransferLib {
     /// @param _authority address of the authority who can call the functions in this contract and update each MetaVesT in '_metavest', such as a BORG
     /// @param _dao DAO governance contract address which exercises control over ability of 'authority' to call certain functions via imposing
     /// conditions through 'updateFunctionCondition'.
-    constructor(address _authority, address _dao, address _vestingFactory, address _tokenOptionFactory, address _restrictedTokenFactory) {
+    /// @param _recipientOverride override individual metavest vault's recipient addresses so grantee cannot specify their own recipient addresses
+    constructor(
+        address _authority,
+        address _dao,
+        address _recipientOverride,
+        address _vestingFactory,
+        address _tokenOptionFactory,
+        address _restrictedTokenFactory
+    ) {
         if (_authority == address(0)) revert MetaVesTController_ZeroAddress();
         authority = _authority;
         vestingFactory = _vestingFactory;
         tokenOptionFactory = _tokenOptionFactory;
         restrictedTokenFactory = _restrictedTokenFactory;
         dao = _dao;
+
+        _updateRecipientOverride(_recipientOverride);
     }
 
     /// @notice for a grantee to consent to an update to one of their metavestDetails by 'authority' corresponding to the applicable function in this controller
@@ -222,20 +239,54 @@ contract metavestController is SafeTransferLib {
         emit MetaVesTController_ConditionUpdated(_condition, _functionSig);
     }
 
-    function createMetavest(metavestType _type, address _grantee,  BaseAllocation.Allocation calldata _allocation, BaseAllocation.Milestone[] calldata _milestones, uint256 _exercisePrice, address _paymentToken,  uint256 _shortStopDuration, uint256 _longStopDate) external onlyAuthority conditionCheck returns (address)
-    {
+    /// @notice For backward compatibility (default recipient)
+    /// @dev Should always call the internal createMetavest() because the latter performs the necessary ACL
+    function createMetavest(
+        metavestType _type,
+        address _grantee,
+        BaseAllocation.Allocation calldata _allocation,
+        BaseAllocation.Milestone[] calldata _milestones,
+        uint256 _exercisePrice,
+        address _paymentToken,
+        uint256 _shortStopDuration,
+        uint256 _longStopDate
+    ) external returns (address) {
+        return createMetavest(
+            _type,
+            _grantee,
+            address(0), // no preference
+            _allocation,
+            _milestones,
+            _exercisePrice,
+            _paymentToken,
+            _shortStopDuration,
+            _longStopDate
+        );
+    }
+
+    function createMetavest(
+        metavestType _type,
+        address _grantee,
+        address _desiredRecipient,
+        BaseAllocation.Allocation calldata _allocation,
+        BaseAllocation.Milestone[] calldata _milestones,
+        uint256 _exercisePrice,
+        address _paymentToken,
+        uint256 _shortStopDuration,
+        uint256 _longStopDate
+    ) public onlyAuthority conditionCheck returns (address) {
         address newMetavest;
         if(_type == metavestType.Vesting)
         {
-            newMetavest = createVestingAllocation(_grantee, _allocation, _milestones);
+            newMetavest = createVestingAllocation(_grantee, _desiredRecipient, _allocation, _milestones);
         }
         else if(_type == metavestType.TokenOption)
         {
-            newMetavest = createTokenOptionAllocation(_grantee, _exercisePrice, _paymentToken, _shortStopDuration, _allocation, _milestones);
+            newMetavest = createTokenOptionAllocation(_grantee, _desiredRecipient, _exercisePrice, _paymentToken, _shortStopDuration, _allocation, _milestones);
         }
         else if(_type == metavestType.RestrictedTokenAward)
         {
-            newMetavest = createRestrictedTokenAward(_grantee, _exercisePrice, _paymentToken, _shortStopDuration, _allocation, _milestones);
+            newMetavest = createRestrictedTokenAward(_grantee, _desiredRecipient, _exercisePrice, _paymentToken, _shortStopDuration, _allocation, _milestones);
         }
         else
         {
@@ -243,10 +294,10 @@ contract metavestController is SafeTransferLib {
         }
         return newMetavest;
     }
-    
 
     function validateInputParameters(
         address _grantee,
+        address _desiredRecipient,
         address _paymentToken,
         uint256 _exercisePrice,
         VestingAllocation.Allocation calldata _allocation
@@ -283,50 +334,58 @@ contract metavestController is SafeTransferLib {
         ) revert MetaVesTController_AmountNotApprovedForTransferFrom();
     }
 
-     function createAndInitializeTokenOptionAllocation(
-            address _grantee,
-            address _paymentToken,
-            uint256 _exercisePrice,
-            uint256 _shortStopDuration,
-            VestingAllocation.Allocation calldata _allocation,
-            VestingAllocation.Milestone[] calldata _milestones
-        ) internal returns (address) {
-            return IAllocationFactory(tokenOptionFactory).createAllocation(
-                IAllocationFactory.AllocationType.TokenOption,
-                _grantee,
-                address(this),
-                _allocation,
-                _milestones,
-                _paymentToken,
-                _exercisePrice,
-                _shortStopDuration
-            );
-        }
+    function createAndInitializeTokenOptionAllocation(
+        address _grantee,
+        address _desiredRecipient,
+        address _paymentToken,
+        uint256 _exercisePrice,
+        uint256 _shortStopDuration,
+        VestingAllocation.Allocation calldata _allocation,
+        VestingAllocation.Milestone[] calldata _milestones
+    ) internal returns (address) {
+        return IAllocationFactory(tokenOptionFactory).createAllocation(
+            IAllocationFactory.AllocationType.TokenOption,
+            _grantee,
+            _desiredRecipient,
+            address(this),
+            _allocation,
+            _milestones,
+            _paymentToken,
+            _exercisePrice,
+            _shortStopDuration
+        );
+    }
 
-        function createAndInitializeRestrictedTokenAward(
-            address _grantee,
-            address _paymentToken,
-            uint256 _repurchasePrice,
-            uint256 _shortStopDuration,
-            VestingAllocation.Allocation calldata _allocation,
-            VestingAllocation.Milestone[] calldata _milestones
-        ) internal returns (address) {
-            return IAllocationFactory(restrictedTokenFactory).createAllocation(
-                IAllocationFactory.AllocationType.RestrictedToken,
-                _grantee,
-                address(this),
-                _allocation,
-                _milestones,
-                _paymentToken,
-                _repurchasePrice,
-                _shortStopDuration
-            );
-        }
+    function createAndInitializeRestrictedTokenAward(
+        address _grantee,
+        address _desiredRecipient,
+        address _paymentToken,
+        uint256 _repurchasePrice,
+        uint256 _shortStopDuration,
+        VestingAllocation.Allocation calldata _allocation,
+        VestingAllocation.Milestone[] calldata _milestones
+    ) internal returns (address) {
+        return IAllocationFactory(restrictedTokenFactory).createAllocation(
+            IAllocationFactory.AllocationType.RestrictedToken,
+            _grantee,
+            _desiredRecipient,
+            address(this),
+            _allocation,
+            _milestones,
+            _paymentToken,
+            _repurchasePrice,
+            _shortStopDuration
+        );
+    }
 
-
-    function createVestingAllocation(address _grantee, VestingAllocation.Allocation calldata _allocation, VestingAllocation.Milestone[] calldata _milestones) internal returns (address){
+    function createVestingAllocation(
+        address _grantee,
+        address _desiredRecipient,
+        VestingAllocation.Allocation calldata _allocation,
+        VestingAllocation.Milestone[] calldata _milestones
+    ) internal returns (address){
         //hard code values not to trigger the failure for the 2 parameters that don't matter for this type of allocation
-        validateInputParameters(_grantee, address(this), 1, _allocation);
+        validateInputParameters(_grantee, _desiredRecipient, address(this), 1, _allocation);
         validateAllocation(_allocation);
         uint256 _milestoneTotal = validateAndCalculateMilestones(_milestones);
 
@@ -337,6 +396,7 @@ contract metavestController is SafeTransferLib {
         address vestingAllocation = IAllocationFactory(vestingFactory).createAllocation(
             IAllocationFactory.AllocationType.Vesting,
             _grantee,
+            _desiredRecipient,
             address(this),
             _allocation,
             _milestones,
@@ -349,50 +409,70 @@ contract metavestController is SafeTransferLib {
         return vestingAllocation;
     }
 
-    function createTokenOptionAllocation(address _grantee, uint256 _exercisePrice, address _paymentToken,  uint256 _shortStopDuration, VestingAllocation.Allocation calldata _allocation, VestingAllocation.Milestone[] calldata _milestones) internal conditionCheck returns (address) {
-        
-        validateInputParameters(_grantee, _paymentToken, _exercisePrice, _allocation);
+    function createTokenOptionAllocation(
+        address _grantee,
+        address _desiredRecipient,
+        uint256 _exercisePrice,
+        address _paymentToken,
+        uint256 _shortStopDuration,
+        VestingAllocation.Allocation calldata _allocation,
+        VestingAllocation.Milestone[] calldata _milestones
+    ) internal conditionCheck returns (address) {
+
+        validateInputParameters(_grantee, _desiredRecipient, _paymentToken, _exercisePrice, _allocation);
         validateAllocation(_allocation);
         uint256 _milestoneTotal = validateAndCalculateMilestones(_milestones);
 
         uint256 _total = _allocation.tokenStreamTotal + _milestoneTotal;
         if (_total == 0) revert MetaVesTController_ZeroAmount();
         validateTokenApprovalAndBalance(_allocation.tokenContract, _total);
-        
+
+        // This is for fixing stack-too-deep errors
         address tokenOptionAllocation = createAndInitializeTokenOptionAllocation(
-                _grantee,
-                _paymentToken,
-                _exercisePrice,
-                _shortStopDuration,
-                _allocation,
-                _milestones
-            );
+            _grantee,
+            _desiredRecipient,
+            _paymentToken,
+            _exercisePrice,
+            _shortStopDuration,
+            _allocation,
+            _milestones
+        );
 
-            safeTransferFrom(_allocation.tokenContract, authority, tokenOptionAllocation, _total);
-            return tokenOptionAllocation;
-        }
+        safeTransferFrom(_allocation.tokenContract, authority, tokenOptionAllocation, _total);
+        return tokenOptionAllocation;
+    }
 
-        function createRestrictedTokenAward(address _grantee, uint256 _repurchasePrice, address _paymentToken, uint256 _shortStopDuration, VestingAllocation.Allocation calldata _allocation, VestingAllocation.Milestone[] calldata _milestones) internal conditionCheck returns (address){
-            validateInputParameters(_grantee, _paymentToken, _repurchasePrice, _allocation);
-            validateAllocation(_allocation);
-            uint256 _milestoneTotal = validateAndCalculateMilestones(_milestones);
+    function createRestrictedTokenAward(
+        address _grantee,
+        address _desiredRecipient,
+        uint256 _repurchasePrice,
+        address _paymentToken,
+        uint256 _shortStopDuration,
+        VestingAllocation.Allocation calldata _allocation,
+        VestingAllocation.Milestone[] calldata _milestones
+    ) internal conditionCheck returns (address){
+        validateInputParameters(_grantee, _desiredRecipient, _paymentToken, _repurchasePrice, _allocation);
+        validateAllocation(_allocation);
+        uint256 _milestoneTotal = validateAndCalculateMilestones(_milestones);
 
-            uint256 _total = _allocation.tokenStreamTotal + _milestoneTotal;
-            if (_total == 0) revert MetaVesTController_ZeroAmount();
-            validateTokenApprovalAndBalance(_allocation.tokenContract, _total);
+        uint256 _total = _allocation.tokenStreamTotal + _milestoneTotal;
+        if (_total == 0) revert MetaVesTController_ZeroAmount();
+        validateTokenApprovalAndBalance(_allocation.tokenContract, _total);
 
-            address restrictedTokenAward = createAndInitializeRestrictedTokenAward(
-                _grantee,
-                _paymentToken,
-                _repurchasePrice,
-                _shortStopDuration,
-                _allocation,
-                _milestones
-            );
+        // This is for fixing stack-too-deep errors
+        address restrictedTokenAward = createAndInitializeRestrictedTokenAward(
+            _grantee,
+            _desiredRecipient,
+            _paymentToken,
+            _repurchasePrice,
+            _shortStopDuration,
+            _allocation,
+            _milestones
+        );
 
-            safeTransferFrom(_allocation.tokenContract, authority, restrictedTokenAward, _total);
-            return restrictedTokenAward;
-        }
+        safeTransferFrom(_allocation.tokenContract, authority, restrictedTokenAward, _total);
+        return restrictedTokenAward;
+    }
     
     function getMetaVestType(address _grant) public view returns (uint256) {
         return BaseAllocation(_grant).getVestingType();
@@ -489,6 +569,18 @@ contract metavestController is SafeTransferLib {
         BaseAllocation(_grant).updateUnlockRate(_unlockRate);
     }
 
+    /// @notice for 'authority' to update a MetaVesT's unlockStartTime (including any transferees)
+    /// @dev '_unlockStartTime' is subject to the rules as defined in `BaseAllocation.updateUnlockStartTime()`
+    /// @param _grant address of grantee whose MetaVesT is being updated
+    /// @param _unlockStartTime token unlock rate in tokens per second
+    function updateMetavestUnlockStartTime(
+        address _grant,
+        uint48 _unlockStartTime
+    ) external onlyAuthority conditionCheck consentCheck(_grant, msg.data) {
+        _resetAmendmentParams(_grant, msg.sig);
+        BaseAllocation(_grant).updateUnlockStartTime(_unlockStartTime);
+    }
+
     /// @notice for 'authority' to update a MetaVesT's vestingRate (including any transferees)
     /// @dev a '_vestingRate' of 0 is permissible to enable temporary freezes of allocation vestings by authority, but to permanently terminate vesting, call 'terminateMetavestVesting'
     /// @param _grant address of grantee whose MetaVesT is being updated
@@ -499,6 +591,18 @@ contract metavestController is SafeTransferLib {
     ) external onlyAuthority conditionCheck consentCheck(_grant, msg.data) {
         _resetAmendmentParams(_grant, msg.sig);
         BaseAllocation(_grant).updateVestingRate(_vestingRate);
+    }
+
+    /// @notice for 'authority' to update a MetaVesT's vestingStartTime (including any transferees)
+    /// @dev '_vestingStartTime' is subject to the rules as defined in `BaseAllocation.updateVestingStartTime()`
+    /// @param _grant address of grantee whose MetaVesT is being updated
+    /// @param _vestingStartTime token vesting rate in tokens per second
+    function updateMetavestVestingStartTime(
+        address _grant,
+        uint48 _vestingStartTime
+    ) external onlyAuthority conditionCheck consentCheck(_grant, msg.data) {
+        _resetAmendmentParams(_grant, msg.sig);
+        BaseAllocation(_grant).updateVestingStartTime(_vestingStartTime);
     }
 
     /// @notice for authority to update a MetaVesT's stopTime and/or shortStopTime, as applicable (including any transferees)
@@ -747,4 +851,17 @@ contract metavestController is SafeTransferLib {
         emit MetaVesTController_AddressRemovedFromSet(_name, _metaVest);
     }
 
+    /// @notice Override individual metavest vault recipient to a new address. Individual metavest grantees may
+    /// set their own desired recipients, but this overrides them if set.
+    /// @dev `address(0)` means null/no overrides
+    /// @dev onlyAuthority -- must be called by the authority
+    /// @param _newRecipientOverride - the address of the new overriding recipient
+    function updateRecipientOverride(address _newRecipientOverride) external onlyAuthority {
+        _updateRecipientOverride(_newRecipientOverride);
+    }
+
+    function _updateRecipientOverride(address _newRecipientOverride) internal {
+        emit MetaVesTController_RecipientOverrideUpdated(_newRecipientOverride);
+        recipientOverride = _newRecipientOverride;
+    }
 }

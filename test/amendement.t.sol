@@ -572,6 +572,7 @@ contract MetaVestControllerTest is Test {
         controller = new metavestController(
             authority,
             dao,
+            address(0),
             address(factory),
             address(tokenFactory),
             address(restrictedTokenFactory)

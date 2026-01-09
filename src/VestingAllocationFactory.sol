@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0
-pragma solidity 0.8.20;
+pragma solidity ^0.8.20;
 
 import "./VestingAllocation.sol";
 import "./interfaces/IAllocationFactory.sol";
@@ -9,6 +9,7 @@ contract VestingAllocationFactory is IAllocationFactory {
     function createAllocation(
         AllocationType _allocationType,
         address _grantee,
+        address _desiredRecipient,
         address _controller,
         VestingAllocation.Allocation memory _allocation,
         VestingAllocation.Milestone[] memory _milestones,
@@ -17,7 +18,7 @@ contract VestingAllocationFactory is IAllocationFactory {
         uint256 _shortStopDuration
     ) external returns (address) {
         if (_allocationType == AllocationType.Vesting) {
-            return address(new VestingAllocation(_grantee, _controller, _allocation, _milestones));
+            return address(new VestingAllocation(_grantee, _desiredRecipient, _controller, _allocation, _milestones));
         } else {
             revert("AllocationFactory: invalid allocation type");
         }

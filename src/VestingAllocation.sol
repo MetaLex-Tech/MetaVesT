@@ -1,23 +1,26 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import "./BaseAllocation.sol";
 
-pragma solidity 0.8.20;
+pragma solidity ^0.8.20;
 
 contract VestingAllocation is BaseAllocation {
 
     /// @notice constructor for VestingAllocation
     /// @param _grantee address of the grantee
+    /// @param _desiredRecipient address of the fund recipient
     /// @param _controller address of the controller
     /// @param _allocation Allocation struct containing token contract
     /// @param _milestones array of Milestone structs with conditions and awards
     constructor (
         address _grantee,
+        address _desiredRecipient,
         address _controller,
         Allocation memory _allocation,
         Milestone[] memory _milestones
     ) BaseAllocation(
-         _grantee,
-         _controller
+        _grantee,
+        _desiredRecipient,
+        _controller
     ) {
         //perform input validation
         if (_allocation.tokenContract == address(0)) revert MetaVesT_ZeroAddress();
@@ -49,19 +52,24 @@ contract VestingAllocation is BaseAllocation {
     /// @notice returns the governing power of the VestingAllocation
     /// @return governingPower - the governing power of the VestingAllocation based on the governance setting
     function getGoverningPower() external view override returns (uint256 governingPower) {
-        if(govType==GovType.all)
-        {
+        // TODO WIP: revise needed. There are some changes since the last audit. Do we need to apply those changes to the other two allocation types?
+        if(govType==GovType.all) {
             uint256 totalMilestoneAward = 0;
-            for(uint256 i; i < milestones.length; ++i)
-            { 
+            for(uint256 i; i < milestones.length; ++i) {
                     totalMilestoneAward += milestones[i].milestoneAward;
             }
             governingPower = (allocation.tokenStreamTotal + totalMilestoneAward) - tokensWithdrawn;
+        } else if(govType==GovType.vested) {
+            uint256 amount = getVestedTokenAmount();
+            governingPower = (amount > tokensWithdrawn)
+                ? amount - tokensWithdrawn
+                : 0;
+        } else {
+            uint256 amount = _min(getVestedTokenAmount(), getUnlockedTokenAmount());
+            governingPower = (amount > tokensWithdrawn)
+                ? amount - tokensWithdrawn
+                : 0;
         }
-        else if(govType==GovType.vested)
-             governingPower = getVestedTokenAmount() - tokensWithdrawn;
-        else 
-            governingPower = _min(getVestedTokenAmount(), getUnlockedTokenAmount()) - tokensWithdrawn;
         
         return governingPower;
     }

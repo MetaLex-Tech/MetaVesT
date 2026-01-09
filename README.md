@@ -177,5 +177,28 @@ To set up the project locally, follow these steps:
 3. **Compile Contracts**
 
    ```base
-   forge build --optimize --optimizer-runs 200 --use solc:0.8.20
+   forge build --optimize --optimizer-runs 200 --use solc:0.8.28 --sizes
    ```
+
+## Deployment
+
+```bash
+# Setup env var for deployment
+cp env.production.abstract-beta.template .env
+# Modify .env and update all relevant values
+
+# To dry-run the deploy scripts (to Ethereum mainnet)
+forge script scripts/deploy.abstract-beta.s.sol --use solc:0.8.28 --optimize --optimizer-runs 200 --rpc-url https://your/rpc/endpt
+
+# To deploy to Ethereum mainnet (and verify on Etherscan)
+forge script scripts/deploy.abstract-beta.s.sol --use solc:0.8.28 --optimize --optimizer-runs 200 --rpc-url https://your/rpc/endpt --broadcast --verify --verifier etherscan --etherscan-api-key $ETHERSCAN_API_KEY
+
+# The scripts will save the Safe txs to out/safeTxs.json, which you can import to the Transaction Builder in Safe web UI for execution
+# It should include txs for:
+#   1. Approve MetavestController (without recipient overrides) for escrowing the vesting token
+#   2. Approve MetavestController (with recipient overrides) for escrowing the vesting token
+#   3~. Create Metavest for each grantee (one transaction each)
+#
+# Always double check the content before signing:
+cat out/safeTxs.json
+```
