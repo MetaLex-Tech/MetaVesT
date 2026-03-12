@@ -5,13 +5,13 @@
 ██║╚██╔╝██║██╔══╝     ██║    ██╔══██║ ██╗ ██╔╝██╔══╝   ╚════██║   ██║
 ██║ ╚═╝ ██║███████╗   ██║    ██║  ██║  ╚██╔═╝ ███████╗ ███████║   ██║
 ╚═╝     ╚═╝╚══════╝   ╚═╝    ╚═╝  ╚═╝   ╚═╝   ╚══════╝ ╚══════╝   ╚═╝
-///BORG-Compatible Token Vesting/Lockup Protocol.
+///Token Vesting/Lockup Protocol for Tokenized Securities/Corporate Finance.
    ╚══╝ ╚════════╝ ╚═══╝ ╚════════════╝ ╚══════╝
 ```
 
 # Overview
 
-MetaVesT is a BORG-compatible token vesting/lockup protocol for ERC20 tokens, supporting:
+MetaVesT is a token vesting/lockup protocol for ERC20 tokens, optimized for tokenized securities & corporate finance, supporting:
 
 - Vesting allocations
 - Token Options
@@ -23,13 +23,13 @@ Each MetaVest framework supports any number of grantees and different ERC20 toke
 
 ## Initiating a MetaVesT Framework
 
-Each MetaVesT framework is designed to be on a per-BORG or more general per-authority basis.
+Each MetaVesT framework is designed to be on a per-entity or more general per-authority basis.
 
 A MetaVesT framework is initiated by calling `deployMetavestAndController()` in `MetaVesTFactory`, supplying:
 
-`_authority`: address of the `authority` who will have the ability to call the functions in the MetaVesTController (including creating and updating MetaVesTs within the framework) such as a BORG.
+`_authority`: address of the `authority` who will have the ability to call the functions in the MetaVesTController (including creating and updating MetaVesTs within the framework) such as a cyberCORP.
 
-`_dao`: DAO governance contract address which exercises control over ability of 'authority' to call certain functions via imposing conditions through 'updateFunctionCondition'
+`_dao`: governance contract address which exercises control over ability of 'authority' to call certain functions via imposing conditions through 'updateFunctionCondition'
 
 `_vestingAllocationFactory`: factory contract address which will be used to create each vesting allocation in this MetaVesT framework
 
