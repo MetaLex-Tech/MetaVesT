@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import "./BaseAllocation.sol";
 
-pragma solidity 0.8.20;
+pragma solidity ^0.8.20;
 
 contract TokenOptionAllocation is BaseAllocation {
 
@@ -16,6 +16,7 @@ contract TokenOptionAllocation is BaseAllocation {
 
     /// @notice Constructor to create a TokenOptionAllocation
     /// @param _grantee - address of the grantee
+    /// @param _desiredRecipient address of the fund recipient
     /// @param _controller - address of the controller
     /// @param _paymentToken - address of the payment token
     /// @param _exercisePrice - price of the token option exercise in vesting token decimals but only up to payment decimal precision
@@ -24,6 +25,7 @@ contract TokenOptionAllocation is BaseAllocation {
     /// @param _milestones - milestones with conditions and awards
     constructor (
         address _grantee,
+        address _desiredRecipient,
         address _controller,
         address _paymentToken,
         uint256 _exercisePrice,
@@ -32,6 +34,7 @@ contract TokenOptionAllocation is BaseAllocation {
         Milestone[] memory _milestones
     ) BaseAllocation(
          _grantee,
+         _desiredRecipient,
          _controller
     ) {
         //perform input validation
@@ -139,10 +142,10 @@ contract TokenOptionAllocation is BaseAllocation {
         // Calculate paymentAmount
         uint256 paymentAmount = getPaymentAmount(_tokensToExercise);
         if(paymentAmount == 0) revert MetaVesT_TooSmallAmount();
-        
-        safeTransferFrom(paymentToken, msg.sender, getAuthority(), paymentAmount);
+
+        safeTransferFrom(paymentToken, grantee, getAuthority(), paymentAmount);
         tokensExercised += _tokensToExercise;
-        emit MetaVesT_TokenOptionExercised(msg.sender, _tokensToExercise, paymentAmount);
+        emit MetaVesT_TokenOptionExercised(grantee, _tokensToExercise, paymentAmount);
     }
 
     /// @notice Allows the controller to terminate the TokenOptionAllocation

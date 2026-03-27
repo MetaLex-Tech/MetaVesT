@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-pragma solidity 0.8.20;
+pragma solidity ^0.8.20;
+
+import {IMetaVesTController} from "./interfaces/IMetaVesTController.sol";
 
 /// @notice interface to a MetaLeX condition contract
 /// @dev see https://github.com/MetaLex-Tech/BORG-CORE/tree/main/src/libs/conditions
@@ -116,6 +118,7 @@ abstract contract BaseAllocation is ReentrancyGuard, SafeTransferLib{
         error MetaVesT_NotTerminated();
         error MetaVesT_MilestoneIndexCompletedOrDoesNotExist();
         error MetaVesT_ConditionNotSatisfied();
+        error MetaVesT_AlreadyStarted();
         error MetaVesT_AlreadyTerminated();
         error MetaVesT_MoreThanAvailable();
         error MetaVesT_VestNotTransferable();
@@ -134,9 +137,12 @@ abstract contract BaseAllocation is ReentrancyGuard, SafeTransferLib{
         event MetaVesT_TransferabilityUpdated(address indexed grantee, bool isTransferable);
         event MetaVest_TransferRightsPending(address indexed grantee, address indexed pendingGrantee);
         event MetaVesT_TransferredRights(address indexed grantee, address transferee);
-        event MetaVesT_UnlockRateUpdated(address indexed grantee, uint208 unlockRate);
-        event MetaVesT_VestingRateUpdated(address indexed grantee, uint208 vestingRate);
-        event MetaVesT_Withdrawn(address indexed grantee, address indexed tokenAddress, uint256 amount);
+        event MetaVesT_DesiredRecipientUpdated(address indexed grantee, address newDesiredRecipient);
+        event MetaVesT_UnlockRateUpdated(address indexed grantee, uint160 unlockRate);
+        event MetaVesT_VestingRateUpdated(address indexed grantee, uint160 vestingRate);
+        event MetaVesT_UnlockStartTimeUpdated(address indexed grantee, uint48 unlockStartTime);
+        event MetaVesT_VestingStartTimeUpdated(address indexed grantee, uint48 vestingStartTime);
+        event MetaVesT_Withdrawn(address indexed grantee, address indexed recipient, address indexed tokenAddress, uint256 amount);
         event MetaVesT_PriceUpdated(address indexed grantee, uint256 exercisePrice);
         event MetaVesT_RepurchaseAndWithdrawal(address indexed grantee, address indexed tokenAddress, uint256 withdrawalAmount, uint256 repurchaseAmount);
         event MetaVesT_Terminated(address indexed grantee, uint256 tokensRecovered);
@@ -168,15 +174,23 @@ abstract contract BaseAllocation is ReentrancyGuard, SafeTransferLib{
         bool public terminated;
         uint256 public terminationTime;
 
+        // TODO: unaudited beta feature
+        // Specifies desired recipient of the tokens. Set by grantee only (address(0) = unset)
+        // Note this is a preference and it could be overridden by the controller.
+        address public desiredRecipient;
+
         /// @notice BaseAllocation constructor
         /// @param _grantee: address of the grantee, cannot be a zero address
         /// @param _controller: address of the MetaVesTController contract
-        constructor(address _grantee, address _controller) {
+        constructor(address _grantee, address _desiredRecipient, address _controller) {
             // Controller can be 0 for an immuatable version, but grantee cannot
             if (_grantee == address(0)) revert MetaVesT_ZeroAddress();
+
             grantee = _grantee;
             controller = _controller;
             govType = GovType.vested;
+
+            _updateDesiredRecipient(_desiredRecipient);
         }
 
         function getVestingType() external view virtual returns (uint256);
@@ -207,7 +221,7 @@ abstract contract BaseAllocation is ReentrancyGuard, SafeTransferLib{
             emit MetaVesT_TransferabilityUpdated(grantee, _transferable);
         }
 
-        /// @notice updates the vesting rate of the VestingAllocation
+        /// @notice updates the vesting rate of the Allocation
         /// @dev onlyController -- must be called from the metavest controller
         /// @param _newVestingRate - the updated vesting rate in tokens per second in the vesting token decimal
         function updateVestingRate(uint160 _newVestingRate) external onlyController {
@@ -216,12 +230,42 @@ abstract contract BaseAllocation is ReentrancyGuard, SafeTransferLib{
             emit MetaVesT_VestingRateUpdated(grantee, _newVestingRate);
         }
 
-        /// @notice updates the unlock rate of the VestingAllocation
+        /// @notice updates the vesting start time of the Allocation
+        /// @dev onlyController -- must be called from the metavest controller
+        /// @param _newVestingStartTime - the updated vesting start time
+        function updateVestingStartTime(uint48 _newVestingStartTime) external onlyController {
+            if (terminated) revert MetaVesT_AlreadyTerminated();
+
+            // It is not allowed to update start time if it has already passed, because
+            // the contract treats vested tokens as permanent and therefore would not allow any change to the start time,
+            // which would change the number of vested token at that very moment.
+            if (allocation.vestingStartTime <= block.timestamp || _newVestingStartTime <= block.timestamp) revert MetaVesT_AlreadyStarted();
+
+            allocation.vestingStartTime = _newVestingStartTime;
+            emit MetaVesT_VestingStartTimeUpdated(grantee, _newVestingStartTime);
+        }
+
+        /// @notice updates the unlock rate of the Allocation
         /// @dev onlyController -- must be called from the metavest controller
         /// @param _newUnlockRate - the updated unlock rate in tokens per second in the vesting token decimal
         function updateUnlockRate(uint160 _newUnlockRate) external onlyController {
             allocation.unlockRate = _newUnlockRate;
             emit MetaVesT_UnlockRateUpdated(grantee, _newUnlockRate);
+        }
+
+        /// @notice updates the unlock start time of the Allocation
+        /// @dev onlyController -- must be called from the metavest controller
+        /// @param _newUnlockStartTime - the updated unlock start time
+        function updateUnlockStartTime(uint48 _newUnlockStartTime) external onlyController {
+            if (terminated) revert MetaVesT_AlreadyTerminated();
+
+            // It is not allowed to update start time if it has already passed, because
+            // the contract treats unlock tokens as permanent and therefore would not allow any change to the start time,
+            // which would change the number of unlock token at that very moment.
+            if (allocation.unlockStartTime <= block.timestamp || _newUnlockStartTime <= block.timestamp) revert MetaVesT_AlreadyStarted();
+
+            allocation.unlockStartTime = _newUnlockStartTime;
+            emit MetaVesT_UnlockStartTimeUpdated(grantee, _newUnlockStartTime);
         }
 
         /// @notice Sets the governing power type for the MetaVesT
@@ -300,6 +344,18 @@ abstract contract BaseAllocation is ReentrancyGuard, SafeTransferLib{
             pendingGrantee = address(0);
         }
 
+        /// @notice update the recipient to a new address
+        /// @dev onlyGrantee -- must be called by the grantee
+        /// @param _newDesiredRecipient - the address of the new recipient preference
+        function updateDesiredRecipient(address _newDesiredRecipient) external onlyGrantee {
+            _updateDesiredRecipient(_newDesiredRecipient);
+        }
+
+        function _updateDesiredRecipient(address _newDesiredRecipient) internal {
+            emit MetaVesT_DesiredRecipientUpdated(grantee, _newDesiredRecipient);
+            desiredRecipient = _newDesiredRecipient;
+        }
+
         /// @notice withdraws tokens from the VestingAllocation
         /// @dev onlyGrantee -- must be called by the grantee
         /// @param _amount - the amount of tokens to withdraw
@@ -307,8 +363,25 @@ abstract contract BaseAllocation is ReentrancyGuard, SafeTransferLib{
             if (_amount == 0) revert MetaVesT_ZeroAmount();
             if (_amount > getAmountWithdrawable() || _amount > IERC20M(allocation.tokenContract).balanceOf(address(this))) revert MetaVesT_MoreThanAvailable();
             tokensWithdrawn += _amount;
-            safeTransfer(allocation.tokenContract, msg.sender, _amount);
-            emit MetaVesT_Withdrawn(msg.sender, allocation.tokenContract, _amount);
+            address recipient = getRecipient();
+            safeTransfer(allocation.tokenContract, recipient, _amount);
+            emit MetaVesT_Withdrawn(grantee, recipient, allocation.tokenContract, _amount);
+        }
+    
+        /// @notice Determine the recipient address based on grantee settings and controller overrides.
+        /// Priority:
+        /// - `controller.recipientOverride`
+        /// - `desiredRecipient`
+        /// - `grantee`
+        /// @dev `address(0)` means null/no preference
+        function getRecipient() public view returns (address) {
+            if (controller != address(0) && IMetaVesTController(controller).recipientOverride() != address(0)) {
+                return IMetaVesTController(controller).recipientOverride();
+            } else if (desiredRecipient != address(0)) {
+                return desiredRecipient;
+            } else {
+                return grantee;
+            }
         }
 
         /// @notice gets the details of the vest

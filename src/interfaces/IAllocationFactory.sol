@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-pragma solidity 0.8.20;
+pragma solidity ^0.8.20;
 
 import "../VestingAllocation.sol";
 
@@ -14,6 +14,7 @@ interface IAllocationFactory {
     function createAllocation(
         AllocationType _allocationType,
         address _grantee,
+        address _desiredRecipient,
         address _controller,
         VestingAllocation.Allocation memory _allocation,
         VestingAllocation.Milestone[] memory _milestones,
