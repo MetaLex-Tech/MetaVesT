@@ -176,10 +176,10 @@ To set up the project locally, follow these steps:
    ```
 3. **Compile Contracts**
    ```base
-   forge build --optimize --optimizer-runs 200 --use solc:0.8.20
+   forge build --optimize --optimizer-runs 200 --use solc:0.8.28
    ```
 
 4. **Run Tests**
    ```bash
-   forge test --optimize --optimizer-runs 200 --use solc:0.8.20
+   forge test --optimize --optimizer-runs 200 --use solc:0.8.28
    ```
