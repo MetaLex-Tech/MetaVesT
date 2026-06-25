@@ -1299,7 +1299,7 @@ contract MetaVestControllerTest is Test {
     }
 
     
-     function testFailReProposeMajorityMetavestAmendment() public {
+     function test_RevertWhen_ReProposeMajorityMetavestAmendment() public {
         address mockAllocation2 = createDummyVestingAllocation();
         bytes4 msgSig = bytes4(keccak256("updateMetavestTransferability(address,bool)"));
         bytes memory callData = abi.encodeWithSelector(msgSig, mockAllocation2, true);
@@ -1310,14 +1310,11 @@ contract MetaVestControllerTest is Test {
         vm.prank(authority);
         controller.proposeMajorityMetavestAmendment("testSet", msgSig, callData);
         vm.warp(block.timestamp + 30 days);
-        /*
-        vm.prank(grantee);
-        controller.voteOnMetavestAmendment(mockAllocation2, "testSet", msgSig, true);
 
+        // the existing proposal was never canceled, so a new one cannot be proposed
         vm.prank(authority);
-        controller.updateMetavestTransferability(mockAllocation2, true);*/
+        vm.expectRevert(metavestController.MetaVesTController_AmendmentAlreadyPending.selector);
         controller.proposeMajorityMetavestAmendment("testSet", msgSig, callData);
-        
     }
 
     function testReProposeMajorityMetavestAmendment() public {
@@ -1340,11 +1337,12 @@ contract MetaVestControllerTest is Test {
         
     }
 
-    function testFailRemoveNonExistantMetaVestFromSet() public {
+    function test_RevertWhen_RemoveNonExistantMetaVestFromSet() public {
         address mockAllocation2 = createDummyVestingAllocation();
         vm.startPrank(authority);
-      //  controller.createSet("testSet");
+        vm.expectRevert(metavestController.MetaVestController_MetaVestNotInSet.selector);
         controller.removeMetaVestFromSet("testSet", mockAllocation2);
+        vm.stopPrank();
     }
 
 
@@ -1437,7 +1435,7 @@ contract MetaVestControllerTest is Test {
         assertEq(updatedAllocation.unlockRate, 1e20);
     }
 
-    function testFailUpdateUnlockRateZeroEmergency() public {
+    function test_RevertWhen_UpdateUnlockRateZeroEmergency() public {
         address vestingAllocation = createDummyVestingAllocation();
         address[] memory addresses = new address[](1);
         addresses[0] = vestingAllocation;
@@ -1446,15 +1444,15 @@ contract MetaVestControllerTest is Test {
         controller.proposeMetavestAmendment(vestingAllocation, controller.updateMetavestUnlockRate.selector, msgData);
         vm.prank(grantee);
         controller.consentToMetavestAmendment(vestingAllocation, controller.updateMetavestUnlockRate.selector, true);
-        
+
         controller.terminateMetavestVesting(vestingAllocation);
 
+        // unlock rate was never set to zero, so the emergency update is not permitted
+        vm.expectRevert(metavestController.MetaVesTController_EmergencyUnlockNotSatisfied.selector);
         controller.emergencyUpdateMetavestUnlockRate(vestingAllocation, 1e20);
-        BaseAllocation.Allocation memory updatedAllocation = BaseAllocation(vestingAllocation).getMetavestDetails();
-        assertEq(updatedAllocation.unlockRate, 1e20);
     }
 
-    function testFailUpdateUnlockRateZeroEmergencyTerminated() public {
+    function test_RevertWhen_UpdateUnlockRateZeroEmergencyTerminated() public {
         address vestingAllocation = createDummyVestingAllocation();
         address[] memory addresses = new address[](1);
         addresses[0] = vestingAllocation;
@@ -1463,17 +1461,17 @@ contract MetaVestControllerTest is Test {
         controller.proposeMetavestAmendment(vestingAllocation, controller.updateMetavestUnlockRate.selector, msgData);
         vm.prank(grantee);
         controller.consentToMetavestAmendment(vestingAllocation, controller.updateMetavestUnlockRate.selector, true);
-                vm.prank(grantee);
+        vm.prank(grantee);
         controller.consentToMetavestAmendment(vestingAllocation, controller.updateMetavestUnlockRate.selector, true);
-        
+
         controller.updateMetavestUnlockRate(vestingAllocation, 0);
-        
+
         BaseAllocation.Allocation memory updatedAllocation = BaseAllocation(vestingAllocation).getMetavestDetails();
         assertEq(updatedAllocation.unlockRate, 0);
 
+        // vesting was never terminated, so the emergency update is not permitted
+        vm.expectRevert(metavestController.MetaVesTController_EmergencyUnlockNotSatisfied.selector);
         controller.emergencyUpdateMetavestUnlockRate(vestingAllocation, 1e20);
-         updatedAllocation = BaseAllocation(vestingAllocation).getMetavestDetails();
-        assertEq(updatedAllocation.unlockRate, 1e20);
     }
 
     function testUpdateVestingRate() public {
@@ -1887,12 +1885,13 @@ contract MetaVestControllerTest is Test {
         assertEq(token.balanceOf(address(controller)), 0);
     }
 
-    function testFailWithdrawFromControllerNonAuthority() public {
+    function test_RevertWhen_WithdrawFromControllerNonAuthority() public {
         vm.prank(address(0x1234));
+        vm.expectRevert(metavestController.MetaVesTController_OnlyAuthority.selector);
         controller.withdrawFromController(address(token));
     }
 
-    function testFailCreateMetavestWithZeroAddress() public {
+    function test_RevertWhen_CreateMetavestWithZeroAddress() public {
         BaseAllocation.Allocation memory allocation = BaseAllocation.Allocation({
             tokenContract: address(0),
             tokenStreamTotal: 1000e18,
@@ -1906,6 +1905,7 @@ contract MetaVestControllerTest is Test {
 
         BaseAllocation.Milestone[] memory milestones = new BaseAllocation.Milestone[](0);
 
+        vm.expectRevert(metavestController.MetaVesTController_ZeroAddress.selector);
         controller.createMetavest(
             metavestController.metavestType.Vesting,
             address(0),
@@ -1915,11 +1915,11 @@ contract MetaVestControllerTest is Test {
             address(0),
             0,
             0
-            
+
         );
     }
 
-    function testFailCreateMetavestWithInsufficientApproval() public {
+    function test_RevertWhen_CreateMetavestWithInsufficientApproval() public {
         BaseAllocation.Allocation memory allocation = BaseAllocation.Allocation({
             tokenContract: address(token),
             tokenStreamTotal: 1000e18,
@@ -1934,6 +1934,7 @@ contract MetaVestControllerTest is Test {
         BaseAllocation.Milestone[] memory milestones = new BaseAllocation.Milestone[](0);
 
         // Not approving any tokens
+        vm.expectRevert(metavestController.MetaVesTController_AmountNotApprovedForTransferFrom.selector);
         controller.createMetavest(
             metavestController.metavestType.Vesting,
             grantee,
@@ -1943,7 +1944,7 @@ contract MetaVestControllerTest is Test {
             address(0),
             0,
             0
-            
+
         );
     }
 
@@ -2300,49 +2301,58 @@ contract MetaVestControllerTest is Test {
 
 
 
-    function testFailUpdateExercisePriceForVesting() public {
+    function test_RevertWhen_UpdateExercisePriceForVesting() public {
         address vestingAllocation = createDummyVestingAllocation();
+        // no amendment was proposed or consented to for this update
+        vm.expectRevert(metavestController.MetaVesTController_AmendmentNeitherMutualNorMajorityConsented.selector);
         controller.updateExerciseOrRepurchasePrice(vestingAllocation, 2e18);
     }
 
-    function testFailRepurchaseTokensAfterExpiry() public {
+    function test_RevertWhen_RepurchaseTokensAfterExpiry() public {
         address restrictedTokenAward = createDummyRestrictedTokenAward();
-        
+
         // Fast forward time to after the short stop date
         vm.warp(block.timestamp + 366 days);
-        
+
+        // tokens can only be repurchased once the award has been terminated
+        vm.expectRevert(BaseAllocation.MetaVesT_NotTerminated.selector);
         RestrictedTokenAward(restrictedTokenAward).repurchaseTokens(500e18);
     }
 
-    function testFailRepurchaseTokensInsufficientAllowance() public {
+    function test_RevertWhen_RepurchaseTokensInsufficientAllowance() public {
         address restrictedTokenAward = createDummyRestrictedTokenAward();
-        
-        // Not approving any tokens
-       RestrictedTokenAward(restrictedTokenAward).repurchaseTokens(500e18);
+
+        // tokens can only be repurchased once the award has been terminated
+        vm.expectRevert(BaseAllocation.MetaVesT_NotTerminated.selector);
+        RestrictedTokenAward(restrictedTokenAward).repurchaseTokens(500e18);
     }
 
-    function testFailInitiateAuthorityUpdateNonAuthority() public {
+    function test_RevertWhen_InitiateAuthorityUpdateNonAuthority() public {
         vm.prank(address(0x1234));
+        vm.expectRevert(metavestController.MetaVesTController_OnlyAuthority.selector);
         controller.initiateAuthorityUpdate(address(0x5678));
     }
 
-    function testFailAcceptAuthorityRoleNonPendingAuthority() public {
+    function test_RevertWhen_AcceptAuthorityRoleNonPendingAuthority() public {
         controller.initiateAuthorityUpdate(address(0x5678));
-        
+
         vm.prank(address(0x1234));
+        vm.expectRevert(metavestController.MetaVesTController_OnlyPendingAuthority.selector);
         controller.acceptAuthorityRole();
     }
 
-    function testFailInitiateDaoUpdateNonDao() public {
+    function test_RevertWhen_InitiateDaoUpdateNonDao() public {
         vm.prank(address(0x1234));
+        vm.expectRevert(metavestController.MetaVesTController_OnlyDAO.selector);
         controller.initiateDaoUpdate(address(0x5678));
     }
 
-    function testFailAcceptDaoRoleNonPendingDao() public {
+    function test_RevertWhen_AcceptDaoRoleNonPendingDao() public {
         vm.prank(dao);
         controller.initiateDaoUpdate(address(0x5678));
-        
+
         vm.prank(address(0x1234));
+        vm.expectRevert(metavestController.MetaVesTController_OnlyPendingDao.selector);
         controller.acceptDaoRole();
     }
 
@@ -2364,10 +2374,11 @@ contract MetaVestControllerTest is Test {
         assertEq(controller.functionToConditions(functionSig, 0), address(condition));
     }
 
-    function testFailUpdateFunctionConditionNonDao() public {
+    function test_RevertWhen_UpdateFunctionConditionNonDao() public {
         bytes4 functionSig = bytes4(keccak256("updateMetavestStopTimes(address,uint48)"));
         address condition = address(0x1234);
-        
+
+        vm.expectRevert(metavestController.MetaVesTController_OnlyDAO.selector);
         controller.updateFunctionCondition(condition, functionSig);
     }
 
@@ -2391,41 +2402,60 @@ contract MetaVestControllerTest is Test {
         controller.removeFunctionCondition(address(condition), functionSig);
     }
 
-    function testFailCheckFunctionCondition() public {
+    function test_RevertWhen_CheckFunctionCondition() public {
         bytes4 functionSig = bytes4(keccak256("createMetavest(uint8,address,(uint256,uint128,uint128,uint160,uint48,uint160,uint48,address),(uint256,bool,bool,address[])[],uint256,address,uint256,uint256)"));
-      /*      constructor(
-        address[] memory _signers,
-        uint256 _threshold,
-        Logic _logic
-    ) */
         address[] memory signers = new address[](2);
         signers[0] = address(0x1);
         signers[1] = address(0x2);
         SignatureCondition condition = new SignatureCondition(signers, 1, SignatureCondition.Logic.AND);
-        
+
         vm.prank(dao);
         controller.updateFunctionCondition(address(condition), functionSig);
         assert(controller.functionToConditions(functionSig, 0) == address(condition));
-        //create a dummy metavest
-        address vestingAllocation = createDummyVestingAllocation();
+
+        BaseAllocation.Allocation memory allocation = BaseAllocation.Allocation({
+            tokenContract: address(token),
+            tokenStreamTotal: 1000e18,
+            vestingCliffCredit: 100e18,
+            unlockingCliffCredit: 100e18,
+            vestingRate: 10e18,
+            vestingStartTime: uint48(block.timestamp),
+            unlockRate: 10e18,
+            unlockStartTime: uint48(block.timestamp)
+        });
+        BaseAllocation.Milestone[] memory milestones = new BaseAllocation.Milestone[](0);
+        token.approve(address(controller), 2100e18);
+
+        // the signature condition on createMetavest is unsatisfied
+        vm.expectRevert(
+            abi.encodeWithSelector(metavestController.MetaVesTController_ConditionNotSatisfied.selector, address(condition))
+        );
+        controller.createMetavest(
+            metavestController.metavestType.Vesting,
+            grantee,
+            allocation,
+            milestones,
+            0,
+            address(0),
+            0,
+            0
+        );
     }
 
-    function testFailAddDuplicateCondition() public {
+    function test_RevertWhen_AddDuplicateCondition() public {
         bytes4 functionSig = bytes4(keccak256("createMetavest(uint8,address,(uint256,uint128,uint128,uint160,uint48,uint160,uint48,address),(uint256,bool,bool,address[])[],uint256,address,uint256,uint256)"));
-      /*      constructor(
-        address[] memory _signers,
-        uint256 _threshold,
-        Logic _logic
-    ) */
         address[] memory signers = new address[](2);
         signers[0] = address(0x1);
         signers[1] = address(0x2);
         SignatureCondition condition = new SignatureCondition(signers, 1, SignatureCondition.Logic.AND);
-        
+
         vm.prank(dao);
         controller.updateFunctionCondition(address(condition), functionSig);
         assert(controller.functionToConditions(functionSig, 0) == address(condition));
+
+        // adding the same condition a second time reverts
         vm.prank(dao);
+        vm.expectRevert(metavestController.MetaVestController_DuplicateCondition.selector);
         controller.updateFunctionCondition(address(condition), functionSig);
     }
 }

@@ -60,12 +60,8 @@ contract MetaVesTFactoryTest is Test {
         metavestController controller = metavestController(_controller);
     }
 
-    function testFailControllerZeroAddress() public {
-        address _authority = address(0);
-        address _dao = address(0);
-        address _paymentToken = address(0);
-        factory.deployMetavestAndController(_authority, _dao, address(0), address(0), address(0));
-    }   
-
-
+    function test_RevertWhen_ControllerZeroAddress() public {
+        vm.expectRevert(MetaVesTFactory.MetaVesTFactory_ZeroAddress.selector);
+        factory.deployMetavestAndController(address(0), address(0), address(0), address(0), address(0));
+    }
 }

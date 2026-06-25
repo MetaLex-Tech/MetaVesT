@@ -15,7 +15,7 @@ contract EvilGrant {
 }
 
 contract Audit is MetaVestControllerTest {
-    function testFailAuditArbitraryVote() public {
+    function test_RevertWhen_AuditArbitraryVote() public {
         // template from testVoteOnMetavestAmendment
         bytes4 msgSig = bytes4(keccak256("updateMetavestTransferability(address,bool)"));
         bytes memory callData = abi.encodeWithSelector(msgSig, address(mockAllocation), true);
@@ -28,19 +28,18 @@ contract Audit is MetaVestControllerTest {
 
         address attacker = address(0x31337);
         address evil_grant = address(new EvilGrant());
-        
-        vm.prank(attacker);
-        controller.voteOnMetavestAmendment(address(evil_grant), "testSet", msgSig, true);
 
-        (uint256 totalVotingPower, uint256 currentVotingPower, , ,  ) = controller.functionToSetMajorityProposal(msgSig, "testSet");
-        console.log("attacker made vote and power is" , currentVotingPower);
+        // the fake grant is not part of the set, so the vote is rejected
+        vm.prank(attacker);
+        vm.expectRevert(metavestController.MetaVesTController_SetDoesNotExist.selector);
+        controller.voteOnMetavestAmendment(address(evil_grant), "testSet", msgSig, true);
     }
 
-    function testFailAuditRemoveConfirmedMilestone() public {
+    function test_RevertWhen_AuditRemoveConfirmedMilestone() public {
         // template from testRemoveMilestone
         address vestingAllocation = createDummyVestingAllocation();
         VestingAllocation(vestingAllocation).confirmMilestone(0);
-        
+
         address[] memory addresses = new address[](1);
         addresses[0] = vestingAllocation;
         bytes4 selector = bytes4(keccak256("removeMetavestMilestone(address,uint256)"));
@@ -49,6 +48,9 @@ contract Audit is MetaVestControllerTest {
 
         vm.prank(grantee);
         controller.consentToMetavestAmendment(vestingAllocation, controller.removeMetavestMilestone.selector, true);
+
+        // milestone 0 was already confirmed, so it cannot be removed
+        vm.expectRevert(metavestController.MetaVesTController_MilestoneIndexCompletedOrDoesNotExist.selector);
         controller.removeMetavestMilestone(vestingAllocation, 0);
     }
 

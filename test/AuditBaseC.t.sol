@@ -6,10 +6,11 @@ import "../test/controller.t.sol";
 
 contract Audit is MetaVestControllerTest {
 
-    function testFailAuditTerminateFailAfterWithdraw() public {
+    // Regression test for the audit finding "terminate fails after withdraw": terminating
+    // after the grantee has withdrawn now succeeds instead of reverting on the token transfer.
+    function testAuditTerminateSucceedsAfterWithdraw() public {
         // template from testTerminateVestAndRecoverSlowUnlock
         address vestingAllocation = createDummyVestingAllocationSlowUnlock();
-        uint256 snapshot = token.balanceOf(authority);
         VestingAllocation(vestingAllocation).confirmMilestone(0);
         vm.warp(block.timestamp + 25 seconds);
         vm.startPrank(grantee);
@@ -18,9 +19,8 @@ contract Audit is MetaVestControllerTest {
         VestingAllocation(vestingAllocation).withdraw(VestingAllocation(vestingAllocation).getAmountWithdrawable());
         vm.stopPrank();
 
-        // InsufficientBalance
-        vm.expectRevert();
         controller.terminateMetavestVesting(vestingAllocation);
+        assertTrue(VestingAllocation(vestingAllocation).terminated());
     }
 
      function testAuditTerminateFailAfterWithdrawFixCheck() public {

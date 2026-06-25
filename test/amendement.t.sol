@@ -602,7 +602,7 @@ contract MetaVestControllerTest is Test {
         assertFalse(inFavor);
     }
 
-     function testFailProposeMajorityMetavestAmendment() public {
+     function test_RevertWhen_ProposeMajorityMetavestAmendment() public {
         address mockAllocation2 = createDummyVestingAllocation();
         address mockAllocation3 = createDummyVestingAllocation();
         address mockAllocation4 = createDummyVestingAllocation();
@@ -616,14 +616,13 @@ contract MetaVestControllerTest is Test {
         vm.warp(block.timestamp + 1 days);
         vm.prank(authority);
         controller.proposeMajorityMetavestAmendment("testSet", msgSig, callData);
-        
-        vm.prank(grantee);
-        //log the current withdrawable
-        console.log(TokenOptionAllocation(mockAllocation2).getAmountWithdrawable());
 
+        // only one of three allocations votes, so majority is never reached
+        vm.prank(grantee);
         controller.voteOnMetavestAmendment(mockAllocation2, "testSet", msgSig, true);
 
         vm.prank(authority);
+        vm.expectRevert(metavestController.MetaVesTController_AmendmentNeitherMutualNorMajorityConsented.selector);
         controller.updateMetavestTransferability(mockAllocation2, true);
     }
 
@@ -683,7 +682,7 @@ contract MetaVestControllerTest is Test {
         controller.updateMetavestTransferability(mockAllocation2, true);
     }
 
-    function testFailMajorityPowerMetavestAmendment() public {
+    function test_RevertWhen_MajorityPowerMetavestAmendment() public {
         address mockAllocation2 = createDummyTokenOptionAllocation();
         address mockAllocation3 = createDummyTokenOptionAllocation();
         address mockAllocation4 = createDummyTokenOptionAllocation();
@@ -707,9 +706,11 @@ contract MetaVestControllerTest is Test {
         vm.prank(grantee);
         controller.voteOnMetavestAmendment(mockAllocation4, "testSet", msgSig, true);
 
+        // first application succeeds; the amendment can only be applied once
         vm.prank(authority);
         controller.updateMetavestTransferability(mockAllocation2, true);
         vm.prank(authority);
+        vm.expectRevert(metavestController.MetaVesTController_AmendmentCanOnlyBeAppliedOnce.selector);
         controller.updateMetavestTransferability(mockAllocation2, true);
     }
 
@@ -776,7 +777,7 @@ contract MetaVestControllerTest is Test {
         controller.updateMetavestTransferability(mockAllocation3, true);
     }
 
-        function testFailNoPassProposeMajorityMetavestAmendment() public {
+        function test_RevertWhen_NoPassProposeMajorityMetavestAmendment() public {
         address mockAllocation2 = createDummyVestingAllocation();
         address mockAllocation3 = createDummyVestingAllocation();
         bytes4 msgSig = bytes4(keccak256("updateMetavestTransferability(address,bool)"));
@@ -789,11 +790,10 @@ contract MetaVestControllerTest is Test {
         vm.prank(authority);
         controller.proposeMajorityMetavestAmendment("testSet", msgSig, callData);
 
+        // no votes were cast, so the amendment is not majority-consented
         vm.prank(authority);
+        vm.expectRevert(metavestController.MetaVesTController_AmendmentNeitherMutualNorMajorityConsented.selector);
         controller.updateMetavestTransferability(mockAllocation2, true);
-        
-        vm.prank(authority);
-        controller.updateMetavestTransferability(mockAllocation3, true);
     }
 
     function testVoteOnMetavestAmendment() public {
@@ -813,7 +813,7 @@ contract MetaVestControllerTest is Test {
 
     }
 
-    function testFailVoteOnMetavestAmendmentTwice() public {
+    function test_RevertWhen_VoteOnMetavestAmendmentTwice() public {
         bytes4 msgSig = bytes4(keccak256("updateMetavestTransferability(address,bool)"));
         bytes memory callData = abi.encodeWithSelector(msgSig, address(mockAllocation), true);
 
@@ -825,6 +825,7 @@ contract MetaVestControllerTest is Test {
 
         vm.startPrank(grantee);
         controller.voteOnMetavestAmendment(address(mockAllocation), "testSet", msgSig, true);
+        vm.expectRevert(metavestController.MetaVesTController_AlreadyVoted.selector);
         controller.voteOnMetavestAmendment(address(mockAllocation), "testSet", msgSig, true);
         vm.stopPrank();
     }
@@ -850,15 +851,17 @@ contract MetaVestControllerTest is Test {
         vm.stopPrank();
     }
 
-    function testFailCreateDuplicateSet() public {
+    function test_RevertWhen_CreateDuplicateSet() public {
         vm.startPrank(authority);
         controller.createSet("duplicateSet");
+        vm.expectRevert(metavestController.MetaVesTController_SetAlreadyExists.selector);
         controller.createSet("duplicateSet");
         vm.stopPrank();
     }
 
-    function testFailNonAuthorityCreateSet() public {
+    function test_RevertWhen_NonAuthorityCreateSet() public {
         vm.prank(grantee);
+        vm.expectRevert(metavestController.MetaVesTController_OnlyAuthority.selector);
         controller.createSet("unauthorizedSet");
     }
 
@@ -983,7 +986,7 @@ contract MetaVestControllerTest is Test {
         controller.updateMetavestTransferability(allocation, true);
     }
 
-    function testFailConsentCheck() public {
+    function test_RevertWhen_ConsentCheck() public {
         address allocation = createDummyVestingAllocation();
         bytes4 msgSig = bytes4(keccak256("updateMetavestTransferability(address,bool)"));
         bytes memory callData = abi.encodeWithSelector(msgSig, allocation, true);
@@ -991,22 +994,22 @@ contract MetaVestControllerTest is Test {
         vm.prank(authority);
         controller.proposeMetavestAmendment(allocation, msgSig, callData);
 
+        // allocation is not part of "testSet", so the majority vote call reverts
         vm.prank(grantee);
+        vm.expectRevert(metavestController.MetaVesTController_SetDoesNotExist.selector);
         controller.voteOnMetavestAmendment(allocation, "testSet", msgSig, false);
-
-        vm.prank(authority);
-        controller.updateMetavestTransferability(allocation, true);
     }
 
-    function testFailConsentCheckNoProposal() public {
+    function test_RevertWhen_ConsentCheckNoProposal() public {
         address allocation = createDummyVestingAllocation();
         bytes4 msgSig = bytes4(keccak256("updateMetavestTransferability(address,bool)"));
 
         vm.prank(grantee);
+        vm.expectRevert(metavestController.MetaVesTController_SetDoesNotExist.selector);
         controller.voteOnMetavestAmendment(allocation, "testSet", msgSig, true);
     }
 
-    function testFailConsentCheckNoVote() public {
+    function test_RevertWhen_ConsentCheckNoVote() public {
         address allocation = createDummyVestingAllocation();
         bytes4 msgSig = bytes4(keccak256("updateMetavestTransferability(address,bool)"));
         bytes memory callData = abi.encodeWithSelector(msgSig, allocation, true);
@@ -1014,11 +1017,13 @@ contract MetaVestControllerTest is Test {
         vm.prank(authority);
         controller.proposeMetavestAmendment(allocation, msgSig, callData);
 
+        // grantee never consented, so applying the amendment reverts
         vm.prank(authority);
+        vm.expectRevert(metavestController.MetaVesTController_AmendmentNeitherMutualNorMajorityConsented.selector);
         controller.updateMetavestTransferability(allocation, true);
     }
 
-    function testFailConsentCheckNoUpdate() public {
+    function test_RevertWhen_ConsentCheckNoUpdate() public {
         address allocation = createDummyVestingAllocation();
         bytes4 msgSig = bytes4(keccak256("updateMetavestTransferability(address,bool)"));
         bytes memory callData = abi.encodeWithSelector(msgSig, allocation, true);
@@ -1027,10 +1032,11 @@ contract MetaVestControllerTest is Test {
         controller.proposeMetavestAmendment(allocation, msgSig, callData);
 
         vm.prank(grantee);
+        vm.expectRevert(metavestController.MetaVesTController_SetDoesNotExist.selector);
         controller.voteOnMetavestAmendment(allocation, "testSet", msgSig, true);
     }
 
-    function testFailConsentCheckNoVoteUpdate() public {
+    function test_RevertWhen_ConsentCheckNoVoteUpdate() public {
         address allocation = createDummyVestingAllocation();
         bytes4 msgSig = bytes4(keccak256("updateMetavestTransferability(address,bool)"));
         bytes memory callData = abi.encodeWithSelector(msgSig, allocation, true);
@@ -1039,6 +1045,7 @@ contract MetaVestControllerTest is Test {
         controller.proposeMetavestAmendment(allocation, msgSig, callData);
 
         vm.prank(grantee);
+        vm.expectRevert(metavestController.MetaVesTController_SetDoesNotExist.selector);
         controller.voteOnMetavestAmendment(allocation, "testSet", msgSig, true);
     }
 
@@ -1088,7 +1095,7 @@ contract MetaVestControllerTest is Test {
         assertTrue(TokenOptionAllocation(allocation1).exercisePrice() == 2e18);
     }
 
-    function testFailCreateSetWithThreeTokenOptionsAndChangeExercisePrice() public {
+    function test_RevertWhen_CreateSetWithThreeTokenOptionsAndChangeExercisePrice() public {
         address allocation1 = createDummyTokenOptionAllocation();
         address allocation2 = createDummyTokenOptionAllocation();
         address allocation3 = createDummyTokenOptionAllocation();
@@ -1115,31 +1122,20 @@ contract MetaVestControllerTest is Test {
         vm.prank(authority);
         controller.proposeMajorityMetavestAmendment("testSet", msgSig, callData);
 
-        //vm.prank(grantee);
-       // controller.voteOnMetavestAmendment(allocation1, "testSet", msgSig, true);
-
-       // vm.prank(grantee);
-       // controller.voteOnMetavestAmendment(allocation2, "testSet", msgSig, true);
-
+        // no votes were cast, so applying the amendment is not majority-consented
         vm.prank(authority);
+        vm.expectRevert(metavestController.MetaVesTController_AmendmentNeitherMutualNorMajorityConsented.selector);
         controller.updateExerciseOrRepurchasePrice(allocation1, 2e18);
-
-        vm.prank(authority);
-        controller.updateExerciseOrRepurchasePrice(allocation2, 2e18);
-
-        vm.prank(authority);
-        controller.updateExerciseOrRepurchasePrice(allocation3, 2e18);
-
-        // Check that the exercise price was updated
-        assertTrue(TokenOptionAllocation(allocation1).exercisePrice() == 2e18);
     }
 
-    function testFailconsentToNoPendingAmendment() public {
+    function test_RevertWhen_consentToNoPendingAmendment() public {
         address allocation = createDummyVestingAllocation();
         bytes4 msgSig = bytes4(keccak256("updateMetavestTransferability(address,bool)"));
-        bytes memory callData = abi.encodeWithSelector(msgSig, allocation, true);
 
         vm.prank(grantee);
+        vm.expectRevert(
+            abi.encodeWithSelector(metavestController.MetaVesTController_NoPendingAmendment.selector, msgSig, allocation)
+        );
         controller.consentToMetavestAmendment(allocation, msgSig, true);
     }
 
@@ -1356,7 +1352,7 @@ contract MetaVestControllerTest is Test {
         controller.setMetaVestGovVariables(allocation, BaseAllocation.GovType.vested);
     }
 
-    function testFailEveryUpdateAmendmentFunctionVesting() public {
+    function test_RevertWhen_EveryUpdateAmendmentFunctionVesting() public {
         address allocation = createDummyVestingAllocation();
         bytes4 msgSig = bytes4(keccak256("updateMetavestTransferability(address,bool)"));
         bytes memory callData = abi.encodeWithSelector(msgSig, allocation, true);
@@ -1412,7 +1408,9 @@ contract MetaVestControllerTest is Test {
         vm.prank(authority);
         controller.proposeMetavestAmendment(allocation, msgSig, callData);
 
+        // grantee never consented to this final amendment
         vm.prank(authority);
+        vm.expectRevert(metavestController.MetaVesTController_AmendmentNeitherMutualNorMajorityConsented.selector);
         controller.setMetaVestGovVariables(allocation, BaseAllocation.GovType.vested);
     }
 }

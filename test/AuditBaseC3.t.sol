@@ -6,10 +6,11 @@ import "../test/controller.t.sol";
 
 contract Audit is MetaVestControllerTest {
 
-    function testFailAuditTerminateFailAfterWithdraw() public {
+    // Regression test for the audit finding "terminate fails after withdraw": terminating
+    // after the grantee has withdrawn now succeeds instead of reverting on the token transfer.
+    function testAuditTerminateSucceedsAfterWithdraw() public {
         // template from testTerminateVestAndRecoverSlowUnlock
         address vestingAllocation = createDummyVestingAllocationSlowUnlock();
-        uint256 snapshot = token.balanceOf(authority);
         VestingAllocation(vestingAllocation).confirmMilestone(0);
         vm.warp(block.timestamp + 25 seconds);
         vm.startPrank(grantee);
@@ -18,9 +19,8 @@ contract Audit is MetaVestControllerTest {
         VestingAllocation(vestingAllocation).withdraw(VestingAllocation(vestingAllocation).getAmountWithdrawable());
         vm.stopPrank();
 
-        // InsufficientBalance
-        vm.expectRevert();
         controller.terminateMetavestVesting(vestingAllocation);
+        assertTrue(VestingAllocation(vestingAllocation).terminated());
     }
 
     function testAuditTerminateVestAndRecovers() public {
@@ -52,34 +52,18 @@ contract Audit is MetaVestControllerTest {
         // assertEq(token.balanceOf(vestingAllocation), 0);
     }
 
-    function testFailAuditRounding() public {
+    function test_RevertWhen_AuditRounding() public {
         // template from testConfirmingMilestoneTokenOption
         address vestingAllocation = createDummyTokenOptionAllocation();
-        uint256 snapshot = token.balanceOf(authority);
         TokenOptionAllocation(vestingAllocation).confirmMilestone(0);
         vm.warp(block.timestamp + 50 seconds);
         vm.startPrank(grantee);
         //exercise max available
         ERC20Stable(paymentToken).approve(vestingAllocation, TokenOptionAllocation(vestingAllocation).getPaymentAmount(TokenOptionAllocation(vestingAllocation).getAmountExercisable()));
-        
-        console.log('before amount of payment token:', ERC20Stable(paymentToken).balanceOf(grantee));
-        console.log('before tokensExercised: ', TokenOptionAllocation(vestingAllocation).tokensExercised());
-        console.log('small amount payment: ', TokenOptionAllocation(vestingAllocation).getPaymentAmount(1e6));
-        console.log('small amount payment: ', TokenOptionAllocation(vestingAllocation).getPaymentAmount(1e11));
-        console.log('small amount payment: ', TokenOptionAllocation(vestingAllocation).getPaymentAmount(9.99e11));
-        console.log('small amount payment: ', TokenOptionAllocation(vestingAllocation).getPaymentAmount(1e12));
-        console.log('small amount payment: ', TokenOptionAllocation(vestingAllocation).getPaymentAmount(1.1e12));
-        console.log('small amount payment: ', TokenOptionAllocation(vestingAllocation).getPaymentAmount(1e13));
-        TokenOptionAllocation(vestingAllocation).exerciseTokenOption(1.1e12);
-        TokenOptionAllocation(vestingAllocation).exerciseTokenOption(1e6);
-        TokenOptionAllocation(vestingAllocation).exerciseTokenOption(1e6);
-        TokenOptionAllocation(vestingAllocation).exerciseTokenOption(1e6);
-        TokenOptionAllocation(vestingAllocation).exerciseTokenOption(1e6);
-        TokenOptionAllocation(vestingAllocation).exerciseTokenOption(1e6);
 
-        console.log('after amount of payment token: ', ERC20Stable(paymentToken).balanceOf(grantee));
-        console.log('after tokensExercised: ', TokenOptionAllocation(vestingAllocation).tokensExercised());
-        // TokenOptionAllocation(vestingAllocation).withdraw(VestingAllocation(vestingAllocation).getAmountWithdrawable());
+        // exercising a fractional amount rounds the payment down below the minimum
+        vm.expectRevert(BaseAllocation.MetaVesT_TooSmallAmount.selector);
+        TokenOptionAllocation(vestingAllocation).exerciseTokenOption(1.1e12);
         vm.stopPrank();
     }
 
