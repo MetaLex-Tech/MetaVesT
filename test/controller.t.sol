@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
-import "../src/metavestController.sol";
+import "../src/MetaVesTController.sol";
 import "../src/VestingAllocation.sol";
 import "../src/TokenOptionAllocation.sol";
 import "../src/RestrictedTokenAllocation.sol";
