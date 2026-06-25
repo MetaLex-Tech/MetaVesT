@@ -1,0 +1,34 @@
+name: CI
+
+on:
+  # push to main and pull_request only to avoid flooding the RPC
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+env:
+  FOUNDRY_PROFILE: ci
+
+jobs:
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    environment: test
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+
+      - name: Show Forge version
+        run: forge --version
+
+      - name: Build
+        run: forge build --sizes
+
+      - name: Tests
+        run: forge test -vvv
