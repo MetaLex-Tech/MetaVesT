@@ -1,3 +1,13 @@
+[profile.default]
+via_ir = true
+optimizer = true
+optimizer_runs = 200
+
+[rpc_endpoints]
+base = "${BASE_RPC_URL}"
+ethereum = "${ETH_RPC_URL}"
+mainnet = "${ETH_RPC_URL}"
+
 [fmt]
 sort_imports = true
 
