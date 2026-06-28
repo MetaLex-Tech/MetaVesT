@@ -14,16 +14,18 @@ import {metavestController} from "../src/MetaVesTController.sol";
 ///         Chain-agnostic — run against Base (8453) or Ethereum mainnet (1) by selecting the
 ///         RPC: `forge script ... --rpc-url base` or `--rpc-url ethereum`.
 ///
-/// The deploy is permissionless: DEPLOYER_PRIVATE_KEY can be any funded throwaway EOA — it
-/// never becomes the authority. `authority` (who controls grants) is the GRANT_AUTHORITY you
-/// pass (the corp's officer/BorgAuth address). The factory is governed by the registry's own
-/// BorgAuth (registry.AUTH()), so setRegistry/upgrade stay with the protocol owner.
+/// The deploy is permissionless: the signer can be any funded throwaway EOA — it never
+/// becomes the authority. Provide the signer on the CLI (so no raw key sits in env):
+///   --private-key 0x<64-hex>           OR
+///   --account <name> --sender 0x<addr> (encrypted keystore via `cast wallet import`) OR
+///   --ledger --sender 0x<addr>
+/// `authority` (who controls grants) is the GRANT_AUTHORITY you pass (the corp officer/
+/// BorgAuth address). The factory is governed by the registry's own BorgAuth (registry.AUTH()).
 ///
 /// The vesting scrip is NOT deployed here — that is a corp-owner op via the corp's
 /// IssuanceManager.deployCyberScrip (force-ops off for allocation-authority mode).
 ///
 /// Env:
-///   DEPLOYER_PRIVATE_KEY      any funded EOA (deployer != authority)
 ///   CYBER_AGREEMENT_REGISTRY  the CyberAgreementRegistry on the target chain
 ///   GRANT_AUTHORITY           the corp officer/BorgAuth address that will control grants
 ///   GRANT_DAO                 optional condition/governance contract (default 0x0)
@@ -31,7 +33,6 @@ import {metavestController} from "../src/MetaVesTController.sol";
 ///   SALT                      CREATE2 salt string (vary per corp for distinct addresses)
 contract DeployGrantsController is Script {
     function run() public {
-        uint256 pk = vm.envUint("DEPLOYER_PRIVATE_KEY");
         CyberAgreementRegistry registry =
             CyberAgreementRegistry(vm.envAddress("CYBER_AGREEMENT_REGISTRY"));
         address authority = vm.envAddress("GRANT_AUTHORITY");
@@ -39,12 +40,11 @@ contract DeployGrantsController is Script {
         address existingFactory = vm.envOr("FACTORY", address(0));
         bytes32 salt = keccak256(bytes(vm.envOr("SALT", string("metalex-grants-v1"))));
 
-        address deployer = vm.addr(pk);
         BorgAuth auth = registry.AUTH();
 
         console2.log("=== DeployGrantsController ===");
         console2.log("chainid:           ", block.chainid);
-        console2.log("deployer (EOA):    ", deployer);
+        console2.log("deployer (sender): ", msg.sender);
         console2.log("registry:          ", address(registry));
         console2.log("registry AUTH:     ", address(auth));
         console2.log("grant authority:   ", authority);
@@ -52,7 +52,7 @@ contract DeployGrantsController is Script {
 
         require(authority != address(0), "GRANT_AUTHORITY required");
 
-        vm.startBroadcast(pk);
+        vm.startBroadcast();
 
         MetaVesTControllerFactory factory;
         if (existingFactory == address(0)) {
