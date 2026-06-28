@@ -56,14 +56,16 @@ contract DeployGrantsController is Script {
 
         MetaVesTControllerFactory factory;
         if (existingFactory == address(0)) {
-            // One factory per (chain, registry); reuse it for every corp on that chain.
-            factory = MetaVesTControllerFactory(address(new ERC1967Proxy{salt: salt}(
-                address(new MetaVesTControllerFactory{salt: salt}()),
+            // Implementations + factory proxy use plain CREATE (nonce-based) so a
+            // re-run never collides; salt determinism is reserved for the per-corp
+            // controller below. One factory per (chain, registry) — reuse via FACTORY=.
+            factory = MetaVesTControllerFactory(address(new ERC1967Proxy(
+                address(new MetaVesTControllerFactory()),
                 abi.encodeWithSelector(
                     MetaVesTControllerFactory.initialize.selector,
                     address(auth),
                     address(registry),
-                    address(new metavestController{salt: salt}())
+                    address(new metavestController())
                 )
             )));
             console2.log("deployed factory:  ", address(factory));
